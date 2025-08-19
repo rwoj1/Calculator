@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Deprescribing Taper Planner</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
+</head>
+<body>
+  <main class="container">
+    <h1>Medicine Chart Input</h1>
+
+    <div class="grid">
+      <label>Medicine Class
+        <select id="classSelect"></select>
+      </label>
+      <label>Medicine
+        <select id="medicineSelect"></select>
+      </label>
+      <label>Form
+        <select id="formSelect"></select>
+      </label>
+    </div>
+
+    <div class="grid">
+      <label>Start date
+        <input id="startDate" class="datepick" placeholder="Select date" />
+      </label>
+      <label>Next review date (optional)
+        <input id="reviewDate" class="datepick" placeholder="Select date" />
+      </label>
+    </div>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Dose lines</h2>
+        <button id="addDoseLineBtn" type="button" class="secondary">Add Dose Line</button>
+      </div>
+      <div id="doseLinesContainer" class="dose-lines"></div>
+      <p class="hint">Additional lines must use the same medicine &amp; form. Only <strong>Strength</strong>, <strong>Number of tablets</strong> and <strong>Frequency</strong> can be changed.</p>
+    </section>
+
+    <section class="card">
+      <div id="bestPracticeBox"></div>
+    </section>
+
+    <section class="card">
+      <h2>Taper controls</h2>
+      <div class="grid compact">
+        <div>
+          <h3>Phase 1</h3>
+          <label>Reduce by (%)<input id="p1Percent" type="number" min="1" max="100" value="25" /></label>
+          <label>Every (days)<input id="p1Interval" type="number" min="1" value="7" /></label>
+          <label>Stop Phase 1 at week # (optional)<input id="p1StopWeek" type="number" min="0" placeholder="optional" /></label>
+        </div>
+        <div>
+          <h3>Phase 2</h3>
+          <label>Reduce by (%)<input id="p2Percent" type="number" min="0" max="100" value="0" /></label>
+          <label>Every (days)<input id="p2Interval" type="number" min="0" value="0" /></label>
+          <p class="hint">Set Phase 2 as 0 if you only want a single-phase taper. Hard limit: 3 months (or review date, if earlier).</p>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="generateBtn" type="button">Generate Chart</button>
+        <button id="printBtn" type="button" class="secondary">Print</button>
+        <button id="savePdfBtn" type="button" class="secondary">Save as PDF</button>
+        <button id="resetBtn" type="button" class="ghost">Reset</button>
+      </div>
+    </section>
+
+    <section id="outputCard" class="card output">
+      <div class="output-head">
+        <h2 id="hdrMedicine">Medicine:</h2>
+        <div id="hdrSpecial" class="pill"></div>
+      </div>
+      <div id="scheduleBlock"></div>
+      <div id="patchBlock" style="display:none"></div>
+
+      <div class="footer-notes">
+        <div><strong>Expected Benefits:</strong> <span id="expBenefits"></span></div>
+        <div><strong>Withdrawal:</strong> <span id="withdrawalInfo"></span></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
