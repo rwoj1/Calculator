@@ -503,21 +503,53 @@ function combosUpTo(avail, maxPatches=3){
   }
   return sums; // Map(total -> best combo)
 }
+function fentanylDesiredGrid(x){
+  // Round to nearest 12.5; if *.5, display as .0 by subtracting 0.5 (12.5→12, 37.5→37, etc.)
+  const lower = Math.floor(x/12.5)*12.5;
+  const upper = Math.ceil(x/12.5)*12.5;
+  let pick;
+  if (Math.abs(x-lower) < Math.abs(upper-x)) pick = lower;
+  else if (Math.abs(x-lower) > Math.abs(upper-x)) pick = upper;
+  else pick = upper; // exact tie → prefer higher grid before display adjustment
+  // If pick ends with .5, shift down by 0.5 for display-normalised integer totals
+  if (Math.abs(pick - Math.round(pick)) > 1e-9) pick -= 0.5;
+  return Math.round(pick);
+}
 function choosePatchTotal(prevTotal, target, med){
   const avail = patchAvailList(med);
   const sums = combosUpTo(avail, 3);
+  const desired = (med === "Fentanyl") ? fentanylDesiredGrid(target) : target;
   const cand = [...sums.keys()].filter(t => t <= prevTotal + EPS);
-  if(cand.length===0) return { total: prevTotal, combo: [prevTotal] };
+  if (cand.length === 0) return { total: prevTotal, combo: [prevTotal] };
   cand.sort((a,b)=>{
-    const da=Math.abs(a-target), db=Math.abs(b-target);
-    if(Math.abs(da-db)>1e-9) return da - db; // nearest to target
-    return b - a; // prefer higher total on tie
+    const da=Math.abs(a-desired), db=Math.abs(b-desired);
+    if (Math.abs(da-db) > 1e-9) return da - db;        // nearest to desired
+    return b - a;                                      // prefer higher total on tie
   });
+
   let pick = cand[0];
-  if(Math.abs(pick - prevTotal) < 1e-9){ // same-as-prior safeguard
-    const lower = cand.find(x => x < prevTotal - 1e-9);
-    if(lower!=null) pick = lower;
+  let combo = sums.get(pick) || [pick];
+
+  // Consolidation for fentanyl: map sums like 12+12→25, 25+12+12→50, etc.,
+  // but NEVER if it would keep the dose the same as previous (must strictly drop).
+  if (med === "Fentanyl"){
+    const singleExact = avail.find(x => Math.abs(x - pick) < 1e-9);
+    const singlePlus1 = avail.find(x => Math.abs(x - (pick+1)) < 1e-9);
+    if (singleExact != null) combo = [singleExact];
+    else if (singlePlus1 != null && (pick+1) < prevTotal - 1e-9){
+      // e.g., 12+12 (24) → 25, but only if < prevTotal to preserve monotonic ↓
+      pick = singlePlus1; combo = [singlePlus1];
+    }
   }
+
+  // Monotonic decrease guard: if still equal to previous, choose the next lower candidate
+  if (Math.abs(pick - prevTotal) < 1e-9){
+    const lower = cand.find(x => x < prevTotal - 1e-9);
+    if (lower != null){ pick = lower; combo = sums.get(lower) || [lower]; }
+  }
+
+  return { total: pick, combo };
+}
   let combo = combosUpTo(avail,3).get(pick) || [pick];
   // Fentanyl normalization: map totals to single if equal or +1 and still ≤ prevTotal
   if(med==="Fentanyl"){
@@ -547,7 +579,7 @@ function buildPlanPatch(){
   // schedule clocks
   let curApply = new Date(startDate);
   let curRemove = addDays(curApply, applyEvery);
-  let nextReductionCutoff = addDays(startDate, reduceEvery); // first time we may change strength
+  let nextReductionCutoff = new Date(startDate); // first reduction occurs at start date (show first row on start date) // first time we may change strength
   let prevTotal = startTotal;
   let current = prevTotal;
   let currentCombo = [prevTotal];
