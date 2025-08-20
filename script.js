@@ -7,6 +7,8 @@ const fmtDate = (d) =>
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 const roundTo = (x, step) => Math.round(x / step) * step;
+const floorTo = (x, step) => Math.floor(x / step) * step;
+const ceilTo  = (x, step) => Math.ceil (x / step) * step;
 const MAX_WEEKS = 60;
 const THREE_MONTHS_MS = 90 * 24 * 3600 * 1000;
 const EPS = 1e-6;
@@ -56,7 +58,7 @@ const CATALOG = {
     Nitrazepam: { Tablet: ["5 mg"] },
     Oxazepam: { Tablet: ["15 mg","30 mg"] },
     Temazepam: { Tablet: ["10 mg"] },
-    Zolpidem: { Tablet: ["10 mg"], "Slow Release Tablet": ["12.5 mg","6.25 mg"] }, // CR cannot be split
+    Zolpidem: { Tablet: ["10 mg"], "Slow Release Tablet": ["12.5 mg","6.25 mg"] },
     Zopiclone: { Tablet: ["7.5 mg"] },
   },
   Antipsychotic: {
@@ -225,6 +227,8 @@ function allowedPiecesMg(cls, med, form){
   return [...new Set(pieces)].sort((a,b)=>a-b);
 }
 function lowestStepMg(cls, med, form){
+  // Special-case Zolpidem CR grid = 6.25 mg
+  if(cls==="Benzodiazepines / Z-Drug (BZRA)" && /Zolpidem/i.test(med) && isMR(form)) return 6.25;
   if(cls==="Benzodiazepines / Z-Drug (BZRA)" && BZRA_MIN_STEP[med]) return BZRA_MIN_STEP[med];
   if(cls==="Antipsychotic" && !isMR(form) && AP_ROUND[med]) return AP_ROUND[med];
   const mg = strengthsForSelected().map(parseMgFromStrength).filter(v=>v>0).sort((a,b)=>a-b)[0]||0;
@@ -244,6 +248,7 @@ function composeExactOrLower(target, pieces, step){
   return {};
 }
 function packsTotalMg(p){ const s=k=>Object.entries(p[k]||{}).reduce((a,[mg,c])=>a+mg*c,0); return s("AM")+s("MID")+s("DIN")+s("PM"); }
+function slotTotalMg(p,slot){ return Object.entries(p[slot]||{}).reduce((a,[mg,c])=>a+mg*c,0); }
 
 /* Build from UI */
 function buildPacksFromDoseLines(){
@@ -276,104 +281,135 @@ function buildPacksFromDoseLines(){
   return packs;
 }
 
-/* ===== Preferred slot distribution ===== */
-function splitDailyPreferred(target, strengths){
-  const step=strengths[0]||1;
-  const half=roundTo(target/2, step);
-  let amTarget = Math.min(half, target-half);
-  let pmTarget = target - amTarget;
-  const am = composeExactOrLower(amTarget, strengths, step);
-  const usedAm = Object.entries(am).reduce((a,[m,c])=>a+m*c,0);
-  const pm = composeExactOrLower(target-usedAm, strengths, step);
-  return { AM:am, PM:pm };
+/* ===== Per-slot composer ===== */
+function composeForSlot(target, cls, med, form){
+  const pieces = allowedPiecesMg(cls,med,form);
+  const step = lowestStepMg(cls,med,form) || pieces[0] || 1;
+  return composeExactOrLower(target, pieces, step);
 }
-function distributeToSlots(target, strengths, slots){
-  const step=strengths[0]||1;
+function recomposeSlots(targets, cls, med, form){
   const out={AM:{},MID:{},DIN:{},PM:{}};
-  if(slots.length===1){
-    out[slots[0]] = composeExactOrLower(target, strengths, step);
-    return out;
-  }
-  if(slots.length===2 && slots.includes("AM") && slots.includes("PM")){
-    const bid=splitDailyPreferred(target, strengths);
-    out.AM=bid.AM; out.PM=bid.PM; return out;
-  }
-  // TID/QID: equal-ish split; spill to PM→DIN→MID→AM
-  const weights = slots.map(()=>1);
-  const sumW = weights.reduce((a,b)=>a+b,0);
-  let remaining = target;
-  const temp={};
-  slots.forEach((slot,i)=>{
-    const allot = (i===slots.length-1) ? remaining : roundTo(target*weights[i]/sumW, step);
-    const comp = composeExactOrLower(allot, strengths, step);
-    const used = Object.entries(comp).reduce((a,[m,c])=>a+m*c,0);
-    temp[slot]=comp; remaining = +(remaining - used).toFixed(3);
-  });
-  for(const slot of ["PM","DIN","MID","AM"]){
-    if(remaining<=EPS) break;
-    if(!slots.includes(slot)) continue;
-    const add = composeExactOrLower(remaining, strengths, step);
-    const used = Object.entries(add).reduce((a,[m,c])=>a+m*c,0);
-    Object.entries(add).forEach(([m,c])=>{ temp[slot][m]=(temp[slot][m]||0)+c; });
-    remaining = +(remaining-used).toFixed(3);
-  }
-  return {AM:temp.AM||{}, MID:temp.MID||{}, DIN:temp.DIN||{}, PM:temp.PM||{}};
-}
-
-/* ===== Opioids & friends steppers ===== */
-function stepOpioid_Recompose(packs, percent){
-  const strengths=strengthsForSelected().map(parseMgFromStrength).filter(v=>v>0).sort((a,b)=>a-b);
-  const step=strengths[0]||1;
-  const total=packsTotalMg(packs); if(total<=EPS) return packs;
-  let target=roundTo(total*(1-percent/100), step);
-  if(target===total && total>0){ target=Math.max(0,total-step); target=roundTo(target,step); }
-
-  // remove DIN then MID → keep BID only
-  let slots = ["AM","MID","DIN","PM"].filter(s=>Object.keys(packs[s]||{}).length>0);
-  if(slots.length>2 && slots.includes("DIN")) slots = slots.filter(s=>s!=="DIN");
-  if(slots.length>2 && slots.includes("MID")) slots = slots.filter(s=>s!=="MID");
-  if(slots.length===0) slots=["PM"];
-
-  const out = distributeToSlots(target, strengths, slots);
+  for(const slot of ["AM","MID","DIN","PM"]) out[slot] = composeForSlot(targets[slot]||0, cls, med, form);
   return out;
 }
-function stepPPI(packs, percent){
+
+/* ===== Preferred BID split ===== */
+function preferredBidTargets(total, cls, med, form){
+  const step = lowestStepMg(cls,med,form) || 1;
+  // Equal if possible; else AM smaller
+  const half = roundTo(total/2, step);
+  let am = Math.min(half, total-half);
+  let pm = total - am;
+  // Ensure rounding to grid doesn't exceed by more than step
+  am = roundTo(am, step); pm = roundTo(pm, step);
+  if(am+pm !== total){
+    // Adjust to meet total exactly on grid
+    const diff = total - (am+pm);
+    if(diff>0) pm = roundTo(pm+diff, step); else pm = roundTo(pm+diff, step);
+    if(am>pm){ const t=am; am=pm; pm=t; } // enforce AM<=PM
+  }
+  return {AM:am, PM:pm};
+}
+
+/* ===== Opioids (tablets) — shave DIN→MID then BID ===== */
+function stepOpioid_Shave(packs, percent, cls, med, form){
   const strengths=strengthsForSelected().map(parseMgFromStrength).filter(v=>v>0).sort((a,b)=>a-b);
   const step=strengths[0]||1;
-  const total=packsTotalMg(packs); if(total<=EPS) return packs;
-  let target=roundTo(total*(1-percent/100), step);
-  if(target===total && total>0){ target=Math.max(0,total-step); target=roundTo(target,step); }
-  // Preserve Dinner last: Night → Midday → Morning → Dinner
-  const active = ["AM","MID","DIN","PM"].filter(s=>Object.keys(packs[s]||{}).length>0);
-  const out = distributeToSlots(target, strengths, active.length?active:["DIN"]);
-  return out;
+  const tot=packsTotalMg(packs); if(tot<=EPS) return packs;
+  let target = roundTo(tot*(1-percent/100), step);
+  if(target===tot && tot>0){ target=Math.max(0, tot-step); target=roundTo(target,step); }
+  let reduce = +(tot - target).toFixed(3);
+
+  // Current per-slot totals
+  let cur = { AM: slotTotalMg(packs,"AM"), MID: slotTotalMg(packs,"MID"), DIN: slotTotalMg(packs,"DIN"), PM: slotTotalMg(packs,"PM") };
+
+  const shave = (slot)=>{
+    if(reduce<=EPS || cur[slot]<=EPS) return;
+    const can = cur[slot];
+    const dec = Math.min(can, roundTo(reduce, step));
+    cur[slot] = +(cur[slot] - dec).toFixed(3);
+    reduce = +(reduce - dec).toFixed(3);
+  };
+
+  // If QID present, reduce DIN first, then MID; if TDS (AM+MID+PM), reduce MID first
+  const hasDIN = cur.DIN>EPS;
+  if(hasDIN){ shave("DIN"); shave("MID"); }
+  else { shave("MID"); }
+
+  // If still need to reduce after DIN/MID handled, distribute across BID (AM/PM)
+  if(reduce>EPS){
+    const bidTarget = +(cur.AM + cur.PM - reduce).toFixed(3);
+    const bid = preferredBidTargets(bidTarget, cls, med, form);
+    cur.AM = bid.AM; cur.PM = bid.PM; reduce = 0;
+  }
+
+  // Zero-out tiny negatives
+  for(const k of ["AM","MID","DIN","PM"]) if(cur[k]<EPS) cur[k]=0;
+
+  // Compose per slot from marketed strengths (no splitting for opioids)
+  return recomposeSlots(cur, cls, med, form);
 }
+
+/* ===== PPI — dinner preserved last ===== */
+function stepPPI(packs, percent, cls, med, form){
+  const strengths=strengthsForSelected().map(parseMgFromStrength).filter(v=>v>0).sort((a,b)=>a-b);
+  const step=strengths[0]||1;
+  const tot=packsTotalMg(packs); if(tot<=EPS) return packs;
+  let target=roundTo(tot*(1-percent/100), step);
+  if(target===tot && tot>0){ target=Math.max(0, tot-step); target=roundTo(target,step); }
+
+  // Order Night → Midday → Morning → Dinner (Dinner preserved last)
+  let cur = { AM: slotTotalMg(packs,"AM"), MID: slotTotalMg(packs,"MID"), DIN: slotTotalMg(packs,"DIN"), PM: slotTotalMg(packs,"PM") };
+  let reduce= +(tot - target).toFixed(3);
+  const shave = (slot)=>{
+    if(reduce<=EPS || cur[slot]<=EPS) return;
+    const can = cur[slot];
+    const dec = Math.min(can, roundTo(reduce, step));
+    cur[slot] = +(cur[slot] - dec).toFixed(3);
+    reduce = +(reduce - dec).toFixed(3);
+  };
+  shave("PM"); shave("MID"); shave("AM"); // DIN preserved last
+  // Any remaining reduce (due to rounding): take from DIN
+  if(reduce>EPS) cur.DIN = Math.max(0, +(cur.DIN - roundTo(reduce,step)).toFixed(3));
+
+  return recomposeSlots(cur, cls, med, form);
+}
+
+/* ===== Antipsychotics ===== */
 function stepAP(packs, percent, med, form){
   const isIR = !isMR(form);
-  if(!isIR) return stepOpioid_Recompose(packs, percent); // SR like opioids
-  const total=packsTotalMg(packs); if(total<=EPS) return packs;
-  const step=AP_ROUND[med] || lowestStepMg("Antipsychotic",med,form) || 0.5;
-  let target=roundTo(total*(1-percent/100), step);
-  if(target===total && total>0){ target=Math.max(0,total-step); target=roundTo(target,step); }
-  // IR order: MID → AM → DIN → PM
-  const strengths=strengthsForSelected().map(parseMgFromStrength).filter(v=>v>0).sort((a,b)=>a-b);
-  let slots = ["AM","MID","DIN","PM"].filter(s=>Object.keys(packs[s]||{}).length>0);
-  if(slots.length>2 && slots.includes("MID")) slots = slots.filter(s=>s!=="MID");
-  if(slots.length>2 && slots.includes("AM")) slots = slots.filter(s=>s!=="AM");
-  if(slots.length>2 && slots.includes("DIN")) slots = slots.filter(s=>s!=="DIN");
-  if(slots.length===0) slots=["PM"];
-  return distributeToSlots(target, strengths, slots);
+  if(!isIR) return stepOpioid_Shave(packs, percent, "Antipsychotic", med, form); // SR like opioids
+
+  const tot=packsTotalMg(packs); if(tot<=EPS) return packs;
+  const step=AP_ROUND[med] || 0.5; // Haloperidol min step 0.5 mg (cap)
+  let target=roundTo(tot*(1-percent/100), step);
+  if(target===tot && tot>0){ target=Math.max(0, tot-step); target=roundTo(target,step); }
+
+  let cur = { AM: slotTotalMg(packs,"AM"), MID: slotTotalMg(packs,"MID"), DIN: slotTotalMg(packs,"DIN"), PM: slotTotalMg(packs,"PM") };
+  let reduce= +(tot - target).toFixed(3);
+  const shave = (slot)=>{
+    if(reduce<=EPS || cur[slot]<=EPS) return;
+    const can = cur[slot];
+    const dec = Math.min(can, roundTo(reduce, step));
+    cur[slot] = +(cur[slot] - dec).toFixed(3);
+    reduce = +(reduce - dec).toFixed(3);
+  };
+  // IR order: MID → AM → DIN → PM (PM preserved last)
+  shave("MID"); shave("AM"); shave("DIN"); shave("PM");
+
+  return recomposeSlots(cur, "Antipsychotic", med, form);
 }
+
+/* ===== BZRA ===== */
 function stepBZRA(packs, percent, med, form){
-  const total=packsTotalMg(packs); if(total<=EPS) return packs;
-  const pieces=allowedPiecesMg("Benzodiazepines / Z-Drug (BZRA)",med,form);
-  const step=BZRA_MIN_STEP[med] || 0.5;
-  let target = total*(1-percent/100);
-  const down = roundTo(Math.floor(target/step+1e-9)*step, step);
-  const up   = roundTo(Math.ceil (target/step-1e-9)*step, step);
-  target = (Math.abs(up-target) < Math.abs(target-down)) ? up : down; // prefer up on tie
-  if(target===total && total>0){ target=Math.max(0,total-step); target=roundTo(target,step); }
-  const pm=composeExactOrLower(target,pieces,step);
+  const tot=packsTotalMg(packs); if(tot<=EPS) return packs;
+  // Zolpidem CR grid = 6.25; others use BZRA_MIN_STEP
+  const step = (!isMR(form) || !/Zolpidem/i.test(med)) ? (BZRA_MIN_STEP[med] || 0.5) : 6.25;
+  let target = tot*(1-percent/100);
+  const down = floorTo(target, step), up = ceilTo(target, step);
+  target = (Math.abs(up-target) < Math.abs(target-down)) ? up : down; // ties up
+  if(target===tot && tot>0){ target=Math.max(0, tot-step); target=roundTo(target,step); }
+  const pm = composeForSlot(target, "Benzodiazepines / Z-Drug (BZRA)", med, form);
   return { AM:{}, MID:{}, DIN:{}, PM:pm };
 }
 
@@ -400,8 +436,8 @@ function buildPlanTablets(){
   const end={ hit3mo:false, hitReview:false, hitP1Stop:false };
 
   const applyStep=()=>{
-    if(cls==="Opioid") packs=stepOpioid_Recompose(packs,p1Pct);
-    else if(cls==="Proton Pump Inhibitor") packs=stepPPI(packs,p1Pct);
+    if(cls==="Opioid") packs=stepOpioid_Shave(packs,p1Pct, cls, med, form);
+    else if(cls==="Proton Pump Inhibitor") packs=stepPPI(packs,p1Pct, cls, med, form);
     else if(cls==="Benzodiazepines / Z-Drug (BZRA)") packs=stepBZRA(packs,p1Pct,med,form);
     else packs=stepAP(packs,p1Pct,med,form);
   };
@@ -419,8 +455,8 @@ function buildPlanTablets(){
 
     const isPhase2 = (p2Pct>0 && p2Int>0 && week>(p1Stop||0));
     if(isPhase2){
-      if(cls==="Opioid") packs=stepOpioid_Recompose(packs,p2Pct);
-      else if(cls==="Proton Pump Inhibitor") packs=stepPPI(packs,p2Pct);
+      if(cls==="Opioid") packs=stepOpioid_Shave(packs,p2Pct, cls, med, form);
+      else if(cls==="Proton Pump Inhibitor") packs=stepPPI(packs,p2Pct, cls, med, form);
       else if(cls==="Benzodiazepines / Z-Drug (BZRA)") packs=stepBZRA(packs,p2Pct,med,form);
       else packs=stepAP(packs,p2Pct,med,form);
       if(packsTotalMg(packs)>EPS){ rows.push({week,date:fmtDate(date),packs:deepCopy(packs),med,form,cls}); }
@@ -437,71 +473,62 @@ function buildPlanTablets(){
   return rows;
 }
 
-/* =================== Patches builder — RULE B =================== */
-/* Tie-breakers: nearest to target but ≤ previous; if exact single exists prefer it; else fewest patches; then higher individual strengths; then lower total */
+/* =================== Patches builder — RULE B and start at step 2 =================== */
 function patchAvailList(med){ return (med==="Fentanyl") ? [12,25,50,75,100] : [5,10,15,20,25,30,40]; }
 function combosUpTo(avail, maxPatches=3){
-  // multiset combinations up to maxPatches
-  const sums = new Map(); // key: total, val: one representative combo (desc sorted)
+  const sums = new Map();
   function addCombo(arr){
     const total = arr.reduce((a,b)=>a+b,0);
-    const key = total;
     const sorted = arr.slice().sort((a,b)=>b-a);
-    if(!sums.has(key)) sums.set(key, sorted);
+    if(!sums.has(total)) sums.set(total, sorted);
     else {
-      const ex = sums.get(key);
-      // prefer fewer patches; if tie, prefer lexicographically higher (higher strengths first)
-      if(sorted.length < ex.length) sums.set(key, sorted);
+      const ex = sums.get(total);
+      if(sorted.length < ex.length) sums.set(total, sorted);
       else if(sorted.length===ex.length){
         for(let i=0;i<sorted.length;i++){
           if(sorted[i]===ex[i]) continue;
-          if(sorted[i]>ex[i]) { sums.set(key, sorted); break; }
+          if(sorted[i]>ex[i]) { sums.set(total, sorted); break; }
           if(sorted[i]<ex[i]) break;
         }
       }
     }
   }
-  // generate
   const n=avail.length;
   for(let a=0;a<n;a++){
     addCombo([avail[a]]);
-    if(maxPatches<2) continue;
     for(let b=a;b<n;b++){
       addCombo([avail[a],avail[b]]);
-      if(maxPatches<3) continue;
-      for(let c=b;c<n;c++){
-        addCombo([avail[a],avail[b],avail[c]]);
-        if(maxPatches<4) continue;
-        for(let d=c; d<n; d++){
-          addCombo([avail[a],avail[b],avail[c],avail[d]]);
-        }
-      }
+      for(let c=b;c<n;c++) addCombo([avail[a],avail[b],avail[c]]);
     }
   }
   return sums; // Map(total -> best combo)
 }
 function choosePatchTotal(prevTotal, target, med){
   const avail = patchAvailList(med);
-  const sums = combosUpTo(avail, 3); // allow up to 3 patches
-  // candidate totals ≤ prevTotal
+  const sums = combosUpTo(avail, 3);
   const cand = [...sums.keys()].filter(t => t <= prevTotal + EPS);
   if(cand.length===0) return { total: prevTotal, combo: [prevTotal] };
-  // pick nearest to target (abs diff); if equal distance, prefer higher total (closer "up")
   cand.sort((a,b)=>{
     const da=Math.abs(a-target), db=Math.abs(b-target);
-    if(Math.abs(da-db)>1e-9) return da - db;
-    return b - a; // prefer higher total on tie (closer up)
+    if(Math.abs(da-db)>1e-9) return da - db; // nearest to target
+    return b - a; // prefer higher total on tie
   });
   let pick = cand[0];
-  if(Math.abs(pick - prevTotal) < 1e-9){ // same-as-prior safeguard: drop one step to next lower candidate
+  if(Math.abs(pick - prevTotal) < 1e-9){ // same-as-prior safeguard
     const lower = cand.find(x => x < prevTotal - 1e-9);
     if(lower!=null) pick = lower;
   }
-  // If exact single exists at pick, keep that; otherwise use precomputed best combo (fewest patches then higher individual)
-  const single = avail.find(a => Math.abs(a-pick)<1e-9);
-  const combo = single!=null ? [single] : (combosUpTo(avail,3).get(pick) || [pick]);
+  let combo = combosUpTo(avail,3).get(pick) || [pick];
+  // Fentanyl normalization: map totals to single if equal or +1 and still ≤ prevTotal
+  if(med==="Fentanyl"){
+    const single = avail.find(x=>Math.abs(x-pick)<1e-9);
+    const singleUp1 = avail.find(x=>Math.abs(x-(pick+1))<1e-9 && (pick+1)<=prevTotal+EPS);
+    if(single!=null) combo=[single];
+    else if(singleUp1!=null) { combo=[singleUp1]; pick=singleUp1; }
+  }
   return { total: pick, combo };
 }
+
 function buildPlanPatch(){
   const med=$("medicineSelect").value;
   const startDate=$("startDate")?($("startDate")._flatpickr?.selectedDates?.[0]||new Date()):new Date();
@@ -525,40 +552,28 @@ function buildPlanPatch(){
   let current = prevTotal;
   let currentCombo = [prevTotal];
 
-  // state to handle smallest hold for one full reduction interval (Rule B)
+  // Rule B state
   let smallestAppliedOn = null;     // date we first apply the smallest patch
   let stopThresholdDate = null;     // smallestAppliedOn + reduceEvery
   const capDate = new Date(+startDate + THREE_MONTHS_MS);
 
-  // helper to append apply row
-  function pushApply(total, combo){
-    rows.push({
-      date: fmtDate(curApply),
-      remove: fmtDate(curRemove),
-      patches: combo.slice(),
-      med, form:"Patch"
-    });
-  }
-  // helper to push final event
-  function pushFinal(type, whenDate){
-    rows.push({
-      date: fmtDate(whenDate),
-      patches: [],
-      med, form:"Patch",
-      stop: (type==="stop"),
-      review: (type==="review")
-    });
-  }
+  const pushApply = () => {
+    rows.push({ date: fmtDate(curApply), remove: fmtDate(curRemove), patches: currentCombo.slice(), med, form:"Patch" });
+  };
+  const pushFinal = (type, whenDate) => {
+    rows.push({ date: fmtDate(whenDate), patches: [], med, form:"Patch", stop:(type==="stop"), review:(type==="review") });
+  };
 
-  let week = 1;
+  let week = 1; let startedReducing=false;
   while(true){
-    // On first apply and each subsequent apply AFTER crossing a reduction boundary, update strength
+    // Only change (and only display) from the first apply AFTER the first reduction boundary
     if(+curApply >= +nextReductionCutoff - 1e-9){
-      // compute target and choose next total (monotonic ↓, nearest ≤ prev)
+      // compute target and choose next total (monotonic ↓)
       const target = prevTotal * (1 - reducePct/100);
       const pick = choosePatchTotal(prevTotal, target, med);
       current = pick.total; currentCombo = pick.combo.slice();
       nextReductionCutoff = addDays(nextReductionCutoff, reduceEvery);
+      if(!startedReducing) startedReducing=true;
       // mark smallest start
       if(current <= smallest + 1e-9 && !smallestAppliedOn){
         smallestAppliedOn = new Date(curApply);
@@ -567,23 +582,19 @@ function buildPlanPatch(){
       prevTotal = current;
     }
 
-    // append apply row
-    pushApply(current, currentCombo);
+    // Skip baseline rows (start at step 2)
+    if(startedReducing) pushApply();
 
-    // compute candidate finals at this cycle
+    // finals
     const candidateStop = (stopThresholdDate && (+curRemove >= +stopThresholdDate - 1e-9)) ? new Date(curRemove) : null;
-    // pick earliest: Review takes precedence if earlier or equal
     let finalType=null, finalDate=null;
     if(reviewDate && (!candidateStop || +reviewDate <= +candidateStop)) { finalType="review"; finalDate=new Date(reviewDate); }
     if(!finalDate && (+capDate <= +curRemove)) { finalType="review"; finalDate=new Date(capDate); }
     if(!finalDate && candidateStop){ finalType="stop"; finalDate=candidateStop; }
 
-    if(finalDate){
-      pushFinal(finalType, finalDate);
-      break;
-    }
+    if(finalDate){ pushFinal(finalType, finalDate); break; }
 
-    // advance to next cycle
+    // advance
     curApply = addDays(curApply, applyEvery);
     curRemove = addDays(curRemove, applyEvery);
     week++; if(week>MAX_WEEKS) break;
@@ -595,7 +606,7 @@ function buildPlanPatch(){
 /* =================== Renderers =================== */
 function td(text, cls){ const el=document.createElement("td"); if(cls) el.className=cls; el.textContent=text||""; return el; }
 
-/* Fractional grouping: prefer mapping pieces to the LARGEST suitable base (fewer tablets), then halves */
+/* Fractional grouping for BZRA/AP-IR: map pieces to largest base first */
 function perStrengthRowsFractional(r){
   const baseAsc = strengthsForSelected().map(parseMgFromStrength).filter(v=>v>0).sort((a,b)=>a-b);
   const baseDesc = baseAsc.slice().sort((a,b)=>b-a);
@@ -608,25 +619,15 @@ function perStrengthRowsFractional(r){
       const piece=+pieceStr; let mapped=false;
 
       // Whole tablet of the largest possible base
-      for(const b of baseDesc){
-        if(Math.abs(piece - b) < 1e-6){ ensure(b)[slot] += 4*count; mapped=true; break; }
-      }
+      for(const b of baseDesc){ if(Math.abs(piece - b) < 1e-6){ ensure(b)[slot] += 4*count; mapped=true; break; } }
       if(mapped) return;
 
       // Half tablet of the largest possible base (if allowed)
-      if(split.half){
-        for(const b of baseDesc){
-          if(Math.abs(piece - b/2) < 1e-6){ ensure(b)[slot] += 2*count; mapped=true; break; }
-        }
-      }
+      if(split.half){ for(const b of baseDesc){ if(Math.abs(piece - b/2) < 1e-6){ ensure(b)[slot] += 2*count; mapped=true; break; } } }
       if(mapped) return;
 
-      // Quarters only if allowed (shouldn’t for BZRA/AP-IR, but keep fallback)
-      if(split.quarter){
-        for(const b of baseDesc){
-          if(Math.abs(piece - b/4) < 1e-6){ ensure(b)[slot] += 1*count; mapped=true; break; }
-        }
-      }
+      // Quarters rarely, but keep fallback if enabled (should be off here)
+      if(split.quarter){ for(const b of baseDesc){ if(Math.abs(piece - b/4) < 1e-6){ ensure(b)[slot] += 1*count; mapped=true; break; } } }
       if(mapped) return;
 
       // Fallback: map to largest base
@@ -810,7 +811,7 @@ function buildPlan(){
   $("hdrSpecial").textContent=`${specialInstructionFor()}`;
   const isPatch=(form==="Patch"); const rows=isPatch?buildPlanPatch():buildPlanTablets();
   if(isPatch) renderPatchTable(rows); else renderStandardTable(rows);
-  setFooterText(cls);
+  setFooterText($("classSelect")?.value);
 }
 
 function updateRecommendedAndLines(){
@@ -840,4 +841,5 @@ function init(){
   $("savePdfBtn").addEventListener("click", saveOutputAsPdf);
   updateRecommended();
 }
+
 document.addEventListener("DOMContentLoaded", ()=>{ try{ init(); } catch(e){ console.error(e); alert("Init error: "+(e?.message||String(e))); }});
