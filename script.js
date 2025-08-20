@@ -550,17 +550,6 @@ function choosePatchTotal(prevTotal, target, med){
 
   return { total: pick, combo };
 }
-  let combo = combosUpTo(avail,3).get(pick) || [pick];
-  // Fentanyl normalization: map totals to single if equal or +1 and still ≤ prevTotal
-  if(med==="Fentanyl"){
-    const single = avail.find(x=>Math.abs(x-pick)<1e-9);
-    const singleUp1 = avail.find(x=>Math.abs(x-(pick+1))<1e-9 && (pick+1)<=prevTotal+EPS);
-    if(single!=null) combo=[single];
-    else if(singleUp1!=null) { combo=[singleUp1]; pick=singleUp1; }
-  }
-  return { total: pick, combo };
-}
-
 function buildPlanPatch(){
   const med=$("medicineSelect").value;
   const startDate=$("startDate")?($("startDate")._flatpickr?.selectedDates?.[0]||new Date()):new Date();
