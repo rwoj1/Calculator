@@ -12,12 +12,7 @@ const THREE_MONTHS_MS = 90 * 24 * 3600 * 1000;
 const EPS = 1e-6;
 
 /* ===== digits/words helpers ===== */
-const WORDS_0_20 = ["zero","one","two","three","four","five","six","seven","eight","nine","ten",
-  "eleven","twelve","thirteen","fourteen","fifteen","sixteen","seventeen","eighteen","nineteen","twenty"];
-const intWord = (n) => (n>=0 && n<=20 ? WORDS_0_20[n] : String(n));
-
-/* cells: digits for whole, words for partial */
-function qToCell(q){
+function qToCell(q){ // q = quarters of a tablet
   const tabs = q/4;
   const whole = Math.floor(tabs + 1e-6);
   const frac = +(tabs - whole).toFixed(2);
@@ -26,8 +21,7 @@ function qToCell(q){
   const tail = frac===0.5 ? "and a half" : (frac===0.25 ? "and a quarter" : "and three quarters");
   return `${whole} ${tail}`;
 }
-/* instructions: digits for whole, words for partial */
-function tabletsPhraseDigits(q){
+function tabletsPhraseDigits(q){ // q = quarters; digits for whole, words for partial
   const tabs = q/4;
   const whole = Math.floor(tabs + 1e-6);
   const frac = +(tabs - whole).toFixed(2);
@@ -82,39 +76,19 @@ const CATALOG = {
 
 /* ===== Rounding minima (BZRA halves-only confirmed) ===== */
 const BZRA_MIN_STEP = {
-  Alprazolam: 0.25,
-  Diazepam: 1.0,
-  Flunitrazepam: 0.5,
-  Lorazepam: 0.5,
-  Nitrazepam: 2.5,
-  Oxazepam: 7.5,
-  Temazepam: 5.0,
-  Zolpidem: 5.0,      // IR
-  Zopiclone: 3.75,
-  Clonazepam: 0.25,
+  Alprazolam: 0.25, Diazepam: 1.0, Flunitrazepam: 0.5, Lorazepam: 0.5,
+  Nitrazepam: 2.5, Oxazepam: 7.5, Temazepam: 5.0, Zolpidem: 5.0, Zopiclone: 3.75, Clonazepam: 0.25,
 };
 const AP_ROUND = { Haloperidol: 0.5, Risperidone: 0.5, Quetiapine: 12.5, Olanzapine: 1.25 };
 
 /* =================== Parsing/labels =================== */
 function isMR(form){ return /slow\s*release|modified|controlled|sustained/i.test(form) || /\b(SR|MR|CR|ER|XR|PR|CD)\b/i.test(form); }
 function formLabelCapsSR(form){ return String(form||"").replace(/\bsr\b/ig,"SR"); }
-
-function parseMgFromStrength(s){
-  if(!s) return 0;
-  const m = String(s).match(/^\s*([\d.]+)\s*(?:mg)?(?:\s*\/|$)/i);
-  return m ? parseFloat(m[1]) : 0;
-}
-function parsePatchRate(s){
-  const m=String(s).match(/([\d.]+)\s*mcg\/hr/i); return m?parseFloat(m[1]):0;
-}
-
-/* oxy/nal label using oxycodone component; prefer single marketed pair if available */
+function parseMgFromStrength(s){ const m = String(s||"").match(/^\s*([\d.]+)\s*(?:mg)?(?:\s*\/|$)/i); return m ? parseFloat(m[1]) : 0; }
+function parsePatchRate(s){ const m=String(s||"").match(/([\d.]+)\s*mcg\/hr/i); return m?parseFloat(m[1]):0; }
 function oxyNxPairLabel(oxyMg){
   const list = (CATALOG["Opioid"]["Oxycodone / Naloxone"]["SR Tablet"] || []);
-  const hit = list.find(s=>{
-    const m = String(s).match(/^\s*([\d.]+)\s*(?:mg)?(?:\s*\/|$)/i);
-    return m && parseFloat(m[1]) === +oxyMg;
-  });
+  const hit = list.find(s=>{ const m = String(s).match(/^\s*([\d.]+)\s*(?:mg)?(?:\s*\/|$)/i); return m && parseFloat(m[1]) === +oxyMg; });
   const pair = hit ? hit.replace(/\s*mg.*$/i, " mg") : `${oxyMg}/${(oxyMg/2)} mg`;
   return `Oxycodone / Naloxone ${pair} SR Tablet`;
 }
@@ -229,7 +203,7 @@ function renderDoseLines(){
 /* =================== Suggested practice header =================== */
 function specialInstructionFor(){
   const cls=$("classSelect")?.value, form=$("formSelect")?.value || "";
-  if(cls==="Benzodiazepines / Z-Drug (BZRA)" || cls==="Antipsychotic") return ""; // removed per rules
+  if(cls==="Benzodiazepines / Z-Drug (BZRA)" || cls==="Antipsychotic") return ""; // remove per request
   return /Patch/i.test(form) ? "Special instruction: apply to intact skin as directed. Do not cut patches."
                               : "Swallow whole, do not halve or crush";
 }
@@ -302,11 +276,10 @@ function buildPacksFromDoseLines(){
   return packs;
 }
 
-/* ===== Split helpers for composing target totals ===== */
+/* ===== Preferred slot distribution ===== */
 function splitDailyPreferred(target, strengths){
   const step=strengths[0]||1;
   const half=roundTo(target/2, step);
-  // prefer smaller AM
   let amTarget = Math.min(half, target-half);
   let pmTarget = target - amTarget;
   const am = composeExactOrLower(amTarget, strengths, step);
@@ -325,7 +298,7 @@ function distributeToSlots(target, strengths, slots){
     const bid=splitDailyPreferred(target, strengths);
     out.AM=bid.AM; out.PM=bid.PM; return out;
   }
-  // TID or QID: start equal split, put rounding “extra” into PM then DIN then MID then AM
+  // TID/QID: equal-ish split; spill to PM→DIN→MID→AM
   const weights = slots.map(()=>1);
   const sumW = weights.reduce((a,b)=>a+b,0);
   let remaining = target;
@@ -336,7 +309,6 @@ function distributeToSlots(target, strengths, slots){
     const used = Object.entries(comp).reduce((a,[m,c])=>a+m*c,0);
     temp[slot]=comp; remaining = +(remaining - used).toFixed(3);
   });
-  // spill any remainder to slots in PM→DIN→MID→AM order
   for(const slot of ["PM","DIN","MID","AM"]){
     if(remaining<=EPS) break;
     if(!slots.includes(slot)) continue;
@@ -348,7 +320,7 @@ function distributeToSlots(target, strengths, slots){
   return {AM:temp.AM||{}, MID:temp.MID||{}, DIN:temp.DIN||{}, PM:temp.PM||{}};
 }
 
-/* ===== class-specific steppers ===== */
+/* ===== Opioids & friends steppers ===== */
 function stepOpioid_Recompose(packs, percent){
   const strengths=strengthsForSelected().map(parseMgFromStrength).filter(v=>v>0).sort((a,b)=>a-b);
   const step=strengths[0]||1;
@@ -356,15 +328,14 @@ function stepOpioid_Recompose(packs, percent){
   let target=roundTo(total*(1-percent/100), step);
   if(target===total && total>0){ target=Math.max(0,total-step); target=roundTo(target,step); }
 
-  // active slots
-  const active = ["AM","MID","DIN","PM"].filter(s=>Object.keys(packs[s]||{}).length>0);
-  // reduce DIN then MID, then keep BID
-  let slots = active.slice();
+  // remove DIN then MID → keep BID only
+  let slots = ["AM","MID","DIN","PM"].filter(s=>Object.keys(packs[s]||{}).length>0);
   if(slots.length>2 && slots.includes("DIN")) slots = slots.filter(s=>s!=="DIN");
   if(slots.length>2 && slots.includes("MID")) slots = slots.filter(s=>s!=="MID");
-  if(slots.length===0) slots = ["PM"]; // fallback
+  if(slots.length===0) slots=["PM"];
 
-  return distributeToSlots(target, strengths, slots);
+  const out = distributeToSlots(target, strengths, slots);
+  return out;
 }
 function stepPPI(packs, percent){
   const strengths=strengthsForSelected().map(parseMgFromStrength).filter(v=>v>0).sort((a,b)=>a-b);
@@ -372,6 +343,7 @@ function stepPPI(packs, percent){
   const total=packsTotalMg(packs); if(total<=EPS) return packs;
   let target=roundTo(total*(1-percent/100), step);
   if(target===total && total>0){ target=Math.max(0,total-step); target=roundTo(target,step); }
+  // Preserve Dinner last: Night → Midday → Morning → Dinner
   const active = ["AM","MID","DIN","PM"].filter(s=>Object.keys(packs[s]||{}).length>0);
   const out = distributeToSlots(target, strengths, active.length?active:["DIN"]);
   return out;
@@ -383,12 +355,12 @@ function stepAP(packs, percent, med, form){
   const step=AP_ROUND[med] || lowestStepMg("Antipsychotic",med,form) || 0.5;
   let target=roundTo(total*(1-percent/100), step);
   if(target===total && total>0){ target=Math.max(0,total-step); target=roundTo(target,step); }
+  // IR order: MID → AM → DIN → PM
   const strengths=strengthsForSelected().map(parseMgFromStrength).filter(v=>v>0).sort((a,b)=>a-b);
-  // Slot order: MID → AM → DIN → PM
   let slots = ["AM","MID","DIN","PM"].filter(s=>Object.keys(packs[s]||{}).length>0);
-  if(slots.length>1 && slots.includes("MID")) slots = slots.filter(s=>s!=="MID");
-  if(slots.length>1 && slots.includes("AM")) slots = slots.filter(s=>s!=="AM");
-  if(slots.length>1 && slots.includes("DIN")) slots = slots.filter(s=>s!=="DIN");
+  if(slots.length>2 && slots.includes("MID")) slots = slots.filter(s=>s!=="MID");
+  if(slots.length>2 && slots.includes("AM")) slots = slots.filter(s=>s!=="AM");
+  if(slots.length>2 && slots.includes("DIN")) slots = slots.filter(s=>s!=="DIN");
   if(slots.length===0) slots=["PM"];
   return distributeToSlots(target, strengths, slots);
 }
@@ -465,165 +437,208 @@ function buildPlanTablets(){
   return rows;
 }
 
-/* =================== Patches builder (Rule B end-logic) =================== */
-function normalizePatchDisplay(med, used){
-  const avail = (med==="Fentanyl") ? [12,25,50,75,100] : [5,10,15,20,25,30,40];
-  const out = used.slice().sort((a,b)=>b-a);
-  const sum=out.reduce((x,y)=>x+y,0);
-  if(avail.includes(sum)) return [sum];
-  return out;
-}
-function choosePatchCombo(target, prev, med){
-  const avail = (med==="Fentanyl") ? [12,25,50,75,100] : [5,10,15,20,25,30,40];
-  // generate candidates up to 3 patches
-  const cands=[];
-  for(let i=0;i<avail.length;i++){
-    const a=avail[i]; if(a<=prev+EPS) cands.push([a]);
-    for(let j=i;j<avail.length;j++){
-      const b=avail[j]; if(a+b<=prev+EPS) cands.push([a,b]);
-      for(let k=j;k<avail.length;k++){
-        const c=avail[k]; if(a+b+c<=prev+EPS) cands.push([a,b,c]);
+/* =================== Patches builder — RULE B =================== */
+/* Tie-breakers: nearest to target but ≤ previous; if exact single exists prefer it; else fewest patches; then higher individual strengths; then lower total */
+function patchAvailList(med){ return (med==="Fentanyl") ? [12,25,50,75,100] : [5,10,15,20,25,30,40]; }
+function combosUpTo(avail, maxPatches=3){
+  // multiset combinations up to maxPatches
+  const sums = new Map(); // key: total, val: one representative combo (desc sorted)
+  function addCombo(arr){
+    const total = arr.reduce((a,b)=>a+b,0);
+    const key = total;
+    const sorted = arr.slice().sort((a,b)=>b-a);
+    if(!sums.has(key)) sums.set(key, sorted);
+    else {
+      const ex = sums.get(key);
+      // prefer fewer patches; if tie, prefer lexicographically higher (higher strengths first)
+      if(sorted.length < ex.length) sums.set(key, sorted);
+      else if(sorted.length===ex.length){
+        for(let i=0;i<sorted.length;i++){
+          if(sorted[i]===ex[i]) continue;
+          if(sorted[i]>ex[i]) { sums.set(key, sorted); break; }
+          if(sorted[i]<ex[i]) break;
+        }
       }
     }
   }
-  // evaluate
-  let best=null;
-  function better(x,y){
-    if(!y) return true;
-    const tx=x.reduce((s,v)=>s+v,0), ty=y.reduce((s,v)=>s+v,0);
-    const dx=Math.abs(tx-target), dy=Math.abs(ty-target);
-    if(dx!==dy) return dx<dy; // nearest to target
-    if(x.length!==y.length) return x.length<y.length; // fewest patches
-    // prefer higher individual strengths (lexicographically desc)
-    const xs=x.slice().sort((a,b)=>b-a), ys=y.slice().sort((a,b)=>b-a);
-    for(let i=0;i<Math.max(xs.length,ys.length);i++){
-      const xv=xs[i]||0, yv=ys[i]||0; if(xv!==yv) return xv>yv;
+  // generate
+  const n=avail.length;
+  for(let a=0;a<n;a++){
+    addCombo([avail[a]]);
+    if(maxPatches<2) continue;
+    for(let b=a;b<n;b++){
+      addCombo([avail[a],avail[b]]);
+      if(maxPatches<3) continue;
+      for(let c=b;c<n;c++){
+        addCombo([avail[a],avail[b],avail[c]]);
+        if(maxPatches<4) continue;
+        for(let d=c; d<n; d++){
+          addCombo([avail[a],avail[b],avail[c],avail[d]]);
+        }
+      }
     }
-    if(tx!==ty) return tx<ty; // finally lower total
-    return false;
   }
-  for(const cand of cands){
-    const tot=cand.reduce((s,v)=>s+v,0); if(tot>prev+EPS) continue;
-    if(!best || better(cand,best)) best=cand;
+  return sums; // Map(total -> best combo)
+}
+function choosePatchTotal(prevTotal, target, med){
+  const avail = patchAvailList(med);
+  const sums = combosUpTo(avail, 3); // allow up to 3 patches
+  // candidate totals ≤ prevTotal
+  const cand = [...sums.keys()].filter(t => t <= prevTotal + EPS);
+  if(cand.length===0) return { total: prevTotal, combo: [prevTotal] };
+  // pick nearest to target (abs diff); if equal distance, prefer higher total (closer "up")
+  cand.sort((a,b)=>{
+    const da=Math.abs(a-target), db=Math.abs(b-target);
+    if(Math.abs(da-db)>1e-9) return da - db;
+    return b - a; // prefer higher total on tie (closer up)
+  });
+  let pick = cand[0];
+  if(Math.abs(pick - prevTotal) < 1e-9){ // same-as-prior safeguard: drop one step to next lower candidate
+    const lower = cand.find(x => x < prevTotal - 1e-9);
+    if(lower!=null) pick = lower;
   }
-  if(!best) best=[Math.min(...((med==="Fentanyl")?[12,25,50,75,100]:[5,10,15,20,25,30,40]))];
-  // enforce monotonic drop: if equals prev, push down by lowest available unit
-  const tot=best.reduce((s,v)=>s+v,0);
-  if(Math.abs(tot-prev)<EPS){
-    const minUnit = (med==="Fentanyl") ? 12 : 5;
-    const target2 = Math.max(0, prev - minUnit);
-    // re-choose under new prev
-    let best2=null;
-    for(const cand of cands){
-      const t=cand.reduce((s,v)=>s+v,0); if(t>prev-minUnit+EPS) continue;
-      if(!best2 || better(cand,best2)) best2=cand;
-    }
-    if(best2) best = best2;
-  }
-  return best;
+  // If exact single exists at pick, keep that; otherwise use precomputed best combo (fewest patches then higher individual)
+  const single = avail.find(a => Math.abs(a-pick)<1e-9);
+  const combo = single!=null ? [single] : (combosUpTo(avail,3).get(pick) || [pick]);
+  return { total: pick, combo };
 }
 function buildPlanPatch(){
   const med=$("medicineSelect").value;
   const startDate=$("startDate")?($("startDate")._flatpickr?.selectedDates?.[0]||new Date()):new Date();
   const reviewDate=$("reviewDate")?($("reviewDate")._flatpickr?.selectedDates?.[0]||null):null;
 
-  const changeDays=(med==="Fentanyl")?3:7;                       // apply/remove cadence
+  const applyEvery=(med==="Fentanyl")?3:7;     // apply/remove cadence
   const reducePct=clamp(parseFloat($("p1Percent")?.value||"0"),1,100);
   const reduceEvery=Math.max(1, parseInt($("p1Interval")?.value|| (med==="Fentanyl"?"3":"7"),10)); // reduction interval
 
-  const strengths=strengthsForSelected().map(parsePatchRate).filter(v=>v>0).sort((a,b)=>a-b);
-  const smallest=strengths[0];
-  let total=0; doseLines.forEach(ln=> total += parsePatchRate(ln.strengthStr)||0 ); if(total<=0) total=smallest;
+  const strengths=strengthsForSelected().map(parsePatchRate).filter(v=>v>0).sort((a,b)=>b-a);
+  const smallest=strengths[strengths.length-1];
+  let startTotal=0; doseLines.forEach(ln=> startTotal += parsePatchRate(ln.strengthStr)||0 ); if(startTotal<=0) startTotal=smallest;
 
-  let currentTotal = total; let prevTotal = total;
-  let reductionDate = addDays(startDate, reduceEvery);
-  let date = new Date(startDate);
+  const rows=[];
+
+  // schedule clocks
+  let curApply = new Date(startDate);
+  let curRemove = addDays(curApply, applyEvery);
+  let nextReductionCutoff = addDays(startDate, reduceEvery); // first time we may change strength
+  let prevTotal = startTotal;
+  let current = prevTotal;
+  let currentCombo = [prevTotal];
+
+  // state to handle smallest hold for one full reduction interval (Rule B)
+  let smallestAppliedOn = null;     // date we first apply the smallest patch
+  let stopThresholdDate = null;     // smallestAppliedOn + reduceEvery
   const capDate = new Date(+startDate + THREE_MONTHS_MS);
 
-  let smallestStartApplyDate = null; // first apply date at smallest
-  let plannedStopDate = null;        // removal date to show Stop
-
-  const rows=[]; let guard=0;
-  while(guard++<500){
-    // if after a reduction date, compute new total BEFORE applying this cycle (Rule B: switch on first apply AFTER reduction date)
-    while(date - reductionDate > -EPS){ // date >= reductionDate
-      const target = prevTotal * (1 - reducePct/100);
-      const combo = choosePatchCombo(target, prevTotal, med);
-      currentTotal = combo.reduce((s,v)=>s+v,0);
-      if(currentTotal<=smallest && !smallestStartApplyDate){
-        smallestStartApplyDate = new Date(date); // smallest begins now (this apply)
-      }
-      prevTotal = currentTotal;
-      reductionDate = addDays(reductionDate, reduceEvery);
-      // continue while in case multiple reduction periods passed
-    }
-
-    // append apply row for currentTotal
-    rows.push({ date: fmtDate(date), patches: normalizePatchDisplay(med,[currentTotal]), med, form:"Patch" });
-
-    // compute removal for this application
-    const removalDate = addDays(date, changeDays);
-
-    // plan Stop once smallest has been held for a full reduction interval (first removal with date >= smallestStart+interval)
-    if(smallestStartApplyDate && !plannedStopDate){
-      const holdUntil = addDays(smallestStartApplyDate, reduceEvery);
-      if(+removalDate >= +holdUntil - EPS){
-        plannedStopDate = new Date(removalDate);
-      }
-    }
-
-    // End conditions (Review precedence)
-    if(reviewDate && (!plannedStopDate || +reviewDate <= +plannedStopDate)){
-      if(+reviewDate <= +removalDate){
-        rows.push({ date: fmtDate(reviewDate), patches: [], med, form:"Patch", review:true });
-        break;
-      }
-    }
-    if(plannedStopDate && +plannedStopDate <= +removalDate){
-      rows.push({ date: fmtDate(plannedStopDate), patches: [], med, form:"Patch", stop:true });
-      break;
-    }
-    if(+date >= +capDate){
-      rows.push({ date: fmtDate(capDate), patches: [], med, form:"Patch", review:true });
-      break;
-    }
-
-    // advance to next apply
-    date = addDays(date, changeDays);
+  // helper to append apply row
+  function pushApply(total, combo){
+    rows.push({
+      date: fmtDate(curApply),
+      remove: fmtDate(curRemove),
+      patches: combo.slice(),
+      med, form:"Patch"
+    });
   }
+  // helper to push final event
+  function pushFinal(type, whenDate){
+    rows.push({
+      date: fmtDate(whenDate),
+      patches: [],
+      med, form:"Patch",
+      stop: (type==="stop"),
+      review: (type==="review")
+    });
+  }
+
+  let week = 1;
+  while(true){
+    // On first apply and each subsequent apply AFTER crossing a reduction boundary, update strength
+    if(+curApply >= +nextReductionCutoff - 1e-9){
+      // compute target and choose next total (monotonic ↓, nearest ≤ prev)
+      const target = prevTotal * (1 - reducePct/100);
+      const pick = choosePatchTotal(prevTotal, target, med);
+      current = pick.total; currentCombo = pick.combo.slice();
+      nextReductionCutoff = addDays(nextReductionCutoff, reduceEvery);
+      // mark smallest start
+      if(current <= smallest + 1e-9 && !smallestAppliedOn){
+        smallestAppliedOn = new Date(curApply);
+        stopThresholdDate = addDays(smallestAppliedOn, reduceEvery);
+      }
+      prevTotal = current;
+    }
+
+    // append apply row
+    pushApply(current, currentCombo);
+
+    // compute candidate finals at this cycle
+    const candidateStop = (stopThresholdDate && (+curRemove >= +stopThresholdDate - 1e-9)) ? new Date(curRemove) : null;
+    // pick earliest: Review takes precedence if earlier or equal
+    let finalType=null, finalDate=null;
+    if(reviewDate && (!candidateStop || +reviewDate <= +candidateStop)) { finalType="review"; finalDate=new Date(reviewDate); }
+    if(!finalDate && (+capDate <= +curRemove)) { finalType="review"; finalDate=new Date(capDate); }
+    if(!finalDate && candidateStop){ finalType="stop"; finalDate=candidateStop; }
+
+    if(finalDate){
+      pushFinal(finalType, finalDate);
+      break;
+    }
+
+    // advance to next cycle
+    curApply = addDays(curApply, applyEvery);
+    curRemove = addDays(curRemove, applyEvery);
+    week++; if(week>MAX_WEEKS) break;
+  }
+
   return rows;
 }
 
 /* =================== Renderers =================== */
 function td(text, cls){ const el=document.createElement("td"); if(cls) el.className=cls; el.textContent=text||""; return el; }
 
-/* Group fractional classes by LARGEST marketed base first (avoid collapsing to smallest) */
+/* Fractional grouping: prefer mapping pieces to the LARGEST suitable base (fewer tablets), then halves */
 function perStrengthRowsFractional(r){
-  const baseDesc = strengthsForSelected().map(parseMgFromStrength).filter(v=>v>0).sort((a,b)=>b-a);
+  const baseAsc = strengthsForSelected().map(parseMgFromStrength).filter(v=>v>0).sort((a,b)=>a-b);
+  const baseDesc = baseAsc.slice().sort((a,b)=>b-a);
   const split = canSplitTablets(r.cls, r.form, r.med);
   const byBase = {};
   const ensure = (b)=>{ byBase[b]=byBase[b]||{AM:0,MID:0,DIN:0,PM:0}; return byBase[b]; };
-  const addQ = (b,slot,q)=>{ ensure(b)[slot]+=q; };
 
   ["AM","MID","DIN","PM"].forEach(slot=>{
     Object.entries(r.packs[slot]||{}).forEach(([pieceStr, count])=>{
       const piece=+pieceStr; let mapped=false;
-      // Prefer mapping to LARGER bases to minimize tablet count
+
+      // Whole tablet of the largest possible base
       for(const b of baseDesc){
-        if(Math.abs(piece-b)<EPS){ addQ(b,slot,4*count); mapped=true; break; }
-        if(split.half && Math.abs(piece-b/2)<EPS){ addQ(b,slot,2*count); mapped=true; break; }
+        if(Math.abs(piece - b) < 1e-6){ ensure(b)[slot] += 4*count; mapped=true; break; }
       }
       if(mapped) return;
-      // Fallback: map to the largest base
+
+      // Half tablet of the largest possible base (if allowed)
+      if(split.half){
+        for(const b of baseDesc){
+          if(Math.abs(piece - b/2) < 1e-6){ ensure(b)[slot] += 2*count; mapped=true; break; }
+        }
+      }
+      if(mapped) return;
+
+      // Quarters only if allowed (shouldn’t for BZRA/AP-IR, but keep fallback)
+      if(split.quarter){
+        for(const b of baseDesc){
+          if(Math.abs(piece - b/4) < 1e-6){ ensure(b)[slot] += 1*count; mapped=true; break; }
+        }
+      }
+      if(mapped) return;
+
+      // Fallback: map to largest base
       const b0 = baseDesc[0];
       const qApprox = Math.max(1, Math.round(piece/(b0/4)));
-      addQ(b0, slot, qApprox * count);
+      ensure(b0)[slot] += qApprox * count;
     });
   });
 
   const rows=[];
   const mkCell = (q)=> q ? qToCell(q) : "";
-  // Order: morning-first presence, then higher strength first
+  // Order: morning-first lines, then by higher base strength
   const bases = Object.keys(byBase).map(parseFloat).sort((a,b)=>{
     const aHasAM = byBase[a].AM>0, bHasAM = byBase[b].AM>0;
     if(aHasAM!==bHasAM) return aHasAM ? -1 : 1;
@@ -712,7 +727,7 @@ function renderStandardTable(rows){
       if(din) instr.push(`Take ${din===1?"1":String(din)} ${din===1?"tablet":"tablets"} at dinner`);
       if(pm) instr.push(`Take ${pm===1?"1":String(pm)} ${pm===1?"tablet":"tablets"} at night`);
 
-      let strengthLabel = `${r.med} ${(+(mg)).toString().replace(/\.0+$/,"")} mg ${formLabelCapsSR(r.form)}`;
+      let strengthLabel = `${r.med} ${(+mg).toString().replace(/\.0+$/,"")} mg ${formLabelCapsSR(r.form)}`;
       if(r.med==="Oxycodone / Naloxone") strengthLabel = oxyNxPairLabel(+mg);
 
       tr.appendChild(td(strengthLabel));
@@ -736,13 +751,14 @@ function renderPatchTable(rows){
   ["Apply on","Remove on","Patch strength(s)","Instructions"].forEach(h=>{ const th=document.createElement("th"); th.textContent=h; hr.appendChild(th); });
   thead.appendChild(hr); table.appendChild(thead);
   const tbody=document.createElement("tbody");
+
   const everyDays=($("medicineSelect").value==="Fentanyl")?3:7;
 
   rows.forEach((r,rowIdx)=>{
     const tr=document.createElement("tr"); if((rowIdx%2)===1) tr.style.background="rgba(0,0,0,0.06)";
     tr.appendChild(td(r.date));
-    tr.appendChild(td((r.stop||r.review) ? "" : fmtDate(addDays(new Date(r.date), everyDays))));
-    tr.appendChild(td((r.patches||[]).length ? (normalizePatchDisplay(r.med, r.patches)||[]).map(v=>`${v} mcg/hr`).join(" + ") : ""));
+    tr.appendChild(td((r.stop||r.review) ? "" : r.remove || "")); // removal blank on final
+    tr.appendChild(td((r.patches||[]).length ? r.patches.map(v=>`${v} mcg/hr`).join(" + ") : ""));
     tr.appendChild(td(r.stop ? "Stop." : r.review ? "Review with your doctor the ongoing plan." : `Apply patches every ${everyDays} days.`));
     tbody.appendChild(tr);
   });
@@ -790,7 +806,8 @@ function saveOutputAsPdf(){ printOutputOnly(); }
 function buildPlan(){
   const cls=$("classSelect")?.value, med=$("medicineSelect")?.value, form=$("formSelect")?.value;
   if(!cls||!med||!form){ alert("Please select medicine class, medicine, and form."); return; }
-  $("hdrMedicine").textContent=`Medicine: ${med} ${form}`; $("hdrSpecial").textContent=`${specialInstructionFor()}`;
+  $("hdrMedicine").textContent=`Medicine: ${med} ${form}`;
+  $("hdrSpecial").textContent=`${specialInstructionFor()}`;
   const isPatch=(form==="Patch"); const rows=isPatch?buildPlanPatch():buildPlanTablets();
   if(isPatch) renderPatchTable(rows); else renderStandardTable(rows);
   setFooterText(cls);
