@@ -50,4 +50,115 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
   .actions, .hint, .pill{display:none}
   .table tbody td{background:#fff;border-color:#ddd}
 }
+/* ================================
+   Print / PDF layout (non-intrusive)
+   ================================ */
+@media print {
+  :root {
+    --stripe: #f7f7f7;     /* light zebra */
+    --final-bg: #ececec;   /* Stop/Review row */
+    --border: #cfcfcf;
+  }
+
+  /* Ensure colors/shading actually print */
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Repeat your custom header (“Medicine…”) on every page.
+     Trick: treat the output block as a table and the header as a table-header-group. */
+  #scheduleBlock,
+  #patchBlock {
+    display: table;
+    width: 100%;
+  }
+  .print-header {
+    display: table-header-group;
+  }
+  .print-header .print-medline {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0 0 2px 0;
+  }
+  .print-header .print-instruction {
+    font-size: 12px;
+    opacity: 0.9;
+    margin: 0 0 2px 0;
+  }
+  .print-header .print-disclaimer {
+    font-size: 11px;
+    opacity: 0.9;
+    margin: 0;
+  }
+
+  /* Table scaffolding */
+  .plan-table {
+    width: 100%;
+    table-layout: fixed;
+    /* border radius works best with separate + no spacing */
+    border-collapse: separate;
+    border-spacing: 0;
+    margin-top: 8px;
+
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  /* Repeat column headers each page */
+  .plan-table thead {
+    display: table-header-group;
+  }
+  .plan-table tfoot {
+    display: table-footer-group;
+  }
+
+  .plan-table th,
+  .plan-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #e5e5e5;
+    vertical-align: top;
+    font-size: 12px;
+  }
+  .plan-table th {
+    font-weight: 600;
+    text-align: left;
+    background: #fafafa;
+  }
+
+  /* Keep steps together & zebra by step for tablets/caps/ODT */
+  .plan-standard .step-group {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .plan-standard .step-group.step-even td {
+    background: var(--stripe);
+  }
+
+  /* Patches: zebra by row (each row is one interval) */
+  .plan-patch tbody tr:nth-child(even) td {
+    background: var(--stripe);
+  }
+
+  /* Final merged cell styling (Stop/Review) */
+  .final-cell {
+    font-weight: 700;
+    background: var(--final-bg);
+  }
+
+  /* Avoid splitting table rows/cells across pages */
+  .plan-table tr,
+  .plan-table td,
+  .plan-table th {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Page size & margins */
+  @page {
+    size: A4 portrait;
+    margin: 16mm 12mm;
+  }
+}
 
