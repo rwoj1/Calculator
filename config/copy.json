@@ -1,0 +1,66 @@
+{
+  "version": "2025-08-22-5",
+  "disclaimer": "This is a guide only – follow the advice of your healthcare professional.",
+  "footerByClass": {
+    "Opioid": {
+      "expectedBenefits": "Improved function and reduced opioid-related harms.",
+      "withdrawal": "Transient pain flare, cravings, mood changes."
+    },
+    "Benzodiazepines / Z-Drug (BZRA)": {
+      "expectedBenefits": "Improved cognition, daytime alertness, and reduced falls.",
+      "withdrawal": "Insomnia, anxiety, irritability."
+    },
+    "Antipsychotic": {
+      "expectedBenefits": "Lower risk of metabolic/extrapyramidal adverse effects.",
+      "withdrawal": "Sleep disturbance, anxiety, return of target symptoms."
+    },
+    "Proton Pump Inhibitor": {
+      "expectedBenefits": "Review at 4–12 weeks; incorporate non-drug strategies (sleep, diet, positioning).",
+      "withdrawal": "Rebound heartburn."
+    }
+  },
+  "practiceText": {
+    "default": "Swallow whole; do not halve or crush.",
+    "byClass": {
+      "Opioid": [
+        "Tailor the deprescribing plan based on the person’s clinical characteristics, goals and preferences. Consider:",
+        "- < 3 months use: reduce the dose by 10% to 25% every week",
+        "- > 3 months use: reduce the dose by 10% to 25% every 4 weeks",
+        "- Long-term opioid use (e.g., > 1 year) or high doses: slower tapering and frequent monitoring.",
+        "[INSERT REFERENCE] [INSERT GUIDE TO RULESET]"
+      ],
+      "Benzodiazepines / Z-Drug (BZRA)": [
+        "Taper slowly with the patient; e.g., 25% every 2 weeks.",
+        "Near end: consider 12.5% reductions and/or planned drug-free days.",
+        "[INSERT REFERENCE] [INSERT GUIDE TO RULESET]"
+      ],
+      "Antipsychotic": [
+        "Reduce ~25–50% every 1–2 weeks with close monitoring.",
+        "Slower taper may be appropriate depending on symptoms.",
+        "[INSERT REFERENCE] [INSERT GUIDE TO RULESET]"
+      ],
+      "Proton Pump Inhibitor": [
+        "Step-down to lowest effective dose, alternate-day dosing, or stop and use on-demand.",
+        "Review at 4–12 weeks.",
+        "[INSERT REFERENCE] [INSERT GUIDE TO RULESET]"
+      ]
+    },
+    "byForm": {
+      "Patch": "Apply to intact skin as directed. Do not cut patches.",
+      "Orally Dispersible Tablet": "The orally dispersible tablet can be dispersed in the mouth."
+    },
+    "byMedicineForm": {
+      "Lansoprazole|Orally Dispersible Tablet": "The orally dispersible tablet can be dispersed in the mouth.",
+      "Fentanyl|Patch": [
+        "Apply to intact, hairless skin; rotate sites.",
+        "Change every 3 days.",
+        "Do not cut patches."
+      ],
+      "Buprenorphine|Patch": [
+        "Apply to intact, hairless skin; rotate sites.",
+        "Change every 7 days.",
+        "Do not cut patches."
+      ]
+    }
+  }
+}
