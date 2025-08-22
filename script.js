@@ -302,11 +302,9 @@ function renderStandardTable(rows){
   const table = document.createElement("table");
   table.className = "plan-table plan-standard";
 
-  // ---------- THEAD: repeating page header ----------
+  // ---------- THEAD: repeating header ----------
   const thead = document.createElement("thead");
 
-  // Build header content (medicine + instruction + disclaimer)
-  const cls  = document.getElementById("classSelect")?.value || "";
   const med  = document.getElementById("medicineSelect")?.value || "";
   const form = document.getElementById("formSelect")?.value || "";
   const formLabel = (form || "")
@@ -316,17 +314,15 @@ function renderStandardTable(rows){
     .replace(/\bOrally\s*Dispersible\s*Tablet\b/i,"orally dispersible tablet");
 
   const headerRows = [
-    { class: "thead-medline", text: `Medicine: ${med} ${formLabel}`.trim() },
-    { class: "thead-instruction", text: (typeof specialInstructionFor === "function" ? (specialInstructionFor() || "") : "") },
+    { class: "thead-medline",    text: `Medicine: ${med} ${formLabel}`.trim() },
+    { class: "thead-instruction",text: (typeof specialInstructionFor === "function" ? (specialInstructionFor() || "") : "") },
     { class: "thead-disclaimer", text: "This is a guide only – always follow the advice of your healthcare professional." }
   ];
 
-  // Column headings row
   const colHeadings = ["Date beginning","Strength","Instructions","Morning","Midday","Dinner","Night"];
 
-  // Append repeated header rows (colspan over all columns)
   headerRows.forEach(h=>{
-    if (!h.text) return; // skip blank instruction row
+    if (!h.text) return;
     const tr = document.createElement("tr");
     tr.className = h.class;
     const th = document.createElement("th");
@@ -336,37 +332,27 @@ function renderStandardTable(rows){
     thead.appendChild(tr);
   });
 
-  // Append column headings
-  {
-    const tr = document.createElement("tr");
-    colHeadings.forEach(t => {
-      const th = document.createElement("th");
-      th.textContent = t;
-      tr.appendChild(th);
-    });
-    thead.appendChild(tr);
-  }
-
+  const trCols = document.createElement("tr");
+  colHeadings.forEach(t => { const th = document.createElement("th"); th.textContent = t; trCols.appendChild(th); });
+  thead.appendChild(trCols);
   table.appendChild(thead);
 
-  // ---------- TBODY: step groups ----------
-  const keyOf = (r)=>{
-    if (r.dateStr) return r.dateStr;
-    if (r.dateDisplay) return r.dateDisplay;
-    if (r.date && typeof fmtDMY === "function") return fmtDMY(r.date);
-    if (r.when && typeof fmtDMY === "function") return fmtDMY(r.when);
-    return (r.date || r.when || r.applyOn || r.applyOnStr || "").toString();
-  };
+  // ---------- TBODIES: one per step (merge date via rowspan) ----------
+  const fmtKey = r =>
+    r.dateStr || r.dateDisplay ||
+    (r.date && typeof fmtDMY === "function" ? fmtDMY(r.date) : null) ||
+    (r.when && typeof fmtDMY === "function" ? fmtDMY(r.when) : null) ||
+    (r.date || r.when || r.applyOn || r.applyOnStr || "").toString();
 
   const groups = [];
-  let cur = null, lastKey = null;
-  rows.forEach(r => {
-    const k = keyOf(r);
-    if (k !== lastKey) { cur = { key: k, items: [] }; groups.push(cur); lastKey = k; }
+  let cur=null, last=null;
+  rows.forEach(r=>{
+    const k = fmtKey(r);
+    if (k !== last) { cur = { key:k, items:[] }; groups.push(cur); last=k; }
     cur.items.push(r);
   });
 
-  groups.forEach((g, idx) => {
+  groups.forEach((g, idx)=>{
     const tbody = document.createElement("tbody");
     tbody.className = "step-group " + (idx % 2 ? "step-even" : "step-odd");
 
@@ -374,26 +360,20 @@ function renderStandardTable(rows){
     if (isFinal){
       const r = g.items[0] || {};
       const tr = document.createElement("tr");
-
-      const tdDate = document.createElement("td");
-      tdDate.textContent = g.key || "";
-      tr.appendChild(tdDate);
-
+      const tdDate = document.createElement("td"); tdDate.textContent = g.key || "";
       const tdMerged = document.createElement("td");
       tdMerged.colSpan = colHeadings.length - 1;
       tdMerged.className = "final-cell";
       tdMerged.textContent = r.stop ? "Stop." : "Review with your doctor the ongoing plan";
-      tr.appendChild(tdMerged);
-
-      tbody.appendChild(tr);
-      table.appendChild(tbody);
+      tr.appendChild(tdDate); tr.appendChild(tdMerged);
+      tbody.appendChild(tr); table.appendChild(tbody);
       return;
     }
 
-    g.items.forEach((r, rowIdx) => {
+    g.items.forEach((r,i)=>{
       const tr = document.createElement("tr");
 
-      if (rowIdx === 0) {
+      if (i===0){
         const tdDate = document.createElement("td");
         tdDate.rowSpan = g.items.length;
         tdDate.textContent = g.key || "";
@@ -401,23 +381,16 @@ function renderStandardTable(rows){
       }
 
       const strength = r.strength || r.strengthLabel || r.str || "";
-      const instr     = r.instr || r.instructions || "";
-
+      const instr    = r.instr || r.instructions || "";
       const tdStrength = document.createElement("td"); tdStrength.textContent = strength;
       const tdInstr    = document.createElement("td"); tdInstr.textContent    = instr;
+      const tdM = document.createElement("td"); tdM.textContent = r.morning ?? r.morn ?? "";
+      const tdMi= document.createElement("td"); tdMi.textContent= r.midday  ?? r.mid  ?? "";
+      const tdD = document.createElement("td"); tdD.textContent = r.dinner  ?? r.din  ?? "";
+      const tdN = document.createElement("td"); tdN.textContent = r.night   ?? r.nocte ?? r.pm ?? "";
 
-      const tdMorn = document.createElement("td"); tdMorn.textContent = r.morning ?? r.morn ?? "";
-      const tdMid  = document.createElement("td"); tdMid.textContent  = r.midday  ?? r.mid  ?? "";
-      const tdDin  = document.createElement("td"); tdDin.textContent  = r.dinner  ?? r.din  ?? "";
-      const tdNgt  = document.createElement("td"); tdNgt.textContent  = r.night   ?? r.nocte ?? r.pm ?? "";
-
-      tr.appendChild(tdStrength);
-      tr.appendChild(tdInstr);
-      tr.appendChild(tdMorn);
-      tr.appendChild(tdMid);
-      tr.appendChild(tdDin);
-      tr.appendChild(tdNgt);
-
+      tr.appendChild(tdStrength); tr.appendChild(tdInstr);
+      tr.appendChild(tdM); tr.appendChild(tdMi); tr.appendChild(tdD); tr.appendChild(tdN);
       tbody.appendChild(tr);
     });
 
@@ -426,8 +399,8 @@ function renderStandardTable(rows){
 
   host.appendChild(table);
 
-  // De-duplicate footer labels (keep only content in spans)
-  normalizeFooterSpans();
+  // footer labels: keep only content in spans
+  normalizeFooterSpans?.();
 }
 
 /* ==========================================
