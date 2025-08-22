@@ -55,58 +55,34 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
    ================================ */
 @media print {
   :root {
-    --stripe: #f7f7f7;     /* light zebra */
-    --final-bg: #ececec;   /* Stop/Review row */
+    --stripe: #eeeeee;     /* slightly darker zebra */
+    --final-bg: #e6e6e6;   /* Stop/Review */
     --border: #cfcfcf;
   }
 
-  /* Ensure colors/shading actually print */
+  /* Print only the output card */
+  .container > * { display: none !important; }
+  #outputCard { display: block !important; }
+
+  /* Make sure colors print */
   body {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
 
-  /* Repeat your custom header (“Medicine…”) on every page.
-     Trick: treat the output block as a table and the header as a table-header-group. */
-  #scheduleBlock,
-  #patchBlock {
-    display: table;
-    width: 100%;
-  }
-  .print-header {
-    display: table-header-group;
-  }
-  .print-header .print-medline {
-    font-size: 18px;
-    font-weight: 700;
-    margin: 0 0 2px 0;
-  }
-  .print-header .print-instruction {
-    font-size: 12px;
-    opacity: 0.9;
-    margin: 0 0 2px 0;
-  }
-  .print-header .print-disclaimer {
-    font-size: 11px;
-    opacity: 0.9;
-    margin: 0;
-  }
-
-  /* Table scaffolding */
+  /* Tables: borders & rounded container */
   .plan-table {
     width: 100%;
     table-layout: fixed;
-    /* border radius works best with separate + no spacing */
     border-collapse: separate;
     border-spacing: 0;
     margin-top: 8px;
-
     border: 1px solid var(--border);
     border-radius: 8px;
     overflow: hidden;
   }
 
-  /* Repeat column headers each page */
+  /* Repeat column headers AND our medicine header rows every page */
   .plan-table thead {
     display: table-header-group;
   }
@@ -121,13 +97,31 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
     vertical-align: top;
     font-size: 12px;
   }
-  .plan-table th {
+  .plan-table thead tr:last-child th { /* column header row */
     font-weight: 600;
     text-align: left;
     background: #fafafa;
   }
 
-  /* Keep steps together & zebra by step for tablets/caps/ODT */
+  /* “Medicine”, instruction, disclaimer rows */
+  .plan-table thead .thead-medline th {
+    font-size: 18px;
+    font-weight: 700;
+    text-align: left;
+    background: white;
+  }
+  .plan-table thead .thead-instruction th {
+    font-size: 12px;
+    text-align: left;
+    background: white;
+  }
+  .plan-table thead .thead-disclaimer th {
+    font-size: 11px;
+    text-align: left;
+    background: white;
+  }
+
+  /* Keep each step together & zebra by step for tablets/caps/ODT */
   .plan-standard .step-group {
     break-inside: avoid;
     page-break-inside: avoid;
@@ -136,7 +130,7 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
     background: var(--stripe);
   }
 
-  /* Patches: zebra by row (each row is one interval) */
+  /* Patches: zebra by row */
   .plan-patch tbody tr:nth-child(even) td {
     background: var(--stripe);
   }
@@ -147,7 +141,7 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
     background: var(--final-bg);
   }
 
-  /* Avoid splitting table rows/cells across pages */
+  /* Don’t split rows across pages */
   .plan-table tr,
   .plan-table td,
   .plan-table th {
@@ -155,7 +149,7 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
     page-break-inside: avoid;
   }
 
-  /* Page size & margins */
+  /* A4 portrait margins */
   @page {
     size: A4 portrait;
     margin: 16mm 12mm;
