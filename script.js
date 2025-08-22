@@ -23,12 +23,12 @@ function patchIntervalRule(){
   if (/Buprenorphine/i.test(med)) return 7;
   return null;
 }
-// Snap an <input type="number"> to the nearest valid multiple (min-bounded)
+// Snap an <input type="number"> UP to the nearest valid multiple (bounded by the rule)
 function snapIntervalToRule(input, rule){
   if (!input) return;
-  let v = parseInt(input.value, 10);
+  const v = parseInt(input.value, 10);
   if (!Number.isFinite(v)) return;
-  const snapped = Math.max(rule, Math.round(v / rule) * rule);
+  const snapped = Math.max(rule, Math.ceil(v / rule) * rule); // <— CEIL (not round)
   if (snapped !== v) input.value = snapped;
 }
 
@@ -58,11 +58,13 @@ function applyPatchIntervalAttributes(){
   if (p1){ p1.min = rule; p1.step = rule; snapIntervalToRule(p1, rule); p1.classList.remove("invalid"); }
   if (p2){ p2.min = rule; p2.step = rule; /* snap only when it has a value */ if (p2.value) snapIntervalToRule(p2, rule); p2.classList.remove("invalid"); }
 
-  // Make sure future changes keep snapping
+   // Make sure future changes keep snapping (on type AND on change)
   [p1, p2].forEach(inp=>{
     if (!inp) return;
     if (!inp._patchSnapAttached){
-      inp.addEventListener("change", ()=> snapIntervalToRule(inp, rule));
+      const handler = ()=> snapIntervalToRule(inp, rule);
+      inp.addEventListener("input", handler);
+      inp.addEventListener("change", handler);
       inp._patchSnapAttached = true;
     }
   });
@@ -891,13 +893,12 @@ if (startTotal <= 0) {
 
     if (startedReducing) pushRow();
 
-    const candidateStop = (stopThresholdDate && (+curRemove >= +stopThresholdDate - 1e-9)) ? new Date(curRemove) : null;
-    let finalType=null, finalDate=null;
-    if (reviewDate && (!candidateStop || +reviewDate <= +candidateStop)) { finalType='review'; finalDate=new Date(reviewDate); }
-    if (!finalDate && (+capDate <= +curRemove)) { finalType='review'; finalDate=new Date(capDate); }
-    if (!finalDate && candidateStop) { finalType='stop'; finalDate=candidateStop; }
-
-    if (finalDate) { pushFinal(finalType, finalDate); break; }
+const candidateStop = (stopThresholdDate && (+curRemove >= +stopThresholdDate - 1e-9)) ? new Date(curRemove) : null;
+let finalType=null, finalDate=null;
+if (reviewDate && (!candidateStop || +reviewDate <= +candidateStop)) { finalType='review'; finalDate=new Date(reviewDate); }
+if (!finalDate && (+capDate <= +curRemove)) { finalType='review'; finalDate=new Date(capDate); }
+if (!finalDate && candidateStop) { finalType='stop'; finalDate=candidateStop; }
+if (finalDate) { pushFinal(finalType, finalDate); break; }
 
     curApply  = addDays(curApply, applyEvery);
     curRemove = addDays(curRemove, applyEvery);
