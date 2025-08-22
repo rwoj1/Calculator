@@ -14,6 +14,88 @@ const MAX_WEEKS = 60;
 const THREE_MONTHS_MS = 90 * 24 * 3600 * 1000;
 const EPS = 1e-6;
 
+/* ===== Patch interval safety (Fentanyl: ×3 days, Buprenorphine: ×7 days) ===== */
+function patchIntervalRule(){
+  const form = document.getElementById("formSelect")?.value || "";
+  if (!/Patch/i.test(form)) return null;
+  const med = document.getElementById("medicineSelect")?.value || "";
+  if (/Fentanyl/i.test(med)) return 3;
+  if (/Buprenorphine/i.test(med)) return 7;
+  return null;
+}
+
+// ensure the hint <div>s exist under the inputs; returns [h1, h2]
+function ensureIntervalHints(){
+  const mk = (id, inputId) => {
+    let el = document.getElementById(id);
+    if (!el) {
+      const input = document.getElementById(inputId);
+      // append the hint to the same <label> as the input
+      const host = input?.parentElement || input?.closest("label") || input?.parentNode;
+      el = document.createElement("div");
+      el.id = id;
+      el.className = "hint";
+      el.style.marginTop = "4px";
+      host?.appendChild(el);
+    }
+    return el;
+  };
+  return [mk("p1IntHint","p1Interval"), mk("p2IntHint","p2Interval")];
+}
+
+// validate intervals, show hints, toggle input error class, and optionally toast
+function validatePatchIntervals(showToastToo=false){
+  const rule = patchIntervalRule();
+  const p1 = document.getElementById("p1Interval");
+  const p2 = document.getElementById("p2Interval");
+  const p2Pct = parseFloat(document.getElementById("p2Percent")?.value || "");
+  const p2Start = document.getElementById("p2StartDate")?._flatpickr?.selectedDates?.[0]
+               || document.getElementById("p2StartDate")?.value || null;
+
+  const [h1,h2] = ensureIntervalHints();
+  let ok = true;
+
+  // clear previous
+  if (h1) h1.textContent = "";
+  if (h2) h2.textContent = "";
+  p1?.classList.remove("invalid");
+  p2?.classList.remove("invalid");
+
+  if (rule){ // only apply for patches
+    const med = document.getElementById("medicineSelect")?.value || "patches";
+    const msg = `For ${med} patches, the interval must be a multiple of ${rule} days.`;
+
+    if (p1){
+      const v = parseInt(p1.value, 10);
+      const bad = !(Number.isFinite(v) && v>0 && v % rule === 0);
+      if (h1) h1.textContent = bad ? msg : `Interval checked: multiples of ${rule} days.`;
+      if (bad) { p1.classList.add("invalid"); ok = false; }
+    }
+
+    // Phase 2: validate only if Phase 2 is “armed”
+    const p2Active = p2 && p2.value && Number.isFinite(p2Pct) && p2Pct>0 && p2Start;
+    if (p2Active){
+      const v2 = parseInt(p2.value, 10);
+      const bad2 = !(Number.isFinite(v2) && v2>0 && v2 % rule === 0);
+      if (h2) h2.textContent = bad2 ? msg : `Interval checked: multiples of ${rule} days.`;
+      if (bad2) { p2.classList.add("invalid"); ok = false; }
+    } else if (h2){ h2.textContent = ""; }
+  } else {
+    // not a patch → clear hints
+    if (h1) h1.textContent = "";
+    if (h2) h2.textContent = "";
+  }
+
+  // also gate the Generate button alongside your existing gating
+  const gen = document.getElementById("generateBtn");
+  if (gen) gen.disabled = gen.disabled || !ok;
+
+  if (!ok && showToastToo && rule){
+    alert(`Patch intervals must be multiples of ${rule} days.`);
+  }
+  return ok;
+}
+
 /* ---- Dirty state + gating ---- */
 let _dirtySinceGenerate = true;
 
@@ -31,12 +113,24 @@ function showToast(msg) {
   t._h = setTimeout(() => { t.style.display = "none"; }, 2200);
 }
 
-function setGenerateEnabled() {
-  const p1Pct = parseFloat($("p1Percent")?.value || "");
-  const p1Int = parseInt($("p1Interval")?.value || "", 10);
-  const gen   = $("generateBtn");
-  const ready = Number.isFinite(p1Pct) && p1Pct > 0 && Number.isFinite(p1Int) && p1Int > 0;
+function setGenerateEnabled(){
+  const pct  = parseFloat(document.getElementById("p1Percent")?.value || "");
+  const intv = parseInt(document.getElementById("p1Interval")?.value || "", 10);
+
+  const gen = document.getElementById("generateBtn");
+  const ready = Number.isFinite(pct) && pct > 0 && Number.isFinite(intv) && intv > 0;
+
   if (gen) gen.disabled = !ready;
+
+  // If you already disable Print/Save when "dirty", keep your existing lines:
+  const printBtn = document.getElementById("printBtn");
+  const saveBtn  = document.getElementById("savePdfBtn");
+  if (printBtn) printBtn.disabled = window.dirty === true;
+  if (saveBtn)  saveBtn.disabled  = window.dirty === true;
+
+  // NEW: for patches, additionally gate Generate unless interval is a valid multiple
+  // (Fentanyl: ×3 days, Buprenorphine: ×7 days). This can only *further* disable.
+  validatePatchIntervals(false);
 }
 
 function setDirty(v = true) {
@@ -1026,17 +1120,34 @@ function saveOutputAsPdf(){ printOutputOnly(); }
 /* =================== Build & init =================== */
 
 function buildPlan(){
-  const cls=$("classSelect")?.value, med=$("medicineSelect")?.value, form=$("formSelect")?.value;
-  if(!cls||!med||!form){ alert("Please select medicine class, medicine, and form."); return; }
+  // Patch-specific guard: enforce multiples (Fentanyl ×3d, Buprenorphine ×7d)
+  if (typeof patchIntervalRule === "function" &&
+      typeof validatePatchIntervals === "function" &&
+      patchIntervalRule() && !validatePatchIntervals(true)) {
+    return; // invalid interval → abort build
+  }
 
-  $("hdrMedicine").textContent=`Medicine: ${med} ${form}`;
-  $("hdrSpecial").textContent=`${specialInstructionFor()}`;
+  const cls  = document.getElementById("classSelect")?.value;
+  const med  = document.getElementById("medicineSelect")?.value;
+  const form = document.getElementById("formSelect")?.value;
 
-const medName = ($("medicineSelect")?.value || "");
-const isPatch = /Patch/i.test(form) || /(Fentanyl|Buprenorphine)/i.test(medName);  const rows=isPatch?buildPlanPatch():buildPlanTablets();
-  if(isPatch) renderPatchTable(rows); else renderStandardTable(rows);
-  setFooterText(cls);
+  if (!cls || !med || !form) {
+    alert("Please select a class, medicine, and form first.");
+    return;
+  }
 
+  let rows = [];
+  if (/Patch/i.test(form)) {
+    // Patches
+    rows = (typeof buildPlanPatch === "function") ? buildPlanPatch() : [];
+    if (typeof renderPatchTable === "function") renderPatchTable(rows);
+  } else {
+    // Tablets/capsules/ODT etc.
+    rows = (typeof buildPlanTablets === "function") ? buildPlanTablets() : [];
+    if (typeof renderStandardTable === "function") renderStandardTable(rows);
+  }
+
+  setGenerateEnabled(); // keep button/print gating in sync
   setDirty(false);
 }
 
@@ -1047,36 +1158,101 @@ function updateRecommendedAndLines(){
 }
 
 function init(){
+  // 1) Date pickers (flatpickr if present; otherwise fallback to <input type="date">)
   document.querySelectorAll(".datepick").forEach(el=>{
-    if(window.flatpickr){ window.flatpickr(el, {dateFormat:"Y-m-d",allowInput:true}); } else { el.type="date"; }
+    if (window.flatpickr) {
+      window.flatpickr(el, { dateFormat: "d/m/Y", allowInput: true });
+    } else {
+      try { el.type = "date"; } catch(_) {}
+    }
   });
 
-  if ($("p1Percent")) { $("p1Percent").value=""; $("p1Percent").placeholder="%"; }
-  if ($("p1Interval")) { $("p1Interval").value=""; $("p1Interval").placeholder="days"; }
+  // 2) Clear Phase-1 presets (placeholders only)
+  const p1PctEl = document.getElementById("p1Percent");
+  const p1IntEl = document.getElementById("p1Interval");
+  if (p1PctEl) { p1PctEl.value = ""; p1PctEl.placeholder = "%"; }
+  if (p1IntEl) { p1IntEl.value = ""; p1IntEl.placeholder = "days"; }
 
-  populateClasses(); updateRecommendedAndLines();
+  // 3) Populate selects and force an initial selection
+  populateClasses();
+  populateMedicines();
+  populateForms();
+  resetDoseLinesToLowest();
+  updateRecommended();
+  if (typeof setFooterText === "function") setFooterText(document.getElementById("classSelect")?.value || "");
 
-  $("classSelect").addEventListener("change", updateRecommendedAndLines);
-  $("medicineSelect").addEventListener("change", ()=>{ populateForms(); updateRecommended(); resetDoseLinesToLowest(); setFooterText($("classSelect")?.value); setDirty(true); });
-  $("formSelect").addEventListener("change", ()=>{ updateRecommended(); resetDoseLinesToLowest(); setDirty(true); });
-
-  $("addDoseLineBtn").addEventListener("click", ()=>{
-    const sList=strengthsForSelected();
-    doseLines.push({ id:nextLineId++, strengthStr:sList[0], qty:1, freqMode:defaultFreq() });
-    renderDoseLines(); setDirty(true);
+  // 4) Change handlers for dependent selects
+  document.getElementById("classSelect")?.addEventListener("change", () => {
+    populateMedicines();
+    populateForms();
+    updateRecommended();
+    if (typeof setFooterText === "function") setFooterText(document.getElementById("classSelect")?.value || "");
+    resetDoseLinesToLowest();
+    setDirty(true);
+    setGenerateEnabled();
+    if (typeof validatePatchIntervals === "function") validatePatchIntervals(false);
   });
 
-  $("generateBtn").addEventListener("click", buildPlan);
-  $("resetBtn").addEventListener("click", ()=>location.reload());
-  $("printBtn").addEventListener("click", printOutputOnly);
-  $("savePdfBtn").addEventListener("click", saveOutputAsPdf);
+  document.getElementById("medicineSelect")?.addEventListener("change", () => {
+    populateForms();
+    updateRecommended();
+    if (typeof setFooterText === "function") setFooterText(document.getElementById("classSelect")?.value || "");
+    resetDoseLinesToLowest();
+    setDirty(true);
+    setGenerateEnabled();
+    if (typeof validatePatchIntervals === "function") validatePatchIntervals(false);
+  });
 
-  watchDirty("#classSelect, #medicineSelect, #formSelect, #startDate, #reviewDate, #p1Percent, #p1Interval, #p2Percent, #p2Interval, #p2StartDate");
+  document.getElementById("formSelect")?.addEventListener("change", () => {
+    updateRecommended();
+    resetDoseLinesToLowest();
+    setDirty(true);
+    setGenerateEnabled();
+    if (typeof validatePatchIntervals === "function") validatePatchIntervals(false);
+  });
 
+  // 5) Add dose line button
+  document.getElementById("addDoseLineBtn")?.addEventListener("click", ()=>{
+    const sList = strengthsForSelected();
+    doseLines.push({
+      id: (typeof nextLineId !== "undefined" ? nextLineId++ : Date.now()),
+      strengthStr: sList && sList.length ? sList[0] : "",
+      qty: 1,
+      freqMode: defaultFreq()
+    });
+    renderDoseLines();
+    setDirty(true);
+  });
+
+  // 6) Main actions
+  document.getElementById("generateBtn")?.addEventListener("click", buildPlan);
+  document.getElementById("resetBtn")?.addEventListener("click", ()=>location.reload());
+  document.getElementById("printBtn")?.addEventListener("click", ()=>window.print());
+  document.getElementById("savePdfBtn")?.addEventListener("click", ()=>window.print()); // same pipeline
+
+  // 7) Live gating + interval hints for patches
+  if (typeof ensureIntervalHints === "function") ensureIntervalHints(); // create the hint <div>s once
+  const rewire = (id)=>{
+    const el = document.getElementById(id);
+    if (!el) return;
+    ["input","change"].forEach(evt=>{
+      el.addEventListener(evt, ()=>{
+        setGenerateEnabled();
+        if (typeof validatePatchIntervals === "function") validatePatchIntervals(false);
+      });
+    });
+  };
+  ["p1Interval","p2Interval","p2Percent","p2StartDate","medicineSelect","formSelect","p1Percent"].forEach(rewire);
+
+  // 8) Dirty tracking (keep your selector list)
+  if (typeof watchDirty === "function") {
+    watchDirty("#classSelect, #medicineSelect, #formSelect, #startDate, #reviewDate, #p1Percent, #p1Interval, #p2Percent, #p2Interval, #p2StartDate");
+  }
+
+  // 9) Initial gate/hints
   setDirty(true);
   setGenerateEnabled();
-
-  updateRecommended();
+  if (typeof validatePatchIntervals === "function") validatePatchIntervals(false);
 }
 
 document.addEventListener("DOMContentLoaded", ()=>{ try{ init(); } catch(e){ console.error(e); alert("Init error: "+(e?.message||String(e))); }});
