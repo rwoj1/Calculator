@@ -78,6 +78,13 @@ if (!inp._patchSnapAttached){
 }
   });
 }
+// Remove duplicated labels from footer spans (leave the strong labels in HTML)
+function normalizeFooterSpans(){
+  const exp = document.getElementById("expBenefits");
+  const wd  = document.getElementById("withdrawalInfo");
+  if (exp) exp.textContent = (exp.textContent || "").replace(/^Expected\s*benefits:\s*/i, "");
+  if (wd)  wd.textContent  = (wd.textContent  || "").replace(/^Withdrawal:\s*/i, "");
+}
 // ensure the hint <div>s exist under the inputs; returns [h1, h2]
 function ensureIntervalHints(){
   const mk = (id, inputId) => {
@@ -292,32 +299,65 @@ function renderStandardTable(rows){
   if (!host) return;
   host.innerHTML = "";
 
-  // Print header block (top)
-  renderPrintHeader(host);
-
-  // Build table
   const table = document.createElement("table");
   table.className = "plan-table plan-standard";
 
+  // ---------- THEAD: repeating page header ----------
   const thead = document.createElement("thead");
-  const hr = document.createElement("tr");
-  ["Date beginning","Strength","Instructions","Morning","Midday","Dinner","Night"]
-    .forEach(t => { const th = document.createElement("th"); th.textContent = t; hr.appendChild(th); });
-  thead.appendChild(hr);
+
+  // Build header content (medicine + instruction + disclaimer)
+  const cls  = document.getElementById("classSelect")?.value || "";
+  const med  = document.getElementById("medicineSelect")?.value || "";
+  const form = document.getElementById("formSelect")?.value || "";
+  const formLabel = (form || "")
+    .replace(/\bTablet\b/i,"tablet")
+    .replace(/\bPatch\b/i,"patch")
+    .replace(/\bCapsule\b/i,"capsule")
+    .replace(/\bOrally\s*Dispersible\s*Tablet\b/i,"orally dispersible tablet");
+
+  const headerRows = [
+    { class: "thead-medline", text: `Medicine: ${med} ${formLabel}`.trim() },
+    { class: "thead-instruction", text: (typeof specialInstructionFor === "function" ? (specialInstructionFor() || "") : "") },
+    { class: "thead-disclaimer", text: "This is a guide only – always follow the advice of your healthcare professional." }
+  ];
+
+  // Column headings row
+  const colHeadings = ["Date beginning","Strength","Instructions","Morning","Midday","Dinner","Night"];
+
+  // Append repeated header rows (colspan over all columns)
+  headerRows.forEach(h=>{
+    if (!h.text) return; // skip blank instruction row
+    const tr = document.createElement("tr");
+    tr.className = h.class;
+    const th = document.createElement("th");
+    th.colSpan = colHeadings.length;
+    th.textContent = h.text;
+    tr.appendChild(th);
+    thead.appendChild(tr);
+  });
+
+  // Append column headings
+  {
+    const tr = document.createElement("tr");
+    colHeadings.forEach(t => {
+      const th = document.createElement("th");
+      th.textContent = t;
+      tr.appendChild(th);
+    });
+    thead.appendChild(tr);
+  }
+
   table.appendChild(thead);
 
-  // Utility: date key (keeps order by sequence)
+  // ---------- TBODY: step groups ----------
   const keyOf = (r)=>{
-    // prefer explicit text if you already compute it
     if (r.dateStr) return r.dateStr;
     if (r.dateDisplay) return r.dateDisplay;
     if (r.date && typeof fmtDMY === "function") return fmtDMY(r.date);
     if (r.when && typeof fmtDMY === "function") return fmtDMY(r.when);
-    // fallback: last resort string coercion
     return (r.date || r.when || r.applyOn || r.applyOnStr || "").toString();
   };
 
-  // Group rows by step boundary (i.e., by contiguous identical date)
   const groups = [];
   let cur = null, lastKey = null;
   rows.forEach(r => {
@@ -326,35 +366,30 @@ function renderStandardTable(rows){
     cur.items.push(r);
   });
 
-  // Build body with one <tbody> per step (enables page-break safety & zebra-by-step)
   groups.forEach((g, idx) => {
     const tbody = document.createElement("tbody");
-    tbody.className = "step-group " + (idx % 2 ? "step-even" : "step-odd"); // CSS will color
+    tbody.className = "step-group " + (idx % 2 ? "step-even" : "step-odd");
 
-    // If this is a Stop/Review group (single merged cell after date)
-    const hasFinal = g.items.some(x => x.stop || x.review);
-    if (hasFinal) {
+    const isFinal = g.items.some(x => x.stop || x.review);
+    if (isFinal){
       const r = g.items[0] || {};
       const tr = document.createElement("tr");
 
-      // Date cell
       const tdDate = document.createElement("td");
       tdDate.textContent = g.key || "";
       tr.appendChild(tdDate);
 
-      // Merged cell across the remaining 6+1 = 7 columns
       const tdMerged = document.createElement("td");
-      tdMerged.colSpan = 7;
+      tdMerged.colSpan = colHeadings.length - 1;
       tdMerged.className = "final-cell";
       tdMerged.textContent = r.stop ? "Stop." : "Review with your doctor the ongoing plan";
       tr.appendChild(tdMerged);
 
       tbody.appendChild(tr);
       table.appendChild(tbody);
-      return; // next group
+      return;
     }
 
-    // Normal group: first row carries the Date with rowspan
     g.items.forEach((r, rowIdx) => {
       const tr = document.createElement("tr");
 
@@ -369,7 +404,7 @@ function renderStandardTable(rows){
       const instr     = r.instr || r.instructions || "";
 
       const tdStrength = document.createElement("td"); tdStrength.textContent = strength;
-      const tdInstr    = document.createElement("td"); tdInstr.textContent = instr;
+      const tdInstr    = document.createElement("td"); tdInstr.textContent    = instr;
 
       const tdMorn = document.createElement("td"); tdMorn.textContent = r.morning ?? r.morn ?? "";
       const tdMid  = document.createElement("td"); tdMid.textContent  = r.midday  ?? r.mid  ?? "";
@@ -390,6 +425,9 @@ function renderStandardTable(rows){
   });
 
   host.appendChild(table);
+
+  // De-duplicate footer labels (keep only content in spans)
+  normalizeFooterSpans();
 }
 
 /* ==========================================
@@ -400,59 +438,86 @@ function renderStandardTable(rows){
 function renderPatchTable(rows){
   const host = document.getElementById("patchBlock");
   if (!host) return;
-  host.style.display = ""; // ensure visible
+  host.style.display = "";
   host.innerHTML = "";
-
-  // Print header block (top)
-  renderPrintHeader(host);
 
   const table = document.createElement("table");
   table.className = "plan-table plan-patch";
 
   const thead = document.createElement("thead");
-  const hr = document.createElement("tr");
-  ["Apply on","Remove on","Patch strength(s)","Instructions"]
-    .forEach(t => { const th = document.createElement("th"); th.textContent = t; hr.appendChild(th); });
-  thead.appendChild(hr);
+
+  // Header rows (repeat every page)
+  const med  = document.getElementById("medicineSelect")?.value || "";
+  const form = document.getElementById("formSelect")?.value || "";
+  const formLabel = (form || "")
+    .replace(/\bTablet\b/i,"tablet")
+    .replace(/\bPatch\b/i,"patch")
+    .replace(/\bCapsule\b/i,"capsule")
+    .replace(/\bOrally\s*Dispersible\s*Tablet\b/i,"orally dispersible tablet");
+
+  const headerRows = [
+    { class: "thead-medline", text: `Medicine: ${med} ${formLabel}`.trim() },
+    { class: "thead-instruction", text: (typeof specialInstructionFor === "function" ? (specialInstructionFor() || "") : "") },
+    { class: "thead-disclaimer", text: "This is a guide only – always follow the advice of your healthcare professional." }
+  ];
+
+  const colHeadings = ["Apply on","Remove on","Patch strength(s)","Instructions"];
+
+  headerRows.forEach(h=>{
+    if (!h.text) return;
+    const tr = document.createElement("tr");
+    tr.className = h.class;
+    const th = document.createElement("th");
+    th.colSpan = colHeadings.length;
+    th.textContent = h.text;
+    tr.appendChild(th);
+    thead.appendChild(tr);
+  });
+
+  // Column headings
+  {
+    const tr = document.createElement("tr");
+    colHeadings.forEach(t => { const th = document.createElement("th"); th.textContent = t; tr.appendChild(th); });
+    thead.appendChild(tr);
+  }
+
   table.appendChild(thead);
 
   const tbody = document.createElement("tbody");
   table.appendChild(tbody);
 
-  const medNameHere = (document.getElementById("medicineSelect")?.value || "");
-  const everyDays = (/Fentanyl/i.test(medNameHere)) ? 3 : 7; // for instruction text only
+  const everyDays = (/Fentanyl/i.test(med)) ? 3 : 7;
 
   rows.forEach((r, idx) => {
     const tr = document.createElement("tr");
-    tr.className = (idx % 2) ? "row-even" : "row-odd"; // CSS will color
+
+    // Stop/Review row (merged cell after Apply on)
+    if (r.stop || r.review) {
+      const tdApply = document.createElement("td");
+      tdApply.textContent = r.dateStr || r.applyOnStr || r.applyOn || "";
+      tr.appendChild(tdApply);
+
+      const tdMerged = document.createElement("td");
+      tdMerged.colSpan = colHeadings.length - 1;
+      tdMerged.className = "final-cell";
+      tdMerged.textContent = r.stop ? "Stop." : "Review with your doctor the ongoing plan";
+      tr.appendChild(tdMerged);
+
+      tbody.appendChild(tr);
+      return;
+    }
 
     const tdApply  = document.createElement("td");
     const tdRemove = document.createElement("td");
     const tdStr    = document.createElement("td");
     const tdInstr  = document.createElement("td");
 
-    // Final Stop/Review row uses merged cell after 'Apply on'
-    if (r.stop || r.review) {
-      tdApply.textContent = r.dateStr || r.applyOnStr || r.applyOn || "";
-      tr.appendChild(tdApply);
-
-      tdInstr.colSpan = 3;
-      tdInstr.className = "final-cell";
-      tdInstr.textContent = r.stop ? "Stop." : "Review with your doctor the ongoing plan";
-      tr.appendChild(tdInstr);
-
-      tbody.appendChild(tr);
-      return;
-    }
-
     tdApply.textContent  = r.applyOnStr || r.applyOn || r.dateStr || "";
     tdRemove.textContent = r.removeOnStr || r.removeOn || "";
 
-    // Strengths (12+12 collapse already handled earlier; just print)
-    let list = Array.isArray(r.patches) ? r.patches.slice() : [];
+    const list = Array.isArray(r.patches) ? r.patches.slice() : [];
     tdStr.textContent = list.length ? list.map(v => `${v} mcg/hr`).join(" + ") : "";
 
-    // Instruction: no leading numbers (safety)
     const plural = list.length > 1 ? "patches" : "patch";
     tdInstr.textContent = `Apply ${plural} every ${everyDays} days.`;
 
@@ -460,10 +525,14 @@ function renderPatchTable(rows){
     tr.appendChild(tdRemove);
     tr.appendChild(tdStr);
     tr.appendChild(tdInstr);
+
     tbody.appendChild(tr);
   });
 
   host.appendChild(table);
+
+  // De-duplicate footer labels (keep only content in spans)
+  normalizeFooterSpans();
 }
 
 /* =================== Catalogue (commercial only) =================== */
