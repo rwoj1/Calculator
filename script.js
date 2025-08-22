@@ -236,6 +236,235 @@ function doseFormNoun(form) {
   if (/Orally\s*Dispersible\s*Tablet/i.test(form)) return "orally dispersible tablets";
   return "tablets";
 }
+/* =========================
+   PRINT HEADER (shared)
+   ========================= */
+function renderPrintHeader(container){
+  // remove old header if present
+  const old = container.querySelector(".print-header");
+  if (old) old.remove();
+
+  const cls  = document.getElementById("classSelect")?.value || "";
+  const med  = document.getElementById("medicineSelect")?.value || "";
+  const form = document.getElementById("formSelect")?.value || "";
+
+  // Medicine label: "<Generic> <form>" with no strength, form lowercased
+  const formLabel = (form || "").replace(/\bTablet\b/i,"tablet")
+                                 .replace(/\bPatch\b/i,"patch")
+                                 .replace(/\bCapsule\b/i,"capsule")
+                                 .replace(/\bOrally\s*Dispersible\s*Tablet\b/i,"orally dispersible tablet");
+
+  // Special instruction (reuse your existing helper if present)
+  let special = "";
+  if (typeof specialInstructionFor === "function") {
+    special = specialInstructionFor() || "";
+  }
+
+  const hdr = document.createElement("div");
+  hdr.className = "print-header";
+  const h1 = document.createElement("div");
+  h1.className = "print-medline";
+  h1.textContent = `Medicine: ${med} ${formLabel}`.trim();
+
+  const h2 = document.createElement("div");
+  h2.className = "print-instruction";
+  h2.textContent = special;
+
+  const h3 = document.createElement("div");
+  h3.className = "print-disclaimer";
+  h3.textContent = "This is a guide only – always follow the advice of your healthcare professional.";
+
+  hdr.appendChild(h1);
+  if (special) hdr.appendChild(h2);
+  hdr.appendChild(h3);
+
+  // insert header at the very top of container
+  container.prepend(hdr);
+}
+/* ==========================================
+   RENDER STANDARD (tablets/caps/ODT) TABLE
+   - Merges date per step (rowspan)
+   - Zebra per step-group (CSS)
+   - Stop/Review merged cell after date
+   ========================================== */
+function renderStandardTable(rows){
+  const host = document.getElementById("scheduleBlock");
+  if (!host) return;
+  host.innerHTML = "";
+
+  // Print header block (top)
+  renderPrintHeader(host);
+
+  // Build table
+  const table = document.createElement("table");
+  table.className = "plan-table plan-standard";
+
+  const thead = document.createElement("thead");
+  const hr = document.createElement("tr");
+  ["Date beginning","Strength","Instructions","Morning","Midday","Dinner","Night"]
+    .forEach(t => { const th = document.createElement("th"); th.textContent = t; hr.appendChild(th); });
+  thead.appendChild(hr);
+  table.appendChild(thead);
+
+  // Utility: date key (keeps order by sequence)
+  const keyOf = (r)=>{
+    // prefer explicit text if you already compute it
+    if (r.dateStr) return r.dateStr;
+    if (r.dateDisplay) return r.dateDisplay;
+    if (r.date && typeof fmtDMY === "function") return fmtDMY(r.date);
+    if (r.when && typeof fmtDMY === "function") return fmtDMY(r.when);
+    // fallback: last resort string coercion
+    return (r.date || r.when || r.applyOn || r.applyOnStr || "").toString();
+  };
+
+  // Group rows by step boundary (i.e., by contiguous identical date)
+  const groups = [];
+  let cur = null, lastKey = null;
+  rows.forEach(r => {
+    const k = keyOf(r);
+    if (k !== lastKey) { cur = { key: k, items: [] }; groups.push(cur); lastKey = k; }
+    cur.items.push(r);
+  });
+
+  // Build body with one <tbody> per step (enables page-break safety & zebra-by-step)
+  groups.forEach((g, idx) => {
+    const tbody = document.createElement("tbody");
+    tbody.className = "step-group " + (idx % 2 ? "step-even" : "step-odd"); // CSS will color
+
+    // If this is a Stop/Review group (single merged cell after date)
+    const hasFinal = g.items.some(x => x.stop || x.review);
+    if (hasFinal) {
+      const r = g.items[0] || {};
+      const tr = document.createElement("tr");
+
+      // Date cell
+      const tdDate = document.createElement("td");
+      tdDate.textContent = g.key || "";
+      tr.appendChild(tdDate);
+
+      // Merged cell across the remaining 6+1 = 7 columns
+      const tdMerged = document.createElement("td");
+      tdMerged.colSpan = 7;
+      tdMerged.className = "final-cell";
+      tdMerged.textContent = r.stop ? "Stop." : "Review with your doctor the ongoing plan";
+      tr.appendChild(tdMerged);
+
+      tbody.appendChild(tr);
+      table.appendChild(tbody);
+      return; // next group
+    }
+
+    // Normal group: first row carries the Date with rowspan
+    g.items.forEach((r, rowIdx) => {
+      const tr = document.createElement("tr");
+
+      if (rowIdx === 0) {
+        const tdDate = document.createElement("td");
+        tdDate.rowSpan = g.items.length;
+        tdDate.textContent = g.key || "";
+        tr.appendChild(tdDate);
+      }
+
+      const strength = r.strength || r.strengthLabel || r.str || "";
+      const instr     = r.instr || r.instructions || "";
+
+      const tdStrength = document.createElement("td"); tdStrength.textContent = strength;
+      const tdInstr    = document.createElement("td"); tdInstr.textContent = instr;
+
+      const tdMorn = document.createElement("td"); tdMorn.textContent = r.morning ?? r.morn ?? "";
+      const tdMid  = document.createElement("td"); tdMid.textContent  = r.midday  ?? r.mid  ?? "";
+      const tdDin  = document.createElement("td"); tdDin.textContent  = r.dinner  ?? r.din  ?? "";
+      const tdNgt  = document.createElement("td"); tdNgt.textContent  = r.night   ?? r.nocte ?? r.pm ?? "";
+
+      tr.appendChild(tdStrength);
+      tr.appendChild(tdInstr);
+      tr.appendChild(tdMorn);
+      tr.appendChild(tdMid);
+      tr.appendChild(tdDin);
+      tr.appendChild(tdNgt);
+
+      tbody.appendChild(tr);
+    });
+
+    table.appendChild(tbody);
+  });
+
+  host.appendChild(table);
+}
+
+/* ==========================================
+   RENDER PATCH TABLE (fentanyl/buprenorphine)
+   - Zebra per row (CSS)
+   - Stop/Review merged cell (colspan)
+   ========================================== */
+function renderPatchTable(rows){
+  const host = document.getElementById("patchBlock");
+  if (!host) return;
+  host.style.display = ""; // ensure visible
+  host.innerHTML = "";
+
+  // Print header block (top)
+  renderPrintHeader(host);
+
+  const table = document.createElement("table");
+  table.className = "plan-table plan-patch";
+
+  const thead = document.createElement("thead");
+  const hr = document.createElement("tr");
+  ["Apply on","Remove on","Patch strength(s)","Instructions"]
+    .forEach(t => { const th = document.createElement("th"); th.textContent = t; hr.appendChild(th); });
+  thead.appendChild(hr);
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  table.appendChild(tbody);
+
+  const medNameHere = (document.getElementById("medicineSelect")?.value || "");
+  const everyDays = (/Fentanyl/i.test(medNameHere)) ? 3 : 7; // for instruction text only
+
+  rows.forEach((r, idx) => {
+    const tr = document.createElement("tr");
+    tr.className = (idx % 2) ? "row-even" : "row-odd"; // CSS will color
+
+    const tdApply  = document.createElement("td");
+    const tdRemove = document.createElement("td");
+    const tdStr    = document.createElement("td");
+    const tdInstr  = document.createElement("td");
+
+    // Final Stop/Review row uses merged cell after 'Apply on'
+    if (r.stop || r.review) {
+      tdApply.textContent = r.dateStr || r.applyOnStr || r.applyOn || "";
+      tr.appendChild(tdApply);
+
+      tdInstr.colSpan = 3;
+      tdInstr.className = "final-cell";
+      tdInstr.textContent = r.stop ? "Stop." : "Review with your doctor the ongoing plan";
+      tr.appendChild(tdInstr);
+
+      tbody.appendChild(tr);
+      return;
+    }
+
+    tdApply.textContent  = r.applyOnStr || r.applyOn || r.dateStr || "";
+    tdRemove.textContent = r.removeOnStr || r.removeOn || "";
+
+    // Strengths (12+12 collapse already handled earlier; just print)
+    let list = Array.isArray(r.patches) ? r.patches.slice() : [];
+    tdStr.textContent = list.length ? list.map(v => `${v} mcg/hr`).join(" + ") : "";
+
+    // Instruction: no leading numbers (safety)
+    const plural = list.length > 1 ? "patches" : "patch";
+    tdInstr.textContent = `Apply ${plural} every ${everyDays} days.`;
+
+    tr.appendChild(tdApply);
+    tr.appendChild(tdRemove);
+    tr.appendChild(tdStr);
+    tr.appendChild(tdInstr);
+    tbody.appendChild(tr);
+  });
+
+  host.appendChild(table);
+}
 
 /* =================== Catalogue (commercial only) =================== */
 
