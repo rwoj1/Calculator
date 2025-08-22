@@ -23,7 +23,50 @@ function patchIntervalRule(){
   if (/Buprenorphine/i.test(med)) return 7;
   return null;
 }
+// Snap an <input type="number"> to the nearest valid multiple (min-bounded)
+function snapIntervalToRule(input, rule){
+  if (!input) return;
+  let v = parseInt(input.value, 10);
+  if (!Number.isFinite(v)) return;
+  const snapped = Math.max(rule, Math.round(v / rule) * rule);
+  if (snapped !== v) input.value = snapped;
+}
 
+// Apply step/min and static hint text for patch intervals
+function applyPatchIntervalAttributes(){
+  const rule = patchIntervalRule();          // returns 3 (Fentanyl), 7 (Buprenorphine), or null
+  const p1 = document.getElementById("p1Interval");
+  const p2 = document.getElementById("p2Interval");
+  const [h1, h2] = ensureIntervalHints();    // creates hint <div>s if missing
+
+  // Clear when not a patch
+  if (!rule){
+    if (h1) h1.textContent = "";
+    if (h2) h2.textContent = "";
+    if (p1){ p1.removeAttribute("min"); p1.removeAttribute("step"); p1.classList.remove("invalid"); }
+    if (p2){ p2.removeAttribute("min"); p2.removeAttribute("step"); p2.classList.remove("invalid"); }
+    return;
+  }
+  // Static messages (always the same text, per your request)
+  const msg = (rule === 3)
+    ? "For Fentanyl patches, the interval must be a multiple of 3 days."
+    : "For Buprenorphine patches, the interval must be a multiple of 7 days.";
+  if (h1) h1.textContent = msg;
+  if (h2) h2.textContent = msg;
+
+  // Hard-guard via HTML attributes
+  if (p1){ p1.min = rule; p1.step = rule; snapIntervalToRule(p1, rule); p1.classList.remove("invalid"); }
+  if (p2){ p2.min = rule; p2.step = rule; /* snap only when it has a value */ if (p2.value) snapIntervalToRule(p2, rule); p2.classList.remove("invalid"); }
+
+  // Make sure future changes keep snapping
+  [p1, p2].forEach(inp=>{
+    if (!inp) return;
+    if (!inp._patchSnapAttached){
+      inp.addEventListener("change", ()=> snapIntervalToRule(inp, rule));
+      inp._patchSnapAttached = true;
+    }
+  });
+}
 // ensure the hint <div>s exist under the inputs; returns [h1, h2]
 function ensureIntervalHints(){
   const mk = (id, inputId) => {
@@ -45,7 +88,7 @@ function ensureIntervalHints(){
 
 // validate intervals, show hints, toggle input error class, and optionally toast
 function validatePatchIntervals(showToastToo=false){
-  const rule = patchIntervalRule();
+  const rule = patchIntervalRule();            // 3 or 7 for patches, else null
   const p1 = document.getElementById("p1Interval");
   const p2 = document.getElementById("p2Interval");
   const p2Pct = parseFloat(document.getElementById("p2Percent")?.value || "");
@@ -55,44 +98,36 @@ function validatePatchIntervals(showToastToo=false){
   const [h1,h2] = ensureIntervalHints();
   let ok = true;
 
-  // clear previous
+  // Default: clear
   if (h1) h1.textContent = "";
   if (h2) h2.textContent = "";
   p1?.classList.remove("invalid");
   p2?.classList.remove("invalid");
 
-  if (rule){ // only apply for patches
-    const med = document.getElementById("medicineSelect")?.value || "patches";
-    const msg = `For ${med} patches, the interval must be a multiple of ${rule} days.`;
+  // Static messages + validity gate only for patches
+  if (rule){
+    const msg = (rule === 3)
+      ? "For Fentanyl patches, the interval must be a multiple of 3 days."
+      : "For Buprenorphine patches, the interval must be a multiple of 7 days.";
+    if (h1) h1.textContent = msg;
+    if (h2) h2.textContent = msg;
 
     if (p1){
       const v = parseInt(p1.value, 10);
       const bad = !(Number.isFinite(v) && v>0 && v % rule === 0);
-      if (h1) h1.textContent = bad ? msg : `Interval checked: multiples of ${rule} days.`;
-      if (bad) { p1.classList.add("invalid"); ok = false; }
+      if (bad){ p1.classList.add("invalid"); ok = false; }
     }
-
-    // Phase 2: validate only if Phase 2 is “armed”
     const p2Active = p2 && p2.value && Number.isFinite(p2Pct) && p2Pct>0 && p2Start;
     if (p2Active){
       const v2 = parseInt(p2.value, 10);
       const bad2 = !(Number.isFinite(v2) && v2>0 && v2 % rule === 0);
-      if (h2) h2.textContent = bad2 ? msg : `Interval checked: multiples of ${rule} days.`;
-      if (bad2) { p2.classList.add("invalid"); ok = false; }
-    } else if (h2){ h2.textContent = ""; }
-  } else {
-    // not a patch → clear hints
-    if (h1) h1.textContent = "";
-    if (h2) h2.textContent = "";
+      if (bad2){ p2.classList.add("invalid"); ok = false; }
+    }
   }
 
-  // also gate the Generate button alongside your existing gating
   const gen = document.getElementById("generateBtn");
   if (gen) gen.disabled = gen.disabled || !ok;
-
-  if (!ok && showToastToo && rule){
-    alert(`Patch intervals must be multiples of ${rule} days.`);
-  }
+  if (!ok && showToastToo && rule) alert((rule===3) ? "Patch intervals must be multiples of 3 days." : "Patch intervals must be multiples of 7 days.");
   return ok;
 }
 
@@ -1156,7 +1191,7 @@ function buildPlan(){
 }
 
 function updateRecommendedAndLines(){
-  populateMedicines(); populateForms(); updateRecommended(); resetDoseLinesToLowest();
+  populateMedicines(); populateForms(); updateRecommended(); applyPatchIntervalAttributes(); resetDoseLinesToLowest();
   setFooterText($("classSelect")?.value);
   setDirty(true);
 }
@@ -1183,6 +1218,7 @@ function init(){
   populateForms();
   resetDoseLinesToLowest();
   updateRecommended();
+  applyPatchIntervalAttributes();
   if (typeof setFooterText === "function") setFooterText(document.getElementById("classSelect")?.value || "");
 
   // 4) Change handlers for dependent selects
@@ -1190,6 +1226,7 @@ function init(){
     populateMedicines();
     populateForms();
     updateRecommended();
+    applyPatchIntervalAttributes();
     if (typeof setFooterText === "function") setFooterText(document.getElementById("classSelect")?.value || "");
     resetDoseLinesToLowest();
     setDirty(true);
