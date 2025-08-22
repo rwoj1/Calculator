@@ -924,9 +924,15 @@ function renderPatchTable(rows){
 
       tr.appendChild(td(r.date || ""));                                       // Apply on
       tr.appendChild(td((r.stop||r.review) ? "" : (r.remove || "")));         // Remove on
-      tr.appendChild(td((r.patches||[]).length ?                              // Patch strengths
-        r.patches.map(v=>`${v} mcg/hr`).join(" + ") : ""
-      ));
+      // --- Patch strength(s) with Fentanyl collapse of 12 + 12 -> 25 ---
+let list = Array.isArray(r.patches) ? r.patches.slice() : [];
+const medNameHere = (document.getElementById("medicineSelect")?.value || "");
+if (/Fentanyl/i.test(medNameHere) && typeof collapseFentanylTwelves === "function") {
+  // ensure numeric array, then collapse
+  list = collapseFentanylTwelves(list.map(v => +v));
+}
+tr.appendChild(td(list.length ? list.map(v => `${v} mcg/hr`).join(" + ") : ""));
+
 
       // Instructions
       let instr="";
