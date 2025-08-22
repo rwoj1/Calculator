@@ -751,7 +751,7 @@ if (startTotal <= 0) {
 
       if(current <= smallest + 1e-9 && !smallestAppliedOn){
         smallestAppliedOn = new Date(curApply);
-        stopThresholdDate = addDays(smallestAppliedOn, currentReduceEvery);
+        stopThresholdDate = addDays(smallestAppliedOn, applyEvery);
       }
       prevTotal = current;
     }
