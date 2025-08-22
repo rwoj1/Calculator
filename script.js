@@ -66,16 +66,16 @@ function applyPatchIntervalAttributes(){
     inp.step = rule;
     if (inp.value) snapIntervalToRule(inp, rule);
 
-    // Attach a handler that looks up the rule each time (no stale closure)
-    if (!inp._patchSnapAttached){
-      const handler = ()=> {
-        const r = patchIntervalRule();
-        if (r) snapIntervalToRule(inp, r);
-      };
-      inp.addEventListener("input",  handler);
-      inp.addEventListener("change", handler);
-      inp._patchSnapAttached = true;
-    }
+ // NEW: snap only on "change" so multi-digit typing works
+if (!inp._patchSnapAttached){
+  inp.addEventListener("change", () => {
+    const r = patchIntervalRule();
+    if (r) snapIntervalToRule(inp, r);       // snap UP on blur/enter
+    validatePatchIntervals(false);           // keep red/ok state in sync
+    setGenerateEnabled();
+  });
+  inp._patchSnapAttached = true;
+}
   });
 }
 // ensure the hint <div>s exist under the inputs; returns [h1, h2]
