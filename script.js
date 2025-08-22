@@ -306,7 +306,11 @@ function strengthsForSelected(){
   return (CATALOG[cls]?.[med]?.[form]||[]).slice();
 }
 function resetDoseLinesToLowest(){
-  const list=strengthsForSelected().sort((a,b)=>parseMgFromStrength(a)-parseMgFromStrength(b));
+  const cls = $("classSelect")?.value, form = $("formSelect")?.value;
+  const list = strengthsForSelected().sort((a,b)=>{
+    if (/Patch/i.test(form)) return parsePatchRate(a) - parsePatchRate(b);
+    return parseMgFromStrength(a) - parseMgFromStrength(b);
+  });
   doseLines = [{ id: nextLineId++, strengthStr: list[0] || "", qty: 1, freqMode: defaultFreq() }];
   renderDoseLines();
 }
