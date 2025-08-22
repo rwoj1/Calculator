@@ -81,17 +81,14 @@ function tabletsPhraseDigits(q){ // instruction lines
 }
 // Collapse pairs of 12/12.5 to 25 (repeat until no pairs remain)
 function collapseFentanylTwelves(patches){
-  // Accept numbers like 12, 12.5, 25, 37.5, 50, etc.
   const isTwelve = v => Math.abs(v - 12) < 0.01 || Math.abs(v - 12.5) < 0.01;
-
-  // Count twelves
-  let twelves = 0;
-  const others = [];
-  for (const v of patches) {
-    if (isTwelve(v)) twelves++;
-    else others.push(v);
-  }
-
+  let twelves = 0, others = [];
+  for (const v of patches) (isTwelve(+v) ? twelves++ : others.push(+v));
+  const pairs = Math.floor(twelves / 2);
+  for (let i = 0; i < pairs; i++) others.push(25);
+  if (twelves % 2 === 1) others.push(12);
+  return others.sort((a, b) => b - a).slice(0, 2); // keep ≤2 patches
+}
   // Turn every pair of twelves into a 25
   const pairs = Math.floor(twelves / 2);
   for (let i = 0; i < pairs; i++) others.push(25);
