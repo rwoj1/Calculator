@@ -895,8 +895,8 @@ if (startTotal <= 0) {
 
 if (current <= smallest + 1e-9 && !smallestAppliedOn){
   smallestAppliedOn = new Date(curApply);
-  // Stop 1 patch cycle after the first lowest is applied
-  stopThresholdDate = addDays(smallestAppliedOn, applyEvery); // 7 for bupe, 3 for fentanyl
+ const holdDaysForLowest = currentReduceEvery;
+  stopThresholdDate = addDays(smallestAppliedOn, holdDaysForLowest);
 }
 
       prevTotal = current;
