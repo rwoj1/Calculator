@@ -49,6 +49,58 @@ let dirty = false;
    PATCH-SPECIFIC FIXES
    ======================= */
 
+/* ===== Fix: specialInstructionFor + footer fallback ===== */
+function specialInstructionFor(){
+  const cls  = document.getElementById("classSelect")?.value || "";
+  const med  = document.getElementById("medicineSelect")?.value || "";
+  const form = document.getElementById("formSelect")?.value || "";
+
+  // No generic line for BZRA & Antipsychotics
+  if (cls === "Benzodiazepines / Z-Drug (BZRA)" || cls === "Antipsychotic") return "";
+
+  // Generic patch note
+  if (/Patch/i.test(form)) return "Apply to intact skin as directed. Do not cut patches.";
+
+  // Lansoprazole ODT
+  if (cls === "Proton Pump Inhibitor" &&
+      /Lansoprazole/i.test(med) &&
+      /Orally\s*Dispersible\s*Tablet/i.test(form)) {
+    return "The orally dispersible tablet can be dispersed in the mouth.";
+  }
+
+  return "Swallow whole, do not halve or crush.";
+}
+
+// Footer text fallback if not already defined elsewhere
+if (typeof window.setFooterText !== "function") {
+  window.setFooterText = function(cls){
+    const map = {
+      "Opioid": {
+        exp: "Improved function and reduced opioid-related harms.",
+        wdr: "Transient pain flare, cravings, mood changes."
+      },
+      "Benzodiazepines / Z-Drug (BZRA)": {
+        exp: "Improved cognition, daytime alertness, and reduced falls.",
+        wdr: "Insomnia, anxiety, irritability."
+      },
+      "Antipsychotic": {
+        exp: "Lower risk of metabolic/extrapyramidal adverse effects.",
+        wdr: "Sleep disturbance, anxiety, return of target symptoms."
+      },
+      "Proton Pump Inhibitor": {
+        exp: "Review at 4–12 weeks; incorporate non-drug strategies (sleep, diet, positioning).",
+        wdr: "Rebound heartburn."
+      }
+    };
+    const f = map[cls] || {exp:"", wdr:""};
+    const exp = document.getElementById("expBenefits");
+    const wdr = document.getElementById("withdrawalInfo");
+    if (exp) exp.textContent = f.exp;
+    if (wdr) wdr.textContent = f.wdr;
+  };
+}
+
+
 /** Collapse pairs of 12 or 12.5 to 25; keep at most two patches total. */
 function collapseFentanylTwelves(patches) {
   // Accept numbers like 12, 12.5, 25, 37.5, 50, etc.
