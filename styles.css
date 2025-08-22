@@ -43,13 +43,6 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
   .actions{flex-direction:column;align-items:flex-start}
 }
 
-/* Print styling (only output card is sent to print via JS) */
-@media print{
-  body{background:#fff;color:#000}
-  .card, .container{box-shadow:none;border:none}
-  .actions, .hint, .pill{display:none}
-  .table tbody td{background:#fff;border-color:#ddd}
-}
 /* ================================
    Print / PDF layout (non-intrusive)
    ================================ */
