@@ -89,16 +89,6 @@ function collapseFentanylTwelves(patches){
   if (twelves % 2 === 1) others.push(12);
   return others.sort((a, b) => b - a).slice(0, 2); // keep ≤2 patches
 }
-  // Turn every pair of twelves into a 25
-  const pairs = Math.floor(twelves / 2);
-  for (let i = 0; i < pairs; i++) others.push(25);
-
-  // If an odd one is left, keep a single 12
-  if (twelves % 2 === 1) others.push(12);
-
-  // Nice ordering (highest first)
-  return others.sort((a, b) => b - a);
-}
 /* ===== Dose-form nouns for labels/instructions ===== */
 function doseFormNoun(form) {
   if (/Patch/i.test(form)) return "patches";
