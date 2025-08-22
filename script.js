@@ -28,42 +28,51 @@ function snapIntervalToRule(input, rule){
   if (!input) return;
   const v = parseInt(input.value, 10);
   if (!Number.isFinite(v)) return;
-  const snapped = Math.max(rule, Math.ceil(v / rule) * rule); // <— CEIL (not round)
+  const snapped = Math.max(rule, Math.ceil(v / rule) * rule);
   if (snapped !== v) input.value = snapped;
 }
 
 // Apply step/min and static hint text for patch intervals
 function applyPatchIntervalAttributes(){
-  const rule = patchIntervalRule();          // returns 3 (Fentanyl), 7 (Buprenorphine), or null
+  const rule = patchIntervalRule();          // 3 (Fentanyl) / 7 (Buprenorphine) / null
   const p1 = document.getElementById("p1Interval");
   const p2 = document.getElementById("p2Interval");
   const [h1, h2] = ensureIntervalHints();    // creates hint <div>s if missing
 
-  // Clear when not a patch
+  // If not a patch, clear constraints + hints
   if (!rule){
     if (h1) h1.textContent = "";
     if (h2) h2.textContent = "";
-    if (p1){ p1.removeAttribute("min"); p1.removeAttribute("step"); p1.classList.remove("invalid"); }
-    if (p2){ p2.removeAttribute("min"); p2.removeAttribute("step"); p2.classList.remove("invalid"); }
+    [p1,p2].forEach(inp=>{
+      if (!inp) return;
+      inp.removeAttribute("min");
+      inp.removeAttribute("step");
+      inp.classList.remove("invalid");
+    });
     return;
   }
-  // Static messages (always the same text, per your request)
+
+  // Static text (always the same)
   const msg = (rule === 3)
     ? "For Fentanyl patches, the interval must be a multiple of 3 days."
     : "For Buprenorphine patches, the interval must be a multiple of 7 days.";
   if (h1) h1.textContent = msg;
   if (h2) h2.textContent = msg;
 
-  // Hard-guard via HTML attributes
-  if (p1){ p1.min = rule; p1.step = rule; snapIntervalToRule(p1, rule); p1.classList.remove("invalid"); }
-  if (p2){ p2.min = rule; p2.step = rule; /* snap only when it has a value */ if (p2.value) snapIntervalToRule(p2, rule); p2.classList.remove("invalid"); }
-
-   // Make sure future changes keep snapping (on type AND on change)
-  [p1, p2].forEach(inp=>{
+  // Enforce via attributes + snap UP now
+  [p1,p2].forEach(inp=>{
     if (!inp) return;
+    inp.min = rule;
+    inp.step = rule;
+    if (inp.value) snapIntervalToRule(inp, rule);
+
+    // Attach a handler that looks up the rule each time (no stale closure)
     if (!inp._patchSnapAttached){
-      const handler = ()=> snapIntervalToRule(inp, rule);
-      inp.addEventListener("input", handler);
+      const handler = ()=> {
+        const r = patchIntervalRule();
+        if (r) snapIntervalToRule(inp, r);
+      };
+      inp.addEventListener("input",  handler);
       inp.addEventListener("change", handler);
       inp._patchSnapAttached = true;
     }
@@ -884,20 +893,30 @@ if (startTotal <= 0) {
       nextReductionCutoff = addDays(nextReductionCutoff, currentReduceEvery);
       if(!startedReducing) startedReducing=true;
 
-      if(current <= smallest + 1e-9 && !smallestAppliedOn){
-        smallestAppliedOn = new Date(curApply);
-        stopThresholdDate = addDays(smallestAppliedOn, applyEvery);
-      }
+if (current <= smallest + 1e-9 && !smallestAppliedOn){
+  smallestAppliedOn = new Date(curApply);
+  // Stop 1 patch cycle after the first lowest is applied
+  stopThresholdDate = addDays(smallestAppliedOn, applyEvery); // 7 for bupe, 3 for fentanyl
+}
+
       prevTotal = current;
     }
 
     if (startedReducing) pushRow();
 
-const candidateStop = (stopThresholdDate && (+curRemove >= +stopThresholdDate - 1e-9)) ? new Date(curRemove) : null;
+const candidateStop = (stopThresholdDate && (+curRemove >= +stopThresholdDate - 1e-9))
+  ? new Date(curRemove) : null;
+
 let finalType=null, finalDate=null;
-if (reviewDate && (!candidateStop || +reviewDate <= +candidateStop)) { finalType='review'; finalDate=new Date(reviewDate); }
-if (!finalDate && (+capDate <= +curRemove)) { finalType='review'; finalDate=new Date(capDate); }
-if (!finalDate && candidateStop) { finalType='stop'; finalDate=candidateStop; }
+if (reviewDate && (!candidateStop || +reviewDate <= +candidateStop)) {
+  finalType='review'; finalDate=new Date(reviewDate);
+}
+if (!finalDate && (+capDate <= +curRemove)) {
+  finalType='review'; finalDate=new Date(capDate);
+}
+if (!finalDate && candidateStop) {
+  finalType='stop'; finalDate=candidateStop;
+}
 if (finalDate) { pushFinal(finalType, finalDate); break; }
 
     curApply  = addDays(curApply, applyEvery);
@@ -1238,6 +1257,7 @@ function init(){
   document.getElementById("medicineSelect")?.addEventListener("change", () => {
     populateForms();
     updateRecommended();
+    applyPatchIntervalAttributes();
     if (typeof setFooterText === "function") setFooterText(document.getElementById("classSelect")?.value || "");
     resetDoseLinesToLowest();
     setDirty(true);
@@ -1247,6 +1267,7 @@ function init(){
 
   document.getElementById("formSelect")?.addEventListener("change", () => {
     updateRecommended();
+    applyPatchIntervalAttributes();
     resetDoseLinesToLowest();
     setDirty(true);
     setGenerateEnabled();
