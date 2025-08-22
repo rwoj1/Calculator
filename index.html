@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Deprescribing Taper Planner</title>
+
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
 </head>
@@ -38,7 +39,7 @@
         <button id="addDoseLineBtn" type="button" class="secondary">Add Dose Line</button>
       </div>
       <div id="doseLinesContainer" class="dose-lines"></div>
-      <p class="hint">Additional lines must use the same medicine &amp; form. Only <strong>Strength</strong>, <strong>Number of tablets</strong> and <strong>Frequency</strong> can be changed.</p>
+<p class="hint">Only <strong>Strength</strong>, <strong>Number of doses</strong> and <strong>Frequency</strong> can be changed.</p>
     </section>
 
     <section class="card">
@@ -47,20 +48,43 @@
 
     <section class="card">
       <h2>Taper controls</h2>
+
       <div class="grid compact">
+        <!-- Phase 1 -->
         <div>
           <h3>Phase 1</h3>
-          <label>Reduce by (%)<input id="p1Percent" type="number" min="1" max="100" value="25" /></label>
-          <label>Every (days)<input id="p1Interval" type="number" min="1" value="7" /></label>
-          <label>Stop Phase 1 at week # (optional)<input id="p1StopWeek" type="number" min="0" placeholder="optional" /></label>
+          <label>Reduce by (%)
+            <input id="p1Percent" type="number" min="1" max="100" placeholder="%" />
+          </label>
+          <label>Every (days)
+            <input id="p1Interval" type="number" min="1" placeholder="days" />
+          </label>
         </div>
-        <div>
-          <h3>Phase 2</h3>
-          <label>Reduce by (%)<input id="p2Percent" type="number" min="0" max="100" value="0" /></label>
-          <label>Every (days)<input id="p2Interval" type="number" min="0" value="0" /></label>
-          <p class="hint">Set Phase 2 as 0 if you only want a single-phase taper. Hard limit: 3 months (or review date, if earlier).</p>
+
+        <!-- Phase 2 (optional) -->
+<div>
+  <h3>Phase 2 <span class="muted">(optional)</span></h3>
+
+  <!-- Moved first -->
+  <label>Start Phase 2 from
+    <input id="p2StartDate" class="datepick" placeholder="DD/MM/YYYY" />
+  </label>
+
+  <label>Reduce by (%)
+    <input id="p2Percent" type="number" min="1" max="100" placeholder="%" />
+  </label>
+  <label>Every (days)
+    <input id="p2Interval" type="number" min="1" placeholder="days" />
+  </label>
+
+  <p class="hint">
+    If Phase 2 is partially complete or empty, only a single-phase taper will generate.
+    Hard limit: 3 months (or review date, if earlier).
+  </p>
+</div>
         </div>
       </div>
+
       <div class="actions">
         <button id="generateBtn" type="button">Generate Chart</button>
         <button id="printBtn" type="button" class="secondary">Print</button>
@@ -74,6 +98,7 @@
         <h2 id="hdrMedicine">Medicine:</h2>
         <div id="hdrSpecial" class="pill"></div>
       </div>
+
       <div id="scheduleBlock"></div>
       <div id="patchBlock" style="display:none"></div>
 
