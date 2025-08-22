@@ -618,29 +618,76 @@ function combosUpTo(avail, maxPatches = 2){
 }
 function choosePatchTotal(prevTotal, target, med){
   const avail = patchAvailList(med);
-  const sums = combosUpTo(avail, 2); // ≤2 patches
-  const desired = (med === "Fentanyl") ? fentanylDesiredGrid(target) : target;
-  const cand = [...sums.keys()].filter(t => t <= prevTotal + EPS);
-  if (cand.length === 0) return { total: prevTotal, combo: [prevTotal] };
-  cand.sort((a,b)=>{
-    const da=Math.abs(a-desired), db=Math.abs(b-desired);
-    if (Math.abs(da-db) > 1e-9) return da - db;
-    return b - a; // prefer higher on tie
-  });
-  let pick = cand[0];
-  let combo = sums.get(pick) || [pick];
+  const sums  = combosUpTo(avail, 2); // ≤ 2 patches
 
-  if (med === "Fentanyl"){
-    const singleExact = avail.find(x => Math.abs(x - pick) < 1e-9);
-    const singlePlus1 = avail.find(x => Math.abs(x - (pick+1)) < 1e-9);
-    if (singleExact != null) combo = [singleExact];
-    else if (singlePlus1 != null && (pick+1) < prevTotal - 1e-9){
-      pick = singlePlus1; combo = [singlePlus1];
+  // Desired grid for fentanyl (12.5 grid with your 12.5→12 display convention)
+  const desired = (med === "Fentanyl") ? fentanylDesiredGrid(target) : target;
+
+  // Totals we can make without increasing from previous
+  const cand = [...sums.keys()].filter(t => t <= prevTotal + 1e-9);
+  if (cand.length === 0) return { total: prevTotal, combo: [prevTotal] };
+
+  // Sort by closeness to desired; tie → higher total (you prefer the closer, then higher)
+  cand.sort((a,b) => {
+    const da = Math.abs(a - desired), db = Math.abs(b - desired);
+    if (Math.abs(da - db) > 1e-9) return da - db;
+    return b - a;
+  });
+
+  let pick  = cand[0];
+  let combo = (sums.get(pick) || [pick]).slice();
+
+  if (med === "Fentanyl") {
+    // Collapse twelves for selection-time logic (not just display)
+    let collapsed = collapseFentanylTwelves(combo);
+    let collapsedTotal = collapsed.reduce((s,v)=>s+v, 0);
+
+    // If the collapsed total would *display* the same as the previous total,
+    // walk down to the next candidate whose collapsed total is strictly lower.
+    if (Math.abs(collapsedTotal - prevTotal) < 1e-9) {
+      let replaced = false;
+      for (let i = 1; i < cand.length; i++) {
+        const t  = cand[i];
+        const cc = (sums.get(t) || [t]).slice();
+        const ccCollapsed = collapseFentanylTwelves(cc);
+        const ccTotal     = ccCollapsed.reduce((s,v)=>s+v, 0);
+        if (ccTotal < prevTotal - 1e-9) {
+          pick       = t;
+          combo      = ccCollapsed;
+          collapsed  = ccCollapsed;
+          collapsedTotal = ccTotal;
+          replaced   = true;
+          break;
+        }
+      }
+      if (!replaced) {
+        // fallback: keep collapsed pick
+        combo = collapsed;
+        pick  = collapsedTotal;
+      }
+    } else {
+      // accept the collapsed combo
+      combo = collapsed;
+      pick  = collapsedTotal;
     }
+
+    // Final safety: if still equal to previous, step down once more if possible
+    if (Math.abs(pick - prevTotal) < 1e-9) {
+      const lower = cand.find(x => x < prevTotal - 1e-9);
+      if (lower != null) {
+        const lc  = (sums.get(lower) || [lower]).slice();
+        const lcc = collapseFentanylTwelves(lc);
+        pick  = lcc.reduce((s,v)=>s+v,0);
+        combo = lcc;
+      }
+    }
+    return { total: pick, combo };
   }
-  if (Math.abs(pick - prevTotal) < 1e-9){
+
+  // Non-fentanyl: keep your original “no-stagnation” guard
+  if (Math.abs(pick - prevTotal) < 1e-9) {
     const lower = cand.find(x => x < prevTotal - 1e-9);
-    if (lower != null){ pick = lower; combo = sums.get(lower) || [lower]; }
+    if (lower != null) { pick = lower; combo = sums.get(lower) || [lower]; }
   }
   return { total: pick, combo };
 }
