@@ -103,6 +103,26 @@ function ensureIntervalHints(){
   };
   return [mk("p1IntHint","p1Interval"), mk("p2IntHint","p2Interval")];
 }
+function injectPrintDisclaimer() {
+  const card = document.getElementById("outputCard");
+  if (!card) return () => {};
+
+  // If it already exists, reuse it
+  let d = document.getElementById("printDisclaimer");
+  if (!d) {
+    d = document.createElement("div");
+    d.id = "printDisclaimer";
+    d.className = "print-disclaimer";
+    d.textContent = "This is a guide only – always follow the advice of your healthcare professional.";
+    card.prepend(d);
+  }
+  // Return a cleanup fn so we can remove after print if you prefer
+  return () => {
+    // keep disclaimer visible on screen too? remove if you want it print-only:
+    // d.remove();
+  };
+}
+
 
 // validate intervals, show hints, toggle input error class, and optionally toast
 function validatePatchIntervals(showToastToo=false){
@@ -1319,11 +1339,26 @@ function _printCSS(){
     @page{size:A4;margin:12mm}
   </style>`;
 }
-function printOutputOnly(){
-  if (_dirtySinceGenerate) {
-    showToast("Inputs changed—please Generate to update the plan before printing or saving.");
-    return;
-  }
+function printOutputOnly() {
+  const card = document.getElementById("outputCard");
+  if (!card) return;
+
+  // Add print-only scoping
+  document.body.classList.add("printing");
+
+  // Ensure we have the disclaimer at the very top
+  const cleanupDisclaimer = injectPrintDisclaimer();
+
+  // Print
+  window.print();
+
+  // Clean up scoping (and optionally disclaimer)
+  setTimeout(() => {
+    document.body.classList.remove("printing");
+    // If you want the disclaimer to be print-only, uncomment next line:
+    // cleanupDisclaimer();
+  }, 100);
+}
 
   // Only print the output card
   const card = document.getElementById("outputCard");
