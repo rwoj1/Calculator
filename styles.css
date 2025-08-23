@@ -47,7 +47,7 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
    Print / PDF layout (non-intrusive)
    ================================ */
 @media print {
-  /* Print the chart only; hide the on-screen header (pill) */
+  /* Print chart only; hide on-screen header (dark pill) */
   .container > * { display: none !important; }
   #outputCard     { display: block !important; }
   .output-head    { display: none !important; }
@@ -57,17 +57,17 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
   html, body, #outputCard { background:#fff !important; }
   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
-  /* Table shell: no outer outline; we’ll rely on row dividers only */
+  /* Table basics (no outer outline) */
   .plan-table {
     width: 100%;
     table-layout: fixed;
-    border-collapse: separate; /* keep rowspans sane in print engines */
+    border-collapse: separate; /* keeps rowspans stable */
     border-spacing: 0;
-    border: none !important;   /* removes outer outline */
+    border: none !important;
     background: #fff !important;
   }
 
-  /* Repeat the header rows & column titles on each page */
+  /* Repeat header rows + column titles each page */
   .plan-table thead { display: table-header-group; }
   .plan-table tfoot { display: table-footer-group; }
 
@@ -76,7 +76,7 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
   .plan-table thead .thead-instruction th { font-size:12px;                 text-align:left; background:#fff !important; }
   .plan-table thead .thead-disclaimer th  { font-size:11px;                 text-align:left; background:#fff !important; }
 
-  /* Column titles (last row of THEAD) */
+  /* Column header row (last THEAD row) */
   .plan-table thead tr:last-child th {
     font-weight: 600;
     text-align: left;
@@ -84,32 +84,34 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
     border-bottom: 1px solid #e5e5e5;
   }
 
-  /* Cells */
+  /* Cells: no vertical rules to avoid misalign across rowspans */
   .plan-table th, .plan-table td {
     padding: 6px 8px;
     border-bottom: 1px solid #e5e5e5;
+    border-left: none !important;
+    border-right: none !important;
     vertical-align: top;
     font-size: 12px;
-    background: #fff !important;     /* white by default */
-    white-space: pre-line;            /* show \n in instructions */
-    border-left: none !important;     /* remove vertical rules to avoid misalign at rowspans */
-    border-right: none !important;
+    background: #fff !important;     /* white baseline (zebra overrides below) */
+    white-space: pre-line;            /* keep line breaks in Instructions */
   }
 
-  /* Zebra per date-step for tablets (each step is a <tbody>) */
+  /* ZEBRA PER STEP
+     - Tablets/caps/ODT: one <tbody> per date-step (already in JS) */
   .plan-standard tbody:nth-of-type(even) td { background: #eeeeee !important; }
-  /* Patches: one row = one step (zebra per row = per step) */
-  .plan-patch tbody tr:nth-of-type(even) td { background: #eeeeee !important; }
+  /* - Patches: one <tbody> per contiguous dose range (new JS grouping) */
+  .plan-patch tbody.step-even td { background: #eeeeee !important; }
 
-  /* Keep a whole step together (merged date + its dose rows) */
+  /* Keep an entire step together on one page (tablets) */
   .plan-standard tbody { break-inside: avoid; page-break-inside: avoid; }
 
-  /* Stop/Review row is bold; keep white (only zebra rows get grey) */
+  /* Stop/Review emphasis (bold, no grey) */
   .final-cell { font-weight: 700; background: #fff !important; }
 
   /* Footer text black */
-  .footer-notes, .footer-notes * { color:#000 !important; }
+  .footer-notes, .footer-notes * { color: #000 !important; }
 
   /* A4 portrait */
   @page { size: A4 portrait; margin: 16mm 12mm; }
 }
+
