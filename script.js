@@ -208,26 +208,29 @@ function mapClassToKey(label) {
   return null;
 }
 
-// Render the “Suggested practice for …” box based on selected class
+let _lastPracticeKey = null;
+
 function updateBestPracticeBox() {
   const box = document.getElementById("bestPracticeBox");
   if (!box) return;
+
   const cls = document.getElementById("classSelect")?.value || "";
   const key = mapClassToKey(cls);
 
-  if (!key) {
-    box.innerHTML = ""; // nothing if no class yet
-    return;
-  }
+  if (!key) { box.innerHTML = ""; _lastPracticeKey = null; return; }
+
+  // Guard: only update if the class changed
+  if (key === _lastPracticeKey) return;
+  _lastPracticeKey = key;
+
   const titleMap = {
     opioids: "Opioids",
     bzra: "Benzodiazepines / Z-Drugs (BZRA)",
     antipsychotic: "Antipsychotics",
     ppi: "Proton Pump Inhibitors",
   };
-  const text = SUGGESTED_PRACTICE[key] || "";
 
-  // Keep your existing card styling; we only populate content
+  const text = SUGGESTED_PRACTICE[key] || "";
   box.innerHTML = `
     <h2>Suggested practice for ${titleMap[key]}</h2>
     <div class="practice-text">
@@ -235,7 +238,6 @@ function updateBestPracticeBox() {
     </div>
   `;
 }
-
 
 /* ---- Dirty state + gating ---- */
 let _dirtySinceGenerate = true;
@@ -836,11 +838,15 @@ function specialInstructionFor(){
   return "Swallow whole, do not halve or crush";
 }
 function updateRecommended(){
-  const med=$("medicineSelect")?.value || "", form=$("formSelect")?.value || "";
-const box = $("bestPracticeBox");
-if (box) box.innerHTML = `<h2>Suggested practice for ${med} ${form}</h2>`;
-const hm = $("hdrMedicine"); if (hm) hm.textContent = `Medicine: ${med} ${form}`;
-const hs = $("hdrSpecial");  if (hs) hs.textContent = specialInstructionFor();}
+  const med  = $("medicineSelect")?.value || "";
+  const form = $("formSelect")?.value || "";
+
+  const hm = $("hdrMedicine");
+  if (hm) hm.textContent = `Medicine: ${med} ${form}`;
+
+  const hs = $("hdrSpecial");
+  if (hs) hs.textContent = specialInstructionFor();
+}
 
 /* =================== Math / composition =================== */
 
@@ -1563,7 +1569,6 @@ function init(){
   document.getElementById("printBtn")?.addEventListener("click", printOutputOnly);
   document.getElementById("savePdfBtn")?.addEventListener("click", saveOutputAsPdf);
  document.getElementById("classSelect")?.addEventListener("change", updateBestPracticeBox);
-  document.getElementById("medicineSelect")?.addEventListener("change", updateBestPracticeBox);
 
    updateBestPracticeBox();
   
