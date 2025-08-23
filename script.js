@@ -302,7 +302,7 @@ function renderStandardTable(rows){
   const table = document.createElement("table");
   table.className = "plan-table plan-standard";
 
-  // ---------- THEAD: repeating header ----------
+  // ---------- THEAD (repeats each page) ----------
   const thead = document.createElement("thead");
 
   const med  = document.getElementById("medicineSelect")?.value || "";
@@ -314,41 +314,40 @@ function renderStandardTable(rows){
     .replace(/\bOrally\s*Dispersible\s*Tablet\b/i,"orally dispersible tablet");
 
   const headerRows = [
-    { class: "thead-medline",    text: `Medicine: ${med} ${formLabel}`.trim() },
-    { class: "thead-instruction",text: (typeof specialInstructionFor === "function" ? (specialInstructionFor() || "") : "") },
-    { class: "thead-disclaimer", text: "This is a guide only – always follow the advice of your healthcare professional." }
+    { cls: "thead-medline",     text: `Medicine: ${med} ${formLabel}`.trim() },
+    { cls: "thead-instruction", text: (typeof specialInstructionFor === "function" ? (specialInstructionFor() || "") : "") },
+    { cls: "thead-disclaimer",  text: "This is a guide only – always follow the advice of your healthcare professional." }
   ];
-
-  const colHeadings = ["Date beginning","Strength","Instructions","Morning","Midday","Dinner","Night"];
+  const cols = ["Date beginning","Strength","Instructions","Morning","Midday","Dinner","Night"];
 
   headerRows.forEach(h=>{
     if (!h.text) return;
     const tr = document.createElement("tr");
-    tr.className = h.class;
+    tr.className = h.cls;
     const th = document.createElement("th");
-    th.colSpan = colHeadings.length;
+    th.colSpan = cols.length;
     th.textContent = h.text;
     tr.appendChild(th);
     thead.appendChild(tr);
   });
 
   const trCols = document.createElement("tr");
-  colHeadings.forEach(t => { const th = document.createElement("th"); th.textContent = t; trCols.appendChild(th); });
+  cols.forEach(t => { const th = document.createElement("th"); th.textContent = t; trCols.appendChild(th); });
   thead.appendChild(trCols);
   table.appendChild(thead);
 
-  // ---------- TBODIES: one per step (merge date via rowspan) ----------
-  const fmtKey = r =>
+  // ---------- TBODIES: one per step (date-group) ----------
+  const keyOf = r =>
     r.dateStr || r.dateDisplay ||
     (r.date && typeof fmtDMY === "function" ? fmtDMY(r.date) : null) ||
     (r.when && typeof fmtDMY === "function" ? fmtDMY(r.when) : null) ||
     (r.date || r.when || r.applyOn || r.applyOnStr || "").toString();
 
   const groups = [];
-  let cur=null, last=null;
+  let cur = null, lastKey = null;
   rows.forEach(r=>{
-    const k = fmtKey(r);
-    if (k !== last) { cur = { key:k, items:[] }; groups.push(cur); last=k; }
+    const k = keyOf(r);
+    if (k !== lastKey){ cur = { key:k, items:[] }; groups.push(cur); lastKey = k; }
     cur.items.push(r);
   });
 
@@ -362,18 +361,19 @@ function renderStandardTable(rows){
       const tr = document.createElement("tr");
       const tdDate = document.createElement("td"); tdDate.textContent = g.key || "";
       const tdMerged = document.createElement("td");
-      tdMerged.colSpan = colHeadings.length - 1;
+      tdMerged.colSpan = cols.length - 1;
       tdMerged.className = "final-cell";
       tdMerged.textContent = r.stop ? "Stop." : "Review with your doctor the ongoing plan";
       tr.appendChild(tdDate); tr.appendChild(tdMerged);
-      tbody.appendChild(tr); table.appendChild(tbody);
+      tbody.appendChild(tr);
+      table.appendChild(tbody);
       return;
     }
 
     g.items.forEach((r,i)=>{
       const tr = document.createElement("tr");
 
-      if (i===0){
+      if (i === 0){
         const tdDate = document.createElement("td");
         tdDate.rowSpan = g.items.length;
         tdDate.textContent = g.key || "";
@@ -382,6 +382,7 @@ function renderStandardTable(rows){
 
       const strength = r.strength || r.strengthLabel || r.str || "";
       const instr    = r.instr || r.instructions || "";
+
       const tdStrength = document.createElement("td"); tdStrength.textContent = strength;
       const tdInstr    = document.createElement("td"); tdInstr.textContent    = instr;
       const tdM = document.createElement("td"); tdM.textContent = r.morning ?? r.morn ?? "";
@@ -397,10 +398,11 @@ function renderStandardTable(rows){
     table.appendChild(tbody);
   });
 
+  host.innerHTML = "";
   host.appendChild(table);
 
-  // footer labels: keep only content in spans
-  normalizeFooterSpans?.();
+  // Footer labels: keep only content in spans (avoid “Expected benefits: Expected benefits:” duplication)
+  if (typeof normalizeFooterSpans === "function") normalizeFooterSpans();
 }
 
 /* ==========================================
@@ -419,7 +421,6 @@ function renderPatchTable(rows){
 
   const thead = document.createElement("thead");
 
-  // Header rows (repeat every page)
   const med  = document.getElementById("medicineSelect")?.value || "";
   const form = document.getElementById("formSelect")?.value || "";
   const formLabel = (form || "")
@@ -429,31 +430,26 @@ function renderPatchTable(rows){
     .replace(/\bOrally\s*Dispersible\s*Tablet\b/i,"orally dispersible tablet");
 
   const headerRows = [
-    { class: "thead-medline", text: `Medicine: ${med} ${formLabel}`.trim() },
-    { class: "thead-instruction", text: (typeof specialInstructionFor === "function" ? (specialInstructionFor() || "") : "") },
-    { class: "thead-disclaimer", text: "This is a guide only – always follow the advice of your healthcare professional." }
+    { cls: "thead-medline",     text: `Medicine: ${med} ${formLabel}`.trim() },
+    { cls: "thead-instruction", text: (typeof specialInstructionFor === "function" ? (specialInstructionFor() || "") : "") },
+    { cls: "thead-disclaimer",  text: "This is a guide only – always follow the advice of your healthcare professional." }
   ];
-
-  const colHeadings = ["Apply on","Remove on","Patch strength(s)","Instructions"];
+  const cols = ["Apply on","Remove on","Patch strength(s)","Instructions"];
 
   headerRows.forEach(h=>{
     if (!h.text) return;
     const tr = document.createElement("tr");
-    tr.className = h.class;
+    tr.className = h.cls;
     const th = document.createElement("th");
-    th.colSpan = colHeadings.length;
+    th.colSpan = cols.length;
     th.textContent = h.text;
     tr.appendChild(th);
     thead.appendChild(tr);
   });
 
-  // Column headings
-  {
-    const tr = document.createElement("tr");
-    colHeadings.forEach(t => { const th = document.createElement("th"); th.textContent = t; tr.appendChild(th); });
-    thead.appendChild(tr);
-  }
-
+  const trCols = document.createElement("tr");
+  cols.forEach(t => { const th = document.createElement("th"); th.textContent = t; trCols.appendChild(th); });
+  thead.appendChild(trCols);
   table.appendChild(thead);
 
   const tbody = document.createElement("tbody");
@@ -461,21 +457,17 @@ function renderPatchTable(rows){
 
   const everyDays = (/Fentanyl/i.test(med)) ? 3 : 7;
 
-  rows.forEach((r, idx) => {
+  rows.forEach((r) => {
     const tr = document.createElement("tr");
 
-    // Stop/Review row (merged cell after Apply on)
     if (r.stop || r.review) {
       const tdApply = document.createElement("td");
       tdApply.textContent = r.dateStr || r.applyOnStr || r.applyOn || "";
-      tr.appendChild(tdApply);
-
       const tdMerged = document.createElement("td");
-      tdMerged.colSpan = colHeadings.length - 1;
+      tdMerged.colSpan = cols.length - 1;
       tdMerged.className = "final-cell";
       tdMerged.textContent = r.stop ? "Stop." : "Review with your doctor the ongoing plan";
-      tr.appendChild(tdMerged);
-
+      tr.appendChild(tdApply); tr.appendChild(tdMerged);
       tbody.appendChild(tr);
       return;
     }
@@ -494,18 +486,14 @@ function renderPatchTable(rows){
     const plural = list.length > 1 ? "patches" : "patch";
     tdInstr.textContent = `Apply ${plural} every ${everyDays} days.`;
 
-    tr.appendChild(tdApply);
-    tr.appendChild(tdRemove);
-    tr.appendChild(tdStr);
-    tr.appendChild(tdInstr);
-
+    tr.appendChild(tdApply); tr.appendChild(tdRemove); tr.appendChild(tdStr); tr.appendChild(tdInstr);
     tbody.appendChild(tr);
   });
 
+  host.innerHTML = "";
   host.appendChild(table);
 
-  // De-duplicate footer labels (keep only content in spans)
-  normalizeFooterSpans();
+  if (typeof normalizeFooterSpans === "function") normalizeFooterSpans();
 }
 
 /* =================== Catalogue (commercial only) =================== */
