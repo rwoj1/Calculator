@@ -300,114 +300,121 @@ function renderPrintHeader(container){
    - Zebra per step-group (CSS)
    - Stop/Review merged cell after date
    ========================================== */
-function renderStandardTable(rows){
-  const host = document.getElementById("scheduleBlock");
-  if (!host) return;
+function renderStandardTable(stepRows){
+  const host = $("scheduleBlock");
+  host.style.display = "";
+  const patchHost = $("patchBlock");
+  if (patchHost) patchHost.style.display = "none";
   host.innerHTML = "";
 
-  const table = document.createElement("table");
-  table.className = "plan-table plan-standard";
-
-  // ---------- THEAD ----------
-  const thead = document.createElement("thead");
-
-  const med  = document.getElementById("medicineSelect")?.value || "";
-  const form = document.getElementById("formSelect")?.value || "";
-  const formLabel = (form || "")
-    .replace(/\bTablet\b/i,"tablet")
-    .replace(/\bPatch\b/i,"patch")
-    .replace(/\bCapsule\b/i,"capsule")
-    .replace(/\bOrally\s*Dispersible\s*Tablet\b/i,"orally dispersible tablet");
-
-  const headerRows = [
-    { cls: "thead-medline",     text: `Medicine: ${med} ${formLabel}`.trim() },
-    { cls: "thead-instruction", text: (typeof specialInstructionFor === "function" ? (specialInstructionFor() || "") : "") },
-    { cls: "thead-disclaimer",  text: "This is a guide only – always follow the advice of your healthcare professional." }
-  ];
-  const cols = ["Date beginning","Strength","Instructions","Morning","Midday","Dinner","Night"];
-
-  headerRows.forEach(h=>{
-    if (!h.text) return;
-    const tr = document.createElement("tr");
-    tr.className = h.cls;
-    const th = document.createElement("th");
-    th.colSpan = cols.length;
-    th.textContent = h.text;
-    tr.appendChild(th);
-    thead.appendChild(tr);
-  });
-
-  const trCols = document.createElement("tr");
-  cols.forEach(t => { const th = document.createElement("th"); th.textContent = t; trCols.appendChild(th); });
-  thead.appendChild(trCols);
-  table.appendChild(thead);
-
-  // ---------- group rows by date (each group = one step) ----------
-  const keyOf = r =>
-    r.dateStr || r.dateDisplay ||
-    (r.date && typeof fmtDMY === "function" ? fmtDMY(r.date) : null) ||
-    (r.when && typeof fmtDMY === "function" ? fmtDMY(r.when) : null) ||
-    (r.date || r.when || r.applyOn || r.applyOnStr || "").toString();
-
-  const groups = [];
-  let cur = null, lastKey = null;
-  rows.forEach(r=>{
-    const k = keyOf(r);
-    if (k !== lastKey){ cur = { key:k, items:[] }; groups.push(cur); lastKey = k; }
-    cur.items.push(r);
-  });
-
-  groups.forEach((g, idx)=>{
-    const tbody = document.createElement("tbody");
-    tbody.className = "step-group " + (idx % 2 ? "step-even" : "step-odd");
-
-    const isFinal = g.items.some(x => x.stop || x.review);
-    if (isFinal){
-      const r = g.items[0] || {};
-      const tr = document.createElement("tr");
-      const tdDate = document.createElement("td"); tdDate.textContent = g.key || "";
-      const tdMerged = document.createElement("td");
-      tdMerged.colSpan = cols.length - 1;
-      tdMerged.className = "final-cell";
-      tdMerged.textContent = r.stop ? "Stop." : "Review with your doctor the ongoing plan";
-      tr.appendChild(tdDate); tr.appendChild(tdMerged);
-      tbody.appendChild(tr);
-      table.appendChild(tbody);
+  // 1) Expand steps into per-strength rows
+  const expanded = [];
+  stepRows.forEach(r => {
+    // Preserve STOP/REVIEW rows exactly as built
+    if (r.stop || r.review) {
+      expanded.push({
+        _kind: r.stop ? "STOP" : "REVIEW",
+        dateStr: r.date || r.dateStr || r.dateDisplay || "",
+      });
       return;
     }
 
-    g.items.forEach((r,i)=>{
-      const tr = document.createElement("tr");
+    // Normal step: expand packs -> per strength rows
+    const lines = perStrengthRowsFractional(r); // already in your code
+    lines.forEach(line => {
+      expanded.push({
+        _kind: "LINE",
+        dateStr: r.date || r.dateStr || r.dateDisplay || r.applyOn || r.when || "",
+        strength: line.strengthLabel || "",
+        instr: line.instructions || "",
+        am: line.am || "",
+        mid: line.mid || "",
+        din: line.din || "",
+        pm: line.pm || ""
+      });
+    });
+  });
 
-      // merged date cell once per step
-      if (i === 0){
+  // 2) Group by date (keeps STOP/REVIEW as their own grouped item)
+  const groupsMap = new Map();
+  for (const row of expanded) {
+    const key = (row._kind === "STOP" || row._kind === "REVIEW")
+      ? `${row._kind}::${row.dateStr}`
+      : row.dateStr;
+    if (!groupsMap.has(key)) groupsMap.set(key, { key, items: [], kind: row._kind, dateStr: row.dateStr });
+    groupsMap.get(key).items.push(row);
+  }
+  const groups = Array.from(groupsMap.values());
+
+  // 3) Build the table
+  const table = document.createElement("table");
+  table.className = "plan-table plan-standard";
+
+  const thead = document.createElement("thead");
+  thead.innerHTML = `<tr>
+    <th>Date beginning</th>
+    <th>Strength</th>
+    <th>Instructions</th>
+    <th>Morning</th>
+    <th>Midday</th>
+    <th>Dinner</th>
+    <th>Night</th>
+  </tr>`;
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+
+  groups.forEach(g => {
+    // STOP/REVIEW single row
+    if (g.kind === "STOP" || g.kind === "REVIEW") {
+      const tr = document.createElement("tr");
+      tr.className = "step-row";
+      const tdDate = document.createElement("td");
+      tdDate.textContent = g.dateStr || "";
+      const tdMsg = document.createElement("td");
+      tdMsg.colSpan = 6;
+      tdMsg.textContent = (g.kind === "STOP") ? "Stop." : "Review with your doctor the ongoing plan.";
+      tr.append(tdDate, tdMsg);
+      tbody.appendChild(tr);
+      return;
+    }
+
+    // Normal date group with merged first column
+    const lines = g.items.filter(x => x._kind === "LINE");
+    const rowSpan = Math.max(1, lines.length);
+
+    lines.forEach((line, idx) => {
+      const tr = document.createElement("tr");
+      tr.className = "step-row";
+
+      if (idx === 0) {
         const tdDate = document.createElement("td");
-        tdDate.rowSpan = g.items.length;
-        tdDate.textContent = g.key || "";
+        tdDate.rowSpan = rowSpan;
+        tdDate.textContent = g.dateStr || "";
         tr.appendChild(tdDate);
       }
 
-      const strength = r.strength || r.strengthLabel || r.str || "";
-      const instr    = r.instr || r.instructions || "";
+      const tdStrength = document.createElement("td");
+      tdStrength.textContent = line.strength || "";
 
-      const tdStrength = document.createElement("td"); tdStrength.textContent = strength;
-      const tdInstr    = document.createElement("td"); tdInstr.textContent    = instr;
-      const tdM = document.createElement("td"); tdM.textContent = r.morning ?? r.morn ?? "";
-      const tdMi= document.createElement("td"); tdMi.textContent= r.midday  ?? r.mid  ?? "";
-      const tdD = document.createElement("td"); tdD.textContent = r.dinner  ?? r.din  ?? "";
-      const tdN = document.createElement("td"); tdN.textContent = r.night   ?? r.nocte ?? r.pm ?? "";
+      const tdInstr = document.createElement("td");
+      tdInstr.className = "instructions-pre";
+      tdInstr.innerHTML = (line.instr || "").replace(/\n/g, "<br>");
 
-      tr.appendChild(tdStrength); tr.appendChild(tdInstr);
-      tr.appendChild(tdM); tr.appendChild(tdMi); tr.appendChild(tdD); tr.appendChild(tdN);
+      const tdAm  = document.createElement("td"); tdAm.textContent  = line.am  || "";
+      const tdMid = document.createElement("td"); tdMid.textContent = line.mid || "";
+      const tdDin = document.createElement("td"); tdDin.textContent = line.din || "";
+      const tdPm  = document.createElement("td"); tdPm.textContent  = line.pm  || "";
+
+      tr.append(tdStrength, tdInstr, tdAm, tdMid, tdDin, tdPm);
       tbody.appendChild(tr);
     });
-
-    table.appendChild(tbody);
   });
 
+  table.appendChild(tbody);
   host.appendChild(table);
-  if (typeof normalizeFooterSpans === "function") normalizeFooterSpans();
 }
+
 
 
 /* =====================================================
@@ -416,19 +423,25 @@ function renderStandardTable(rows){
    - Group contiguous rows with the SAME patch strengths into one <tbody> (zebra per dose range)
    - Stop/Review row shown with merged cell
    ===================================================== */
-function renderPatchTable(rows){
-  const host = document.getElementById("patchBlock");
+function renderPatchTable(stepRows) {
+  const scheduleHost = $("scheduleBlock");
+  const host = $("patchBlock");
   if (!host) return;
+
+  // Show patches, hide tablets
+  if (scheduleHost) { scheduleHost.style.display = "none"; scheduleHost.innerHTML = ""; }
   host.style.display = "";
   host.innerHTML = "";
 
+  // Build table
   const table = document.createElement("table");
   table.className = "plan-table plan-patch";
 
   // ---------- THEAD ----------
   const thead = document.createElement("thead");
-  const med  = document.getElementById("medicineSelect")?.value || "";
-  const form = document.getElementById("formSelect")?.value || "";
+
+  const med  = $("medicineSelect")?.value || "";
+  const form = $("formSelect")?.value || "";
   const formLabel = (form || "")
     .replace(/\bTablet\b/i,"tablet")
     .replace(/\bPatch\b/i,"patch")
@@ -442,7 +455,7 @@ function renderPatchTable(rows){
   ];
   const cols = ["Apply on","Remove on","Patch strength(s)","Instructions"];
 
-  headerRows.forEach(h=>{
+  headerRows.forEach(h => {
     if (!h.text) return;
     const tr = document.createElement("tr");
     tr.className = h.cls;
@@ -458,10 +471,11 @@ function renderPatchTable(rows){
   thead.appendChild(trCols);
   table.appendChild(thead);
 
-  // ---------- group contiguous rows by identical patch set ----------
+  // ---------- GROUP contiguous rows by identical patch set ----------
   const groups = [];
   let cur = null;
-  rows.forEach(r => {
+
+  (stepRows || []).forEach(r => {
     const isFinal = r && (r.stop || r.review);
     if (isFinal) {
       if (cur && cur.items.length) { groups.push(cur); cur = null; }
@@ -477,7 +491,7 @@ function renderPatchTable(rows){
   });
   if (cur && cur.items.length) groups.push(cur);
 
-  // ---------- render groups (each group = one <tbody> = one zebra step) ----------
+  // ---------- RENDER groups ----------
   const everyDays = (/Fentanyl/i.test(med)) ? 3 : 7;
 
   groups.forEach((g, idx) => {
@@ -487,20 +501,26 @@ function renderPatchTable(rows){
     if (g.type === "final") {
       const r = g.item || {};
       const tr = document.createElement("tr");
-      const tdApply = document.createElement("td");
-      tdApply.textContent = r.dateStr || r.applyOnStr || r.applyOn || "";
+
+      const tdApply  = document.createElement("td");
       const tdMerged = document.createElement("td");
+
+      tdApply.textContent = r.applyOnStr || r.applyOn || r.dateStr || "";
       tdMerged.colSpan = cols.length - 1;
       tdMerged.className = "final-cell";
       tdMerged.textContent = r.stop ? "Stop." : "Review with your doctor the ongoing plan";
-      tr.appendChild(tdApply); tr.appendChild(tdMerged);
+
+      tr.appendChild(tdApply);
+      tr.appendChild(tdMerged);
       tbody.appendChild(tr);
       table.appendChild(tbody);
       return;
     }
 
+    // Dose-range group rows (same strength combo across this contiguous run)
     g.items.forEach(r => {
       const tr = document.createElement("tr");
+
       const tdApply  = document.createElement("td");
       const tdRemove = document.createElement("td");
       const tdStr    = document.createElement("td");
@@ -515,7 +535,7 @@ function renderPatchTable(rows){
       const plural = list.length > 1 ? "patches" : "patch";
       tdInstr.textContent = `Apply ${plural} every ${everyDays} days.`;
 
-      tr.appendChild(tdApply); tr.appendChild(tdRemove); tr.appendChild(tdStr); tr.appendChild(tdInstr);
+      tr.append(tdApply, tdRemove, tdStr, tdInstr);
       tbody.appendChild(tr);
     });
 
@@ -523,6 +543,7 @@ function renderPatchTable(rows){
   });
 
   host.appendChild(table);
+  // If you have footer normalization (optional safety), keep it:
   if (typeof normalizeFooterSpans === "function") normalizeFooterSpans();
 }
 
@@ -1299,11 +1320,23 @@ function _printCSS(){
   </style>`;
 }
 function printOutputOnly(){
-  if (_dirtySinceGenerate) { showToast("Inputs changed—please Generate to update the plan before printing or saving."); return; }
-  const el=$("outputCard"); const w=window.open("", "_blank"); if(!w){ alert("Popup blocked."); return; }
+  if (_dirtySinceGenerate) {
+    showToast("Inputs changed—please Generate to update the plan before printing or saving.");
+    return;
+  }
+
+  // Only current output card
+  const el = $("outputCard");
+  const w  = window.open("", "_blank");
+  if (!w) { alert("Popup blocked."); return; }
+
   w.document.write(`<!doctype html><html><head><meta charset="utf-8">${_printCSS()}</head><body>${el.outerHTML}</body></html>`);
-  w.document.close(); w.focus(); w.print(); w.close();
+  w.document.close();
+  w.focus();
+  w.print();
+  w.close();
 }
+
 function saveOutputAsPdf(){ printOutputOnly(); }
 
 /* =================== Build & init =================== */
