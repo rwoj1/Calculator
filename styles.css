@@ -47,36 +47,36 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
    Print / PDF layout (non-intrusive)
    ================================ */
 @media print {
-  /* Print chart only; hide on-screen header (dark pill) */
+  /* Print the chart only; hide the on-screen header (pill) so instruction is shown in table header instead */
   .container > * { display: none !important; }
   #outputCard     { display: block !important; }
   .output-head    { display: none !important; }
 
-  /* All text black; plain white background */
+  /* All text pure black; plain white background */
   * { color:#000 !important; -webkit-text-fill-color:#000 !important; }
   html, body, #outputCard { background:#fff !important; }
   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
-  /* Table basics (no outer outline) */
+  /* Table shell: no outer outline; we rely on row separators only */
   .plan-table {
     width: 100%;
     table-layout: fixed;
-    border-collapse: separate; /* keeps rowspans stable */
+    border-collapse: separate; /* keeps rowspans sane across print engines */
     border-spacing: 0;
     border: none !important;
     background: #fff !important;
   }
 
-  /* Repeat header rows + column titles each page */
+  /* Repeat header rows + column titles on each page */
   .plan-table thead { display: table-header-group; }
   .plan-table tfoot { display: table-footer-group; }
 
-  /* Header rows (Medicine, instruction, disclaimer) */
+  /* Header rows inside THEAD (Medicine → instruction → disclaimer) */
   .plan-table thead .thead-medline th     { font-size:18px; font-weight:700; text-align:left; background:#fff !important; }
   .plan-table thead .thead-instruction th { font-size:12px;                 text-align:left; background:#fff !important; }
   .plan-table thead .thead-disclaimer th  { font-size:11px;                 text-align:left; background:#fff !important; }
 
-  /* Column header row (last THEAD row) */
+  /* Column headings row (the last THEAD row) */
   .plan-table thead tr:last-child th {
     font-weight: 600;
     text-align: left;
@@ -84,7 +84,7 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
     border-bottom: 1px solid #e5e5e5;
   }
 
-  /* Cells: no vertical rules to avoid misalign across rowspans */
+  /* Cells: no vertical rules (prevents misaligned lines when rowspans are used) */
   .plan-table th, .plan-table td {
     padding: 6px 8px;
     border-bottom: 1px solid #e5e5e5;
@@ -92,20 +92,22 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
     border-right: none !important;
     vertical-align: top;
     font-size: 12px;
-    background: #fff !important;     /* white baseline (zebra overrides below) */
-    white-space: pre-line;            /* keep line breaks in Instructions */
+    background: #fff !important;
+    white-space: pre-line; /* keep \n line breaks in Instructions */
   }
 
   /* ZEBRA PER STEP
-     - Tablets/caps/ODT: one <tbody> per date-step (already in JS) */
-  .plan-standard tbody:nth-of-type(even) td { background: #eeeeee !important; }
-  /* - Patches: one <tbody> per contiguous dose range (new JS grouping) */
+     Tablets/caps/ODT: each step is a <tbody class="step-group"> from JS.
+     Shade the whole step (merged date + all its rows). */
+  .plan-standard tbody.step-even td { background: #eeeeee !important; }
+
+  /* Patches: JS groups contiguous identical strengths into <tbody class="step-group"> too. */
   .plan-patch tbody.step-even td { background: #eeeeee !important; }
 
   /* Keep an entire step together on one page (tablets) */
   .plan-standard tbody { break-inside: avoid; page-break-inside: avoid; }
 
-  /* Stop/Review emphasis (bold, no grey) */
+  /* Stop/Review emphasis (bold; keep white since only zebra gets grey) */
   .final-cell { font-weight: 700; background: #fff !important; }
 
   /* Footer text black */
@@ -114,4 +116,5 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
   /* A4 portrait */
   @page { size: A4 portrait; margin: 16mm 12mm; }
 }
+
 
