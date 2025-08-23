@@ -125,6 +125,18 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
 
   /* Footer notes (benefits / withdrawal) in black */
   .footer-notes, .footer-notes * { color: #000 !important; }
+/* Show ONLY the output card when printing */
+
+  body.printing .container > * { display: none !important; }
+  body.printing #outputCard { display: block !important; }
+
+  /* If you want the output card to start right at the top in print */
+  body.printing #outputCard {
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
 
   /* A4 portrait page */
   @page {
