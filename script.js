@@ -424,8 +424,8 @@ function renderStandardTable(stepRows){
    - Stop/Review row shown with merged cell
    ===================================================== */
 function renderPatchTable(stepRows) {
-  const scheduleHost = $("scheduleBlock");
-  const host = $("patchBlock");
+  const scheduleHost = document.getElementById("scheduleBlock");
+  const host = document.getElementById("patchBlock");
   if (!host) return;
 
   // Show patches, hide tablets
@@ -433,48 +433,21 @@ function renderPatchTable(stepRows) {
   host.style.display = "";
   host.innerHTML = "";
 
-  // Build table
   const table = document.createElement("table");
   table.className = "plan-table plan-patch";
 
-  // ---------- THEAD ----------
+  // Column header row ONLY (on-screen look unchanged)
   const thead = document.createElement("thead");
-
-  const med  = $("medicineSelect")?.value || "";
-  const form = $("formSelect")?.value || "";
-  const formLabel = (form || "")
-    .replace(/\bTablet\b/i,"tablet")
-    .replace(/\bPatch\b/i,"patch")
-    .replace(/\bCapsule\b/i,"capsule")
-    .replace(/\bOrally\s*Dispersible\s*Tablet\b/i,"orally dispersible tablet");
-
-  const headerRows = [
-    { cls: "thead-medline",     text: `Medicine: ${med} ${formLabel}`.trim() },
-    { cls: "thead-instruction", text: (typeof specialInstructionFor === "function" ? (specialInstructionFor() || "") : "") },
-    { cls: "thead-disclaimer",  text: "This is a guide only – always follow the advice of your healthcare professional." }
-  ];
-  const cols = ["Apply on","Remove on","Patch strength(s)","Instructions"];
-
-  headerRows.forEach(h => {
-    if (!h.text) return;
-    const tr = document.createElement("tr");
-    tr.className = h.cls;
-    const th = document.createElement("th");
-    th.colSpan = cols.length;
-    th.textContent = h.text;
-    tr.appendChild(th);
-    thead.appendChild(tr);
-  });
-
   const trCols = document.createElement("tr");
-  cols.forEach(t => { const th = document.createElement("th"); th.textContent = t; trCols.appendChild(th); });
+  ["Apply on","Remove on","Patch strength(s)","Instructions"].forEach(t=>{
+    const th = document.createElement("th"); th.textContent = t; trCols.appendChild(th);
+  });
   thead.appendChild(trCols);
   table.appendChild(thead);
 
-  // ---------- GROUP contiguous rows by identical patch set ----------
+  // Group contiguous rows by identical patch set
   const groups = [];
   let cur = null;
-
   (stepRows || []).forEach(r => {
     const isFinal = r && (r.stop || r.review);
     if (isFinal) {
@@ -491,7 +464,8 @@ function renderPatchTable(stepRows) {
   });
   if (cur && cur.items.length) groups.push(cur);
 
-  // ---------- RENDER groups ----------
+  // Render groups
+  const med = document.getElementById("medicineSelect")?.value || "";
   const everyDays = (/Fentanyl/i.test(med)) ? 3 : 7;
 
   groups.forEach((g, idx) => {
@@ -505,19 +479,20 @@ function renderPatchTable(stepRows) {
       const tdApply  = document.createElement("td");
       const tdMerged = document.createElement("td");
 
-      tdApply.textContent = r.applyOnStr || r.applyOn || r.dateStr || "";
-      tdMerged.colSpan = cols.length - 1;
+      tdApply.textContent =
+        r.applyOnStr || r.dateStr ||
+        (r.applyOn ? r.applyOn : (r.date ? (typeof fmtDMY==="function"? fmtDMY(r.date): String(r.date)) : ""));
+
+      tdMerged.colSpan = 3;
       tdMerged.className = "final-cell";
       tdMerged.textContent = r.stop ? "Stop." : "Review with your doctor the ongoing plan";
 
-      tr.appendChild(tdApply);
-      tr.appendChild(tdMerged);
+      tr.append(tdApply, tdMerged);
       tbody.appendChild(tr);
       table.appendChild(tbody);
       return;
     }
 
-    // Dose-range group rows (same strength combo across this contiguous run)
     g.items.forEach(r => {
       const tr = document.createElement("tr");
 
@@ -526,8 +501,13 @@ function renderPatchTable(stepRows) {
       const tdStr    = document.createElement("td");
       const tdInstr  = document.createElement("td");
 
-      tdApply.textContent  = r.applyOnStr || r.applyOn || r.dateStr || "";
-      tdRemove.textContent = r.removeOnStr || r.removeOn || "";
+      tdApply.textContent =
+        r.applyOnStr || r.dateStr ||
+        (r.applyOn ? r.applyOn : (r.date ? (typeof fmtDMY==="function"? fmtDMY(r.date): String(r.date)) : ""));
+
+      tdRemove.textContent =
+        r.removeOnStr || r.removeStr ||
+        (r.remove ? (typeof fmtDMY==="function"? fmtDMY(r.remove): String(r.remove)) : "");
 
       const list = Array.isArray(r.patches) ? r.patches.slice().map(Number).sort((a,b)=>a-b) : [];
       tdStr.textContent = list.length ? list.map(v => `${v} mcg/hr`).join(" + ") : "";
@@ -543,7 +523,8 @@ function renderPatchTable(stepRows) {
   });
 
   host.appendChild(table);
-  // If you have footer normalization (optional safety), keep it:
+
+  // Keep your existing footer normalization (if present)
   if (typeof normalizeFooterSpans === "function") normalizeFooterSpans();
 }
 
