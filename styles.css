@@ -47,41 +47,68 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
    Print / PDF layout (non-intrusive)
    ================================ */
 @media print {
-  /* Show only the chart; hide screen header with the dark pill */
+  /* Print the chart only; hide the on-screen header (pill) */
   .container > * { display: none !important; }
   #outputCard     { display: block !important; }
   .output-head    { display: none !important; }
 
-  /* All text pure black */
+  /* All text black; plain white background */
   * { color:#000 !important; -webkit-text-fill-color:#000 !important; }
   html, body, #outputCard { background:#fff !important; }
   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
-  /* New table (preferred) */
-  .plan-table { width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; border:none !important; background:#fff !important; }
+  /* Table shell: no outer outline; we’ll rely on row dividers only */
+  .plan-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: separate; /* keep rowspans sane in print engines */
+    border-spacing: 0;
+    border: none !important;   /* removes outer outline */
+    background: #fff !important;
+  }
+
+  /* Repeat the header rows & column titles on each page */
   .plan-table thead { display: table-header-group; }
   .plan-table tfoot { display: table-footer-group; }
-  .plan-table thead .thead-medline th    { font-size:18px; font-weight:700; text-align:left; background:#fff !important; }
-  .plan-table thead .thead-instruction th{ font-size:12px;                 text-align:left; background:#fff !important; }
-  .plan-table thead .thead-disclaimer th { font-size:11px;                 text-align:left; background:#fff !important; }
-  .plan-table thead tr:last-child th { font-weight:600; text-align:left; background:#fff !important; border-bottom:1px solid #e5e5e5; }
-  .plan-table th, .plan-table td { padding:6px 8px; border-bottom:1px solid #e5e5e5; vertical-align:top; font-size:12px; background:#fff !important; white-space:pre-line; }
-  /* Zebra by step: tablets (each <tbody> is one step); patches are 1 row per step */
-  .plan-standard tbody:nth-of-type(even) td { background:#eeeeee !important; }
-  .plan-patch    tbody tr:nth-of-type(even) td { background:#eeeeee !important; }
-  /* Keep each step together on one page */
+
+  /* Header rows (Medicine, instruction, disclaimer) */
+  .plan-table thead .thead-medline th     { font-size:18px; font-weight:700; text-align:left; background:#fff !important; }
+  .plan-table thead .thead-instruction th { font-size:12px;                 text-align:left; background:#fff !important; }
+  .plan-table thead .thead-disclaimer th  { font-size:11px;                 text-align:left; background:#fff !important; }
+
+  /* Column titles (last row of THEAD) */
+  .plan-table thead tr:last-child th {
+    font-weight: 600;
+    text-align: left;
+    background: #fff !important;
+    border-bottom: 1px solid #e5e5e5;
+  }
+
+  /* Cells */
+  .plan-table th, .plan-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #e5e5e5;
+    vertical-align: top;
+    font-size: 12px;
+    background: #fff !important;     /* white by default */
+    white-space: pre-line;            /* show \n in instructions */
+    border-left: none !important;     /* remove vertical rules to avoid misalign at rowspans */
+    border-right: none !important;
+  }
+
+  /* Zebra per date-step for tablets (each step is a <tbody>) */
+  .plan-standard tbody:nth-of-type(even) td { background: #eeeeee !important; }
+  /* Patches: one row = one step (zebra per row = per step) */
+  .plan-patch tbody tr:nth-of-type(even) td { background: #eeeeee !important; }
+
+  /* Keep a whole step together (merged date + its dose rows) */
   .plan-standard tbody { break-inside: avoid; page-break-inside: avoid; }
-  .final-cell { font-weight:700; background:#fff !important; }
 
-  /* Fallback for the old table markup (if it ever sneaks in) */
-  #outputCard table { width:100%; border-collapse:separate; border-spacing:0; border:none !important; }
-  #outputCard table thead { display: table-header-group; }
-  #outputCard table th, #outputCard table td { padding:6px 8px; border-bottom:1px solid #e5e5e5; background:#fff !important; }
-  #outputCard table tbody:nth-of-type(even) td { background:#eeeeee !important; }  /* step zebra if tbodies exist */
-  #outputCard table tbody tr:nth-of-type(even) td { background:#eeeeee !important; } /* row zebra otherwise */
+  /* Stop/Review row is bold; keep white (only zebra rows get grey) */
+  .final-cell { font-weight: 700; background: #fff !important; }
 
-  /* Remove vertical column rules (prevents misaligned lines across rowspans) */
-  #outputCard table th, #outputCard table td { border-left:none !important; border-right:none !important; }
+  /* Footer text black */
+  .footer-notes, .footer-notes * { color:#000 !important; }
 
   /* A4 portrait */
   @page { size: A4 portrait; margin: 16mm 12mm; }
