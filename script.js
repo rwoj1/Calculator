@@ -312,7 +312,7 @@ function renderStandardTable(stepRows){
 
   // Table shell
   const table = document.createElement("table");
-  table.className = "plan-table plan-standard";
+  table.className = "table plan-standard";
 
   // Column headers ONLY (on-screen look unchanged)
   const thead = document.createElement("thead");
@@ -453,7 +453,7 @@ function renderPatchTable(stepRows) {
   host.innerHTML = "";
 
   const table = document.createElement("table");
-  table.className = "plan-table plan-patch";
+  table.className = "table plan-patch";
 
   // Column header row ONLY (on-screen look unchanged)
   const thead = document.createElement("thead");
