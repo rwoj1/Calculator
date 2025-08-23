@@ -149,6 +149,12 @@ function validatePatchIntervals(showToastToo=false){
   return ok;
 }
 
+// Stable signature for a patch list (e.g., [75,12] -> "12+75")
+function patchSignature(list) {
+  const arr = Array.isArray(list) ? list.slice().map(Number).sort((a,b)=>a-b) : [];
+  return arr.join("+"); // "" if no patches
+}
+
 /* ---- Dirty state + gating ---- */
 let _dirtySinceGenerate = true;
 
@@ -302,7 +308,7 @@ function renderStandardTable(rows){
   const table = document.createElement("table");
   table.className = "plan-table plan-standard";
 
-  // ---------- THEAD (repeats each page) ----------
+  // ---------- THEAD ----------
   const thead = document.createElement("thead");
 
   const med  = document.getElementById("medicineSelect")?.value || "";
@@ -336,7 +342,7 @@ function renderStandardTable(rows){
   thead.appendChild(trCols);
   table.appendChild(thead);
 
-  // ---------- TBODIES: one per step (date-group) ----------
+  // ---------- group rows by date (each group = one step) ----------
   const keyOf = r =>
     r.dateStr || r.dateDisplay ||
     (r.date && typeof fmtDMY === "function" ? fmtDMY(r.date) : null) ||
@@ -373,6 +379,7 @@ function renderStandardTable(rows){
     g.items.forEach((r,i)=>{
       const tr = document.createElement("tr");
 
+      // merged date cell once per step
       if (i === 0){
         const tdDate = document.createElement("td");
         tdDate.rowSpan = g.items.length;
@@ -398,18 +405,10 @@ function renderStandardTable(rows){
     table.appendChild(tbody);
   });
 
-  host.innerHTML = "";
   host.appendChild(table);
-
-  // Footer labels: keep only content in spans (avoid “Expected benefits: Expected benefits:” duplication)
   if (typeof normalizeFooterSpans === "function") normalizeFooterSpans();
 }
 
-// Helper: stable signature for a patch list (e.g., [75,12] -> "12+75")
-function patchSignature(list) {
-  const arr = Array.isArray(list) ? list.slice().map(Number).sort((a,b)=>a-b) : [];
-  return arr.join("+"); // empty string if no patches
-}
 
 /* =====================================================
    RENDER PATCH TABLE (fentanyl / buprenorphine)
@@ -459,13 +458,12 @@ function renderPatchTable(rows){
   thead.appendChild(trCols);
   table.appendChild(thead);
 
-  // ---------- GROUP contiguous rows by patch-dose signature ----------
+  // ---------- group contiguous rows by identical patch set ----------
   const groups = [];
   let cur = null;
   rows.forEach(r => {
     const isFinal = r && (r.stop || r.review);
     if (isFinal) {
-      // Flush current group if any
       if (cur && cur.items.length) { groups.push(cur); cur = null; }
       groups.push({ type: "final", item: r });
       return;
@@ -479,10 +477,9 @@ function renderPatchTable(rows){
   });
   if (cur && cur.items.length) groups.push(cur);
 
-  const tbodyElems = [];
+  // ---------- render groups (each group = one <tbody> = one zebra step) ----------
   const everyDays = (/Fentanyl/i.test(med)) ? 3 : 7;
 
-  // ---------- RENDER groups ----------
   groups.forEach((g, idx) => {
     const tbody = document.createElement("tbody");
     tbody.className = "step-group " + (idx % 2 ? "step-even" : "step-odd");
@@ -499,14 +496,11 @@ function renderPatchTable(rows){
       tr.appendChild(tdApply); tr.appendChild(tdMerged);
       tbody.appendChild(tr);
       table.appendChild(tbody);
-      tbodyElems.push(tbody);
       return;
     }
 
-    // Dose-range group rows
     g.items.forEach(r => {
       const tr = document.createElement("tr");
-
       const tdApply  = document.createElement("td");
       const tdRemove = document.createElement("td");
       const tdStr    = document.createElement("td");
@@ -521,23 +515,17 @@ function renderPatchTable(rows){
       const plural = list.length > 1 ? "patches" : "patch";
       tdInstr.textContent = `Apply ${plural} every ${everyDays} days.`;
 
-      tr.appendChild(tdApply);
-      tr.appendChild(tdRemove);
-      tr.appendChild(tdStr);
-      tr.appendChild(tdInstr);
+      tr.appendChild(tdApply); tr.appendChild(tdRemove); tr.appendChild(tdStr); tr.appendChild(tdInstr);
       tbody.appendChild(tr);
     });
 
     table.appendChild(tbody);
-    tbodyElems.push(tbody);
   });
 
-  host.innerHTML = "";
   host.appendChild(table);
-
-  // Footer labels: keep only content in spans (avoid duplicate label text)
   if (typeof normalizeFooterSpans === "function") normalizeFooterSpans();
 }
+
 
 /* =================== Catalogue (commercial only) =================== */
 
