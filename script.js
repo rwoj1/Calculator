@@ -1325,19 +1325,41 @@ function printOutputOnly(){
     return;
   }
 
-  // Only current output card
-  const el = $("outputCard");
-  const w  = window.open("", "_blank");
-  if (!w) { alert("Popup blocked."); return; }
+  // Only print the output card
+  const card = document.getElementById("outputCard");
+  if (!card) return;
 
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8">${_printCSS()}</head><body>${el.outerHTML}</body></html>`);
-  w.document.close();
-  w.focus();
-  w.print();
-  w.close();
+  // Add a class so @media print rules hide everything except #outputCard
+  document.body.classList.add("printing");
+
+  // Trigger the print dialog
+  window.print();
+
+  // Clean up after print (some browsers fire afterprint, some don’t)
+  setTimeout(() => document.body.classList.remove("printing"), 100);
 }
 
-function saveOutputAsPdf(){ printOutputOnly(); }
+function saveOutputAsPdf() {
+  const card = document.getElementById("outputCard");
+  if (!card) return;
+
+  const opt = {
+    margin:       [10, 10, 10, 10],
+    filename:     'deprescribing-plan.pdf',
+    image:        { type: 'jpeg', quality: 0.98 },
+    html2canvas:  { scale: 2, useCORS: true },
+    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
+  };
+
+  // Temporarily switch to print layout for consistent PDF styling
+  document.body.classList.add("printing");
+  html2pdf().set(opt).from(card).save().then(() => {
+    document.body.classList.remove("printing");
+  }).catch(() => {
+    document.body.classList.remove("printing");
+  });
+}
 
 /* =================== Build & init =================== */
 
