@@ -1363,17 +1363,6 @@ function printOutputOnly() {
   }, 100);
 }
 
-
-  // Add a class so @media print rules hide everything except #outputCard
-  document.body.classList.add("printing");
-
-  // Trigger the print dialog
-  window.print();
-
-  // Clean up after print (some browsers fire afterprint, some don’t)
-  setTimeout(() => document.body.classList.remove("printing"), 100);
-}
-
 function saveOutputAsPdf() {
   const card = document.getElementById("outputCard");
   if (!card) return;
