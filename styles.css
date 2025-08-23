@@ -120,24 +120,27 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
     page-break-inside: avoid;
   }
 
-  /* ---------- Zebra striping PER STEP ---------- 
-     (each <tbody class="step-group ..."> is one step/date group for tablets
-      or one contiguous dose-range run for patches) */
-  .plan-standard tbody.step-even td,
-  .plan-patch    tbody.step-even td {
-    background: #eeeeee !important;
+  /* === ZEBRA: make the whole step grey (tablets & patches) === */
+  table.plan-standard tbody.step-even td,
+  table.plan-patch    tbody.step-even td,
+  .table.plan-standard tbody.step-even td,
+  .table.plan-patch    tbody.step-even td {
+    background: #eeeeee !important;   /* full row group, not just the date cell */
   }
-  /* Fallback if .step-even wasn't added: alternate by position */
-  .plan-standard tbody:not(.step-even):nth-of-type(even) td,
-  .plan-patch    tbody:not(.step-even):nth-of-type(even) td {
+
+  /* Fallback if step-even wasn’t added by JS for some reason */
+  table.plan-standard tbody:not(.step-even):nth-of-type(even) td,
+  table.plan-patch    tbody:not(.step-even):nth-of-type(even) td,
+  .table.plan-standard tbody:not(.step-even):nth-of-type(even) td,
+  .table.plan-patch    tbody:not(.step-even):nth-of-type(even) td {
     background: #eeeeee !important;
   }
 
-  /* ---------- Rounded “bubble” corners per step group ---------- */
+  /* === Rounded “bubble” edges per step group ===
+     Works with grid lines; subtle & professional. */
   .plan-standard tbody.step-group tr:first-child td:first-child,
   .plan-patch    tbody.step-group tr:first-child td:first-child {
     border-top-left-radius: 10px !important;
-    -webkit-print-color-adjust: exact;
     background-clip: padding-box;
   }
   .plan-standard tbody.step-group tr:first-child td:last-child,
@@ -155,6 +158,7 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
     border-bottom-right-radius: 10px !important;
     background-clip: padding-box;
   }
+}
 
   /* STOP/REVIEW merged message cell */
   .final-cell {
