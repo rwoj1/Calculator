@@ -114,7 +114,11 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
   .footer-notes, .footer-notes * { color: #000 !important; }
 
   /* A4 portrait */
+
   @page { size: A4 portrait; margin: 16mm 12mm; }
+  /* Fallback if old .table markup prints: make rows white so they’re readable */
+.table tbody td { background: #fff !important; color: #000 !important; }
+
 }
 
 
