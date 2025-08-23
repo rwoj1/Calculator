@@ -47,35 +47,35 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
    Print / PDF layout (non-intrusive)
    ================================ */
 @media print {
-  /* --- Global print reset --- */
+  /* ---- Global reset for print ---- */
   * {
     color: #000 !important;                 /* all text pure black */
     -webkit-text-fill-color: #000 !important;
-    background: transparent !important;     /* remove dark fills */
+    background: transparent !important;     /* strip dark fills in print */
   }
-  html, body {
-    background: #fff !important;
-  }
-  .pill, .pill * {                          /* avoid dark chips in print */
+  html, body { background: #fff !important; }
+  /* keep on-screen chips from printing dark */
+  .pill, .pill * {
     background: #fff !important;
     border-color: #000 !important;
     color: #000 !important;
   }
 
-  /* --- Table shell --- */
-  .plan-table {
+  /* ---- Table shell ---- */
+  .table, .plan-table {
     width: 100%;
-    table-layout: auto;                      /* let Instructions breathe */
+    table-layout: auto;                     /* let Instructions breathe */
     border-collapse: collapse !important;
     border-spacing: 0 !important;
     background: #fff !important;
   }
 
-  /* Repeat table header/footer on each page (if present) */
-  .plan-table thead { display: table-header-group; }
-  .plan-table tfoot { display: table-footer-group; }
+  /* Repeat header/footer rows across pages (if present) */
+  .table thead, .plan-table thead  { display: table-header-group; }
+  .table tfoot, .plan-table tfoot  { display: table-footer-group; }
 
   /* Column header row */
+  .table thead tr:last-child th,
   .plan-table thead tr:last-child th {
     font-weight: 600;
     text-align: left;
@@ -84,7 +84,8 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
     background: #fff !important;
   }
 
-  /* Generic cell rules (grid lines ON) */
+  /* Cell grid lines + sizing */
+  .table th, .table td,
   .plan-table th, .plan-table td {
     border: 1px solid #000 !important;      /* row + column lines */
     padding: 6px 8px;
@@ -93,44 +94,45 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
     white-space: pre-line;                   /* keep \n in Instructions */
     font-size: 12px;
   }
+  /* multi-line instructions cell */
+  .table td.instructions-pre,
+  .plan-table td.instructions-pre { white-space: pre-line !important; }
 
-  /* Multi-line instructions from JS: td has class "instructions-pre" */
-  .plan-table td.instructions-pre { white-space: pre-line; }
-
-  /* Keep a whole step together on a page (helps merged date cells) */
+  /* Keep whole step groups together (better with rowSpan merged date) */
   .plan-standard tbody,
-  .plan-patch tbody {
+  .plan-patch    tbody {
     break-inside: avoid;
     page-break-inside: avoid;
   }
 
-  /* Zebra striping PER STEP:
-     - Preferred: JS adds .step-even on each <tbody>
-     - Fallback: alternate by position if class missing               */
+  /* Zebra PER STEP (tbody = one step/date group for tablets,
+     or one contiguous dose-range group for patches) */
   .plan-standard tbody.step-even td,
   .plan-patch    tbody.step-even td {
     background: #eeeeee !important;
   }
+  /* Fallback if .step-even class is missing: alternate by position */
   .plan-standard tbody:not(.step-even):nth-of-type(even) td,
   .plan-patch    tbody:not(.step-even):nth-of-type(even) td {
     background: #eeeeee !important;
   }
 
-  /* STOP/REVIEW merged message cell */
+  /* STOP / REVIEW merged cell style */
   .final-cell {
     font-weight: 700;
     background: #fff !important;
   }
 
-  /* Footer notes (benefits / withdrawal) remain black */
+  /* Footer notes (benefits / withdrawal) in black */
   .footer-notes, .footer-notes * { color: #000 !important; }
 
-  /* A4 portrait page box */
+  /* A4 portrait page */
   @page {
     size: A4 portrait;
     margin: 16mm 12mm;
   }
 }
+
 
 
 
