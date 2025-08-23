@@ -175,6 +175,68 @@ function patchSignature(list) {
   return arr.join("+"); // "" if no patches
 }
 
+// --- Suggested practice copy (exact wording from your doc) ---
+const SUGGESTED_PRACTICE = {
+  opioids: `Tailor the deprescribing plan based on the person’s clinical characteristics, goals and preferences. Consider:
+• < 3 months use: reduce the dose by 10% to 25% every week
+• >3 months use: reduce the dose by 10% to 25% every 4 weeks
+• Long-term opioid use (e.g. 1> year) or on high doses: slower tapering and frequent monitoring
+[INSERT ALGORITHM][INSERT SUMMARY OF EVIDENCE] [INSERT GUIDE TO RULESET]`,
+
+  bzra: `Taper slowly with the patient; e.g., 25% every 2 weeks.
+• Near end: consider 12.5% reductions and/or planned drug-free days.
+[INSERT ALGORITHM][INSERT SUMMARY OF EVIDENCE] [INSERT GUIDE TO RULESET]`,
+
+  antipsychotic: `Reduce ~25–50% every 1–2 weeks with close monitoring.
+• Slower taper may be appropriate depending on symptoms.
+[INSERT ALGORITHM][INSERT SUMMARY OF EVIDENCE] [INSERT GUIDE TO RULESET]`,
+
+  ppi: `Step-down to lowest effective dose, alternate-day dosing, or stop and use on-demand.
+• Review at 4–12 weeks.
+[INSERT ALGORITHM][INSERT SUMMARY OF EVIDENCE] [INSERT GUIDE TO RULESET]`,
+};
+
+// Normalize the dropdown label to one of our keys above
+function mapClassToKey(label) {
+  const s = String(label || "").toLowerCase();
+  if (s.includes("benzodiazep")) return "bzra";
+  if (s.includes("z-drug") || s.includes("z drug")) return "bzra";
+  if (s.includes("antipsych")) return "antipsychotic";
+  if (s.includes("proton") || s.includes("ppi")) return "ppi";
+  // include patches under Opioids class as well
+  if (s.includes("opioid") || s.includes("fentanyl") || s.includes("buprenorphine")) return "opioids";
+  return null;
+}
+
+// Render the “Suggested practice for …” box based on selected class
+function updateBestPracticeBox() {
+  const box = document.getElementById("bestPracticeBox");
+  if (!box) return;
+  const cls = document.getElementById("classSelect")?.value || "";
+  const key = mapClassToKey(cls);
+
+  if (!key) {
+    box.innerHTML = ""; // nothing if no class yet
+    return;
+  }
+  const titleMap = {
+    opioids: "Opioids",
+    bzra: "Benzodiazepines / Z-Drugs (BZRA)",
+    antipsychotic: "Antipsychotics",
+    ppi: "Proton Pump Inhibitors",
+  };
+  const text = SUGGESTED_PRACTICE[key] || "";
+
+  // Keep your existing card styling; we only populate content
+  box.innerHTML = `
+    <h2>Suggested practice for ${titleMap[key]}</h2>
+    <div class="practice-text">
+      ${text.split("\n").map(line => `<p>${line}</p>`).join("")}
+    </div>
+  `;
+}
+
+
 /* ---- Dirty state + gating ---- */
 let _dirtySinceGenerate = true;
 
@@ -1501,7 +1563,10 @@ function init(){
   document.getElementById("resetBtn")?.addEventListener("click", ()=>location.reload());
   document.getElementById("printBtn")?.addEventListener("click", printOutputOnly);
   document.getElementById("savePdfBtn")?.addEventListener("click", saveOutputAsPdf);
+ document.getElementById("classSelect")?.addEventListener("change", updateBestPracticeBox);
 
+   updateBestPracticeBox();
+  
   // 7) Live gating + interval hints for patches
   if (typeof ensureIntervalHints === "function") ensureIntervalHints(); // create the hint <div>s once
   const rewire = (id)=>{
