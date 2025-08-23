@@ -1340,29 +1340,29 @@ function _printCSS(){
   </style>`;
 }
 function printOutputOnly() {
+  // Only print the output card
   const card = document.getElementById("outputCard");
-  if (!card) return;
+  if (!card) {
+    alert("Please generate a chart first.");
+    return;
+  }
 
-  // Add print-only scoping
+  // Scope the print to the chart only (CSS uses body.printing)
   document.body.classList.add("printing");
 
-  // Ensure we have the disclaimer at the very top
-  const cleanupDisclaimer = injectPrintDisclaimer();
+  // Optionally add the one-line disclaimer at the very top (safe if helper missing)
+  try { if (typeof injectPrintDisclaimer === "function") injectPrintDisclaimer(); } catch {}
 
-  // Print
+  // Open print dialog
   window.print();
 
-  // Clean up scoping (and optionally disclaimer)
+  // Clean up after print
   setTimeout(() => {
     document.body.classList.remove("printing");
-    // If you want the disclaimer to be print-only, uncomment next line:
-    // cleanupDisclaimer();
+    // If your injectPrintDisclaimer() returns a cleanup fn, call it here instead.
   }, 100);
 }
 
-  // Only print the output card
-  const card = document.getElementById("outputCard");
-  if (!card) return;
 
   // Add a class so @media print rules hide everything except #outputCard
   document.body.classList.add("printing");
