@@ -1475,8 +1475,8 @@ function init(){
   // 6) Main actions
   document.getElementById("generateBtn")?.addEventListener("click", buildPlan);
   document.getElementById("resetBtn")?.addEventListener("click", ()=>location.reload());
-  document.getElementById("printBtn")?.addEventListener("click", ()=>window.print());
-  document.getElementById("savePdfBtn")?.addEventListener("click", ()=>window.print()); // same pipeline
+  document.getElementById("printBtn")?.addEventListener("click", printOutputOnly);
+  document.getElementById("savePdfBtn")?.addEventListener("click", saveOutputAsPdf);
 
   // 7) Live gating + interval hints for patches
   if (typeof ensureIntervalHints === "function") ensureIntervalHints(); // create the hint <div>s once
