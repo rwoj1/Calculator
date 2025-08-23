@@ -258,20 +258,19 @@ function setGenerateEnabled(){
   const pct  = parseFloat(document.getElementById("p1Percent")?.value || "");
   const intv = parseInt(document.getElementById("p1Interval")?.value || "", 10);
 
+  // Enable Generate only when Phase 1 is complete
   const gen = document.getElementById("generateBtn");
   const ready = Number.isFinite(pct) && pct > 0 && Number.isFinite(intv) && intv > 0;
-
   if (gen) gen.disabled = !ready;
 
-  // If you already disable Print/Save when "dirty", keep your existing lines:
-  const printBtn = document.getElementById("printBtn");
-  const saveBtn  = document.getElementById("savePdfBtn");
-  if (printBtn) printBtn.disabled = window.dirty === true;
-  if (saveBtn)  saveBtn.disabled  = window.dirty === true;
-
-  // NEW: for patches, additionally gate Generate unless interval is a valid multiple
-  // (Fentanyl: ×3 days, Buprenorphine: ×7 days). This can only *further* disable.
-  validatePatchIntervals(false);
+  // IMPORTANT: Do NOT touch Print/Save here.
+  // setDirty(...) already disables/enables them using _dirtySinceGenerate.
+  // (This removes the old window.dirty override.)
+  
+  // Keep the patch-interval extra rule if you had it:
+  if (typeof validatePatchIntervals === "function") {
+    validatePatchIntervals(false);
+  }
 }
 
 function setDirty(v = true) {
