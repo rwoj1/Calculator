@@ -301,119 +301,138 @@ function renderPrintHeader(container){
    - Stop/Review merged cell after date
    ========================================== */
 function renderStandardTable(stepRows){
-  const host = $("scheduleBlock");
-  host.style.display = "";
-  const patchHost = $("patchBlock");
-  if (patchHost) patchHost.style.display = "none";
-  host.innerHTML = "";
+  const scheduleHost = document.getElementById("scheduleBlock");
+  const patchHost    = document.getElementById("patchBlock");
+  if (!scheduleHost) return;
 
-  // 1) Expand steps into per-strength rows
+  // Screen: show tablets, hide patches
+  scheduleHost.style.display = "";
+  scheduleHost.innerHTML = "";
+  if (patchHost) { patchHost.style.display = "none"; patchHost.innerHTML = ""; }
+
+  // Table shell
+  const table = document.createElement("table");
+  table.className = "plan-table plan-standard";
+
+  // Column headers ONLY (on-screen look unchanged)
+  const thead = document.createElement("thead");
+  const trCols = document.createElement("tr");
+  ["Date beginning","Strength","Instructions","Morning","Midday","Dinner","Night"].forEach(t=>{
+    const th = document.createElement("th");
+    th.textContent = t;
+    trCols.appendChild(th);
+  });
+  thead.appendChild(trCols);
+  table.appendChild(thead);
+
+  // 1) Expand each step into per-strength lines (so Strength/Instructions are populated)
   const expanded = [];
-  stepRows.forEach(r => {
-    // Preserve STOP/REVIEW rows exactly as built
-    if (r.stop || r.review) {
+  (stepRows || []).forEach(step => {
+    // STOP / REVIEW pass-through
+    if (step.stop || step.review) {
       expanded.push({
-        _kind: r.stop ? "STOP" : "REVIEW",
-        dateStr: r.date || r.dateStr || r.dateDisplay || "",
+        kind: step.stop ? "STOP" : "REVIEW",
+        dateStr: step.dateStr || step.date || step.when || step.applyOn || ""
       });
       return;
     }
+    const lines = (typeof perStrengthRowsFractional === "function")
+      ? perStrengthRowsFractional(step)
+      : [];
 
-    // Normal step: expand packs -> per strength rows
-    const lines = perStrengthRowsFractional(r); // already in your code
     lines.forEach(line => {
       expanded.push({
-        _kind: "LINE",
-        dateStr: r.date || r.dateStr || r.dateDisplay || r.applyOn || r.when || "",
-        strength: line.strengthLabel || "",
+        kind: "LINE",
+        dateStr: step.dateStr || step.date || step.when || step.applyOn || "",
+        strength: line.strengthLabel || line.strength || "",
         instr: line.instructions || "",
-        am: line.am || "",
-        mid: line.mid || "",
-        din: line.din || "",
-        pm: line.pm || ""
+        am:  (line.am   ?? line.morning ?? ""),
+        mid: (line.mid  ?? line.midday  ?? ""),
+        din: (line.din  ?? line.dinner  ?? ""),
+        pm:  (line.pm   ?? line.night   ?? line.nocte ?? "")
       });
     });
   });
 
-  // 2) Group by date (keeps STOP/REVIEW as their own grouped item)
-  const groupsMap = new Map();
-  for (const row of expanded) {
-    const key = (row._kind === "STOP" || row._kind === "REVIEW")
-      ? `${row._kind}::${row.dateStr}`
+  // 2) Group by date (each group = one step = one <tbody>)
+  const groups = [];
+  let current = null, lastKey = null;
+  expanded.forEach(row => {
+    const key = (row.kind === "STOP" || row.kind === "REVIEW")
+      ? `${row.kind}::${row.dateStr}`
       : row.dateStr;
-    if (!groupsMap.has(key)) groupsMap.set(key, { key, items: [], kind: row._kind, dateStr: row.dateStr });
-    groupsMap.get(key).items.push(row);
-  }
-  const groups = Array.from(groupsMap.values());
+    if (key !== lastKey) {
+      current = { key, dateStr: row.dateStr || "", kind: row.kind, items: [] };
+      groups.push(current); lastKey = key;
+    }
+    current.items.push(row);
+  });
 
-  // 3) Build the table
-  const table = document.createElement("table");
-  table.className = "plan-table plan-standard";
+  // 3) Render groups with merged date + zebra-ready <tbody class="step-group">
+  groups.forEach((g, idx) => {
+    const tbody = document.createElement("tbody");
+    tbody.className = "step-group " + (idx % 2 ? "step-even" : "step-odd");
 
-  const thead = document.createElement("thead");
-  thead.innerHTML = `<tr>
-    <th>Date beginning</th>
-    <th>Strength</th>
-    <th>Instructions</th>
-    <th>Morning</th>
-    <th>Midday</th>
-    <th>Dinner</th>
-    <th>Night</th>
-  </tr>`;
-  table.appendChild(thead);
-
-  const tbody = document.createElement("tbody");
-
-  groups.forEach(g => {
-    // STOP/REVIEW single row
+    // STOP / REVIEW row
     if (g.kind === "STOP" || g.kind === "REVIEW") {
       const tr = document.createElement("tr");
-      tr.className = "step-row";
+
       const tdDate = document.createElement("td");
       tdDate.textContent = g.dateStr || "";
+
       const tdMsg = document.createElement("td");
       tdMsg.colSpan = 6;
-      tdMsg.textContent = (g.kind === "STOP") ? "Stop." : "Review with your doctor the ongoing plan.";
+      tdMsg.className = "final-cell";
+      tdMsg.textContent = (g.kind === "STOP")
+        ? "Stop."
+        : "Review with your doctor the ongoing plan";
+
       tr.append(tdDate, tdMsg);
       tbody.appendChild(tr);
+      table.appendChild(tbody);
       return;
     }
 
-    // Normal date group with merged first column
-    const lines = g.items.filter(x => x._kind === "LINE");
-    const rowSpan = Math.max(1, lines.length);
+    // Normal date group
+    const lines = g.items.filter(x => x.kind === "LINE");
+    const span  = Math.max(1, lines.length);
 
-    lines.forEach((line, idx) => {
+    lines.forEach((line, i) => {
       const tr = document.createElement("tr");
-      tr.className = "step-row";
 
-      if (idx === 0) {
+      // Merge date cell once per group
+      if (i === 0) {
         const tdDate = document.createElement("td");
-        tdDate.rowSpan = rowSpan;
+        tdDate.rowSpan = span;
         tdDate.textContent = g.dateStr || "";
         tr.appendChild(tdDate);
       }
 
       const tdStrength = document.createElement("td");
-      tdStrength.textContent = line.strength || "";
+      tdStrength.textContent = line.strength;
 
       const tdInstr = document.createElement("td");
       tdInstr.className = "instructions-pre";
       tdInstr.innerHTML = (line.instr || "").replace(/\n/g, "<br>");
 
-      const tdAm  = document.createElement("td"); tdAm.textContent  = line.am  || "";
-      const tdMid = document.createElement("td"); tdMid.textContent = line.mid || "";
-      const tdDin = document.createElement("td"); tdDin.textContent = line.din || "";
-      const tdPm  = document.createElement("td"); tdPm.textContent  = line.pm  || "";
+      const tdM  = document.createElement("td"); tdM.textContent  = line.am  || "";
+      const tdMi = document.createElement("td"); tdMi.textContent = line.mid || "";
+      const tdD  = document.createElement("td"); tdD.textContent  = line.din || "";
+      const tdN  = document.createElement("td"); tdN.textContent  = line.pm  || "";
 
-      tr.append(tdStrength, tdInstr, tdAm, tdMid, tdDin, tdPm);
+      tr.append(tdStrength, tdInstr, tdM, tdMi, tdD, tdN);
       tbody.appendChild(tr);
     });
+
+    table.appendChild(tbody);
   });
 
-  table.appendChild(tbody);
-  host.appendChild(table);
+  scheduleHost.appendChild(table);
+
+  // Keep any footer label normalization you use elsewhere
+  if (typeof normalizeFooterSpans === "function") normalizeFooterSpans();
 }
+
 
 
 
