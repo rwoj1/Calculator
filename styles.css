@@ -47,56 +47,18 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
    Print / PDF layout (non-intrusive)
    ================================ */
 @media print {
-  /* Neutral white print — no dark cards/headers */
-  :root { --stripe: #eeeeee; --final-bg: #e6e6e6; --border: #cfcfcf; }
-  html, body, #outputCard { background: #fff !important; }
-  .card, .output { background: #fff !important; box-shadow: none !important; }
-  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-
-  /* Table chrome */
-  .plan-table { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0;
-                margin-top: 8px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-  .plan-table thead { display: table-header-group; }
-  .plan-table tfoot { display: table-footer-group; }
-  .plan-table th, .plan-table td { padding: 6px 8px; border-bottom: 1px solid #e5e5e5; vertical-align: top; font-size: 12px; }
-
-  /* Column header row on white */
-  .plan-table thead tr:last-child th { background: #fff !important; font-weight: 600; text-align: left; }
-
-  /* Repeating header rows (inside THEAD) */
-  .plan-table thead .thead-medline th      { font-size: 18px; font-weight: 700; text-align: left; background: #fff !important; padding-bottom: 2px; }
-  .plan-table thead .thead-instruction th  { font-size: 12px; text-align: left; background: #fff !important; padding-bottom: 2px; }
-  .plan-table thead .thead-disclaimer th   { font-size: 11px; text-align: left; background: #fff !important; }
-
-  /* Zebra shading */
-  .plan-standard .step-group.step-even td { background: var(--stripe) !important; }  /* tablets/caps/ODT: per step-group */
-  .plan-patch tbody tr:nth-child(even) td { background: var(--stripe) !important; }  /* patches: per row */
-
-  /* Keep a whole step together (merged date + its lines) */
-  .plan-standard .step-group { break-inside: avoid; page-break-inside: avoid; }
-
-  /* Stop/Review emphasis */
-  .final-cell { font-weight: 700; background: var(--final-bg) !important; }
-
-  /* Don’t split rows across pages */
-  .plan-table tr, .plan-table td, .plan-table th { break-inside: avoid; page-break-inside: avoid; }
-
-  /* A4 portrait */
-  @page { size: A4 portrait; margin: 16mm 12mm; }
-}
-@media print {
-  /* Start from the chart only */
+  /* 1) Print only the chart */
   .container > * { display: none !important; }
   #outputCard     { display: block !important; }
 
-  /* Neutral white page, no card tint/shadow */
-  html, body, #outputCard { background: #fff !important; }
-  .card, .output { background: #fff !important; box-shadow: none !important; }
+  /* 2) All text black, no dark UI backgrounds */
+  * { color: #000 !important; -webkit-text-fill-color: #000 !important; }
+  html, body, #outputCard, .card, .output { background: #fff !important; box-shadow: none !important; }
 
-  /* Ensure greys actually print */
+  /* Make sure greys/zebra actually print */
   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
-  /* Table chrome */
+  /* 3) Table basics */
   .plan-table {
     width: 100%;
     table-layout: fixed;
@@ -106,44 +68,52 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
     border: 1px solid #cfcfcf;
     border-radius: 8px;
     overflow: hidden;
+    background: #fff !important; /* white table body by default */
   }
 
-  /* Repeat our custom header + column headers on every page */
+  /* Repeat our header and column titles on each page */
   .plan-table thead { display: table-header-group; }
   .plan-table tfoot { display: table-footer-group; }
 
-  /* Force black text everywhere in tables + footer */
-  .plan-table th,
-  .plan-table td,
-  .footer-notes,
-  .footer-notes * { color: #000 !important; }
-
-  /* Column header (the last <tr> in THEAD) on white */
-  .plan-table thead tr:last-child th {
-    background: #fff !important;
-    font-weight: 600;
-    text-align: left;
+  /* Cells & headers */
+  .plan-table th, .plan-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #e5e5e5;
+    vertical-align: top;
+    font-size: 12px;
+    background: #fff !important; /* default white (zebra overrides below) */
+    white-space: pre-line; /* show line breaks in Instructions (“Take 1…\nTake 1…”) */
   }
 
-  /* Repeating header rows (medicine line, instruction, disclaimer) */
-  .plan-table thead .thead-medline   th { font-size: 18px; font-weight: 700; text-align: left; background: #fff !important; padding-bottom: 2px; }
-  .plan-table thead .thead-instruction th { font-size: 12px;                 text-align: left; background: #fff !important; padding-bottom: 2px; }
-  .plan-table thead .thead-disclaimer th  { font-size: 11px;                 text-align: left; background: #fff !important; }
+  /* Column header (last row in THEAD) */
+  .plan-table thead tr:last-child th {
+    font-weight: 600;
+    text-align: left;
+    background: #fff !important;
+  }
 
-  /* Zebra shading (adjust shade here if you want darker/lighter) */
-  .plan-standard .step-group.step-even td { background: #eeeeee !important; } /* per step-group */
-  .plan-patch tbody tr:nth-child(even) td { background: #eeeeee !important; } /* per row */
+  /* 4) Repeating top-of-table header (Medicine → instruction → disclaimer) */
+  .plan-table thead .thead-medline th    { font-size: 18px; font-weight: 700; text-align: left; background: #fff !important; padding-bottom: 2px; }
+  .plan-table thead .thead-instruction th{ font-size: 12px;                 text-align: left; background: #fff !important; padding-bottom: 2px; }
+  .plan-table thead .thead-disclaimer th { font-size: 11px;                 text-align: left; background: #fff !important; }
 
-  /* Keep each step together (prevents a date-group splitting across pages) */
+  /* 5) Zebra shading – by step for tablets; by row (one step) for patches */
+  .plan-standard .step-group:nth-of-type(even) td { background: #eeeeee !important; }
+  .plan-patch    tbody tr:nth-child(even) td      { background: #eeeeee !important; }
+
+  /* Keep each entire step together (prevents a date-group being split) */
   .plan-standard .step-group { break-inside: avoid; page-break-inside: avoid; }
 
-  /* Emphasise Stop/Review row */
-  .final-cell { font-weight: 700; background: #e6e6e6 !important; }
+  /* Stop/Review row – bold, white background (since only zebra gets grey) */
+  .final-cell { font-weight: 700; background: #fff !important; }
 
-  /* Don’t split cells/rows */
-  .plan-table tr, .plan-table td, .plan-table th { break-inside: avoid; page-break-inside: avoid; }
+  /* Footer text must be black */
+  .footer-notes, .footer-notes * { color: #000 !important; }
 
-  /* A4 portrait margins */
+  /* Defensive: override any legacy .table styles to stay white/black */
+  .table th, .table td { background: #fff !important; color: #000 !important; }
+
+  /* A4 portrait */
   @page { size: A4 portrait; margin: 16mm 12mm; }
 }
 
