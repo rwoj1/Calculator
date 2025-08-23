@@ -47,78 +47,90 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
    Print / PDF layout (non-intrusive)
    ================================ */
 @media print {
-  /* Print the chart only; hide the on-screen header (pill) so instruction is shown in table header instead */
-  .container > * { display: none !important; }
-  #outputCard     { display: block !important; }
-  .output-head    { display: none !important; }
+  /* --- Global print reset --- */
+  * {
+    color: #000 !important;                 /* all text pure black */
+    -webkit-text-fill-color: #000 !important;
+    background: transparent !important;     /* remove dark fills */
+  }
+  html, body {
+    background: #fff !important;
+  }
+  .pill, .pill * {                          /* avoid dark chips in print */
+    background: #fff !important;
+    border-color: #000 !important;
+    color: #000 !important;
+  }
 
-  /* All text pure black; plain white background */
-  * { color:#000 !important; -webkit-text-fill-color:#000 !important; }
-  html, body, #outputCard { background:#fff !important; }
-  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-
-  /* Table shell: no outer outline; we rely on row separators only */
+  /* --- Table shell --- */
   .plan-table {
     width: 100%;
-    table-layout: fixed;
-    border-collapse: separate; /* keeps rowspans sane across print engines */
-    border-spacing: 0;
-    border: none !important;
+    table-layout: auto;                      /* let Instructions breathe */
+    border-collapse: collapse !important;
+    border-spacing: 0 !important;
     background: #fff !important;
   }
 
-  /* Repeat header rows + column titles on each page */
+  /* Repeat table header/footer on each page (if present) */
   .plan-table thead { display: table-header-group; }
   .plan-table tfoot { display: table-footer-group; }
 
-  /* Header rows inside THEAD (Medicine → instruction → disclaimer) */
-  .plan-table thead .thead-medline th     { font-size:18px; font-weight:700; text-align:left; background:#fff !important; }
-  .plan-table thead .thead-instruction th { font-size:12px;                 text-align:left; background:#fff !important; }
-  .plan-table thead .thead-disclaimer th  { font-size:11px;                 text-align:left; background:#fff !important; }
-
-  /* Column headings row (the last THEAD row) */
+  /* Column header row */
   .plan-table thead tr:last-child th {
     font-weight: 600;
     text-align: left;
-    background: #fff !important;
-    border-bottom: 1px solid #e5e5e5;
-  }
-
-  /* Cells: no vertical rules (prevents misaligned lines when rowspans are used) */
-  .plan-table th, .plan-table td {
+    border: 1px solid #000 !important;
     padding: 6px 8px;
-    border-bottom: 1px solid #e5e5e5;
-    border-left: none !important;
-    border-right: none !important;
-    vertical-align: top;
-    font-size: 12px;
     background: #fff !important;
-    white-space: pre-line; /* keep \n line breaks in Instructions */
   }
 
-  /* ZEBRA PER STEP
-     Tablets/caps/ODT: each step is a <tbody class="step-group"> from JS.
-     Shade the whole step (merged date + all its rows). */
-  .plan-standard tbody.step-even td { background: #eeeeee !important; }
+  /* Generic cell rules (grid lines ON) */
+  .plan-table th, .plan-table td {
+    border: 1px solid #000 !important;      /* row + column lines */
+    padding: 6px 8px;
+    vertical-align: top;
+    background: #fff !important;
+    white-space: pre-line;                   /* keep \n in Instructions */
+    font-size: 12px;
+  }
 
-  /* Patches: JS groups contiguous identical strengths into <tbody class="step-group"> too. */
-  .plan-patch tbody.step-even td { background: #eeeeee !important; }
+  /* Multi-line instructions from JS: td has class "instructions-pre" */
+  .plan-table td.instructions-pre { white-space: pre-line; }
 
-  /* Keep an entire step together on one page (tablets) */
-  .plan-standard tbody { break-inside: avoid; page-break-inside: avoid; }
+  /* Keep a whole step together on a page (helps merged date cells) */
+  .plan-standard tbody,
+  .plan-patch tbody {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
 
-  /* Stop/Review emphasis (bold; keep white since only zebra gets grey) */
-  .final-cell { font-weight: 700; background: #fff !important; }
+  /* Zebra striping PER STEP:
+     - Preferred: JS adds .step-even on each <tbody>
+     - Fallback: alternate by position if class missing               */
+  .plan-standard tbody.step-even td,
+  .plan-patch    tbody.step-even td {
+    background: #eeeeee !important;
+  }
+  .plan-standard tbody:not(.step-even):nth-of-type(even) td,
+  .plan-patch    tbody:not(.step-even):nth-of-type(even) td {
+    background: #eeeeee !important;
+  }
 
-  /* Footer text black */
+  /* STOP/REVIEW merged message cell */
+  .final-cell {
+    font-weight: 700;
+    background: #fff !important;
+  }
+
+  /* Footer notes (benefits / withdrawal) remain black */
   .footer-notes, .footer-notes * { color: #000 !important; }
 
-  /* A4 portrait */
-
-  @page { size: A4 portrait; margin: 16mm 12mm; }
-  /* Fallback if old .table markup prints: make rows white so they’re readable */
-.table tbody td { background: #fff !important; color: #000 !important; }
-
+  /* A4 portrait page box */
+  @page {
+    size: A4 portrait;
+    margin: 16mm 12mm;
+  }
 }
+
 
 
