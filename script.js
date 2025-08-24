@@ -1,6 +1,6 @@
 "use strict";
 
-/* ====================== Helpers ====================== */
+/* ====================== Helpers ====================== *
 
 const $ = (id) => document.getElementById(id);
 const fmtDate = (d) =>
