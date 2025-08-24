@@ -328,93 +328,103 @@ function _printCSS(){
   </style>`;
 }
 function printOutputOnly() {
+  if (window._dirtySinceGenerate) {
+    (typeof showToast === "function" ? showToast : alert)(
+      "Inputs changed — please click Generate Chart before printing."
+    );
+    return;
+  }
+
   const card = document.getElementById("outputCard");
   if (!card) return alert("Generate the chart first.");
 
-  // Pick the visible table (tablets or patches)
+  // pick the visible table (tablets/caps vs patches)
   const schedTbl = card.querySelector("#scheduleBlock table");
   const patchTbl = card.querySelector("#patchBlock table");
   const srcTable = (patchTbl && patchTbl.offsetParent !== null) ? patchTbl : schedTbl;
   if (!srcTable) return alert("No chart to print. Please generate first.");
 
-  // Build a print-only root
+  // --- Build a print-only root (isolated from app UI) ---
+  const overlay = document.createElement("div");
+  overlay.id = "printOverlayOnly";
+
   const printRoot = document.createElement("div");
   printRoot.id = "printOnlyRoot";
-  printRoot.style.all = "initial"; // isolate
-  printRoot.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
-  printRoot.style.color = "#000";
-  printRoot.style.padding = "0";
-  printRoot.style.margin = "0";
+  overlay.appendChild(printRoot);
 
-  // Header (clone) — uses your existing output head
+  // 1) Header (Medicine + special instruction) — CLONE from the live card
   const head = card.querySelector(".output-head");
-  if (head) printRoot.appendChild(head.cloneNode(true));
+  if (head) {
+    const headClone = head.cloneNode(true);
+    headClone.style.display = "block";           // make sure it shows in print
+    printRoot.appendChild(headClone);
+  }
 
-  // Disclaimer if you render one near the table already
+  // 2) Disclaimer (if you render one above/below table)
   const disclaimer = document.getElementById("headerDisclaimer");
-  if (disclaimer) printRoot.appendChild(disclaimer.cloneNode(true));
+  if (disclaimer) {
+    printRoot.appendChild(disclaimer.cloneNode(true));
+  }
 
-  // Create per-step mini tables so each step stays on one page
+  // 3) Build one mini-table per step, but include THEAD only on the FIRST one
   const thead = srcTable.querySelector("thead");
   const groups = srcTable.querySelectorAll("tbody.step-group");
 
   groups.forEach((g, idx) => {
     const mini = document.createElement("table");
-    mini.className = srcTable.className + " print-chunk";
+    mini.className = (srcTable.className + " print-chunk").trim();
     mini.style.width = "100%";
     mini.style.borderCollapse = "separate";
     mini.style.borderSpacing = "0";
-
-    // Header
-    if (thead) mini.appendChild(thead.cloneNode(true));
-
-    // This step's body (rows cloned)
-    const tb = document.createElement("tbody");
-    tb.className = "step-group";
-    g.querySelectorAll("tr").forEach(tr => tb.appendChild(tr.cloneNode(true)));
-    mini.appendChild(tb);
-
-    // Very strong "no-split" guard for this chunk
+    mini.style.margin = "0 0 8mm 0";
+    // very strong no-split guards
     mini.style.breakInside = "avoid";
     mini.style.pageBreakInside = "avoid";
 
-    // Optional little vertical gap between steps
-    mini.style.margin = "0 0 8mm 0";
+    // include the column header ONLY on the very first step
+    if (thead && idx === 0) mini.appendChild(thead.cloneNode(true));
+
+    // clone this step's rows
+    const tb = document.createElement("tbody");
+    tb.className = g.className; // preserves zebra classes etc.
+    g.querySelectorAll("tr").forEach(tr => tb.appendChild(tr.cloneNode(true)));
+    mini.appendChild(tb);
 
     printRoot.appendChild(mini);
   });
 
-  // Footer (clone) — you have a footer notes section under the table
+  // 4) Footer notes (Expected Benefits / Withdrawal)
   const foot = card.querySelector(".footer-notes");
   if (foot) printRoot.appendChild(foot.cloneNode(true));
 
-  // Create an overlay container that hides app UI during print
-  const overlay = document.createElement("div");
-  overlay.id = "printOverlayOnly";
-  overlay.appendChild(printRoot);
-  document.body.appendChild(overlay);
-
-  // Hide the app UI while printing so only our printRoot appears
+  // 5) Print-only CSS & app UI hiding
   const hideStyle = document.createElement("style");
   hideStyle.textContent = `
     @media print {
+      /* show only our overlay; hide the app UI */
       body > *:not(#printOverlayOnly) { display: none !important; }
       #printOverlayOnly { display: block !important; }
-      /* keep headers repeating and step groups intact (backstop) */
-      .plan-standard thead, .plan-patch thead { display: table-header-group; }
-      .plan-standard tbody.step-group, .plan-patch tbody.step-group { break-inside: avoid; page-break-inside: avoid; }
-      .plan-standard tbody.step-group tr, .plan-patch tbody.step-group tr { break-inside: avoid; page-break-inside: avoid; }
+
+      /* make sure header is visible */
+      #printOnlyRoot .output-head { display: block !important; color: #000 !important; }
+
+      /* step tables should not split */
+      .print-chunk { page-break-inside: avoid; break-inside: avoid; }
+
+      /* keep things black/white and crisp */
+      html, body { background:#fff !important; color:#000 !important; }
+      .table th, .table td { color:#000 !important; background:#fff !important; }
     }
   `;
   overlay.appendChild(hideStyle);
 
-  // Print and clean up
+  // attach & print
+  document.body.appendChild(overlay);
   window.print();
-  setTimeout(() => {
-    overlay.remove();
-  }, 0);
-}
 
+  // cleanup immediately after print
+  setTimeout(() => overlay.remove(), 0);
+}
 
 // Save as PDF: export the chart only, with header on later pages and no split steps
 async function saveOutputAsPdf() {
