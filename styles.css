@@ -139,6 +139,27 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
     border-bottom-right-radius: 6pt !important; background-clip: padding-box;
   }
 
+  /* Footer block under the table */
+  .footer-notes, .footer-notes * {
+    color: #000 !important;
+    background: #fff !important;
+    border: 0 !important;
+  }
+
+   /* Soft rounding for every printed row */
+  .table tbody tr td:first-child,
+  .plan-table tbody tr td:first-child {
+    border-top-left-radius: 4pt !important;
+    border-bottom-left-radius: 4pt !important;
+    background-clip: padding-box;
+  }
+  .table tbody tr td:last-child,
+  .plan-table tbody tr td:last-child {
+    border-top-right-radius: 4pt !important;
+    border-bottom-right-radius: 4pt !important;
+    background-clip: padding-box;
+  }
+
   /* STOP/REVIEW merged message cell */
   .final-cell { font-weight: 700; background: #fff !important; }
 
