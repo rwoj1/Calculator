@@ -43,155 +43,83 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
   .actions{flex-direction:column;align-items:flex-start}
 }
 
-/* ---------- Page box (top-level) ---------- */
-@page {
-  size: A4 portrait;
-  margin: 16mm 12mm;
-}
-
 /* ==============================
    PRINT / PDF rules
    ============================== */
-  /* Print-only visibility toggle (used by JS) */
+
+@page { size: A4 portrait; margin: 16mm 12mm; }
+
+/* used when the script injects a print header; harmless if unused */
 .print-only { display: none; }
 
 @media print {
-  /* Ensure background colors print (for zebra) */
+  /* keep shading/colors exactly in print */
   html, body, #outputCard, #outputCard * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* Print ONLY the chart; keep the rest off-page */
+  /* print just the chart card */
   body.printing .container > * { display: none !important; }
   body.printing #outputCard     { display: block !important; margin: 0 !important; }
 
-  /* Make the page white; kill any app chrome */
-  html, body, #outputCard { background: #fff !important; color: #000 !important; }
-  #outputCard::before, #outputCard::after,
-  .card::before, .card::after { content: none !important; display: none !important; }
-  .output-head { display: none !important; }   /* hide on-screen header in print */
-  .pill { background: #fff !important; border: 1px solid #000 !important; color: #000 !important; }
+  /* white page; remove app chrome/bands/shadows */
+  html, body, main, .container, .card, #outputCard {
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+  }
+  .container::before, .container::after,
+  .card::before, .card::after,
+  #outputCard::before, #outputCard::after { content: none !important; display: none !important; }
 
-  /* Show the injected print-only header */
-  .print-only { display: block !important; }
-  .print-header      { margin: 0 0 10pt 0; }
-  .print-medline     { font-size: 14pt; font-weight: 600; margin-bottom: 2pt; }
-  .print-instruction { font-size: 10pt; margin-bottom: 2pt; }
-  .print-disclaimer  { font-size: 9pt; font-style: italic; margin-bottom: 8pt; }
+  /* hide on-screen header; show injected print header if present */
+  .output-head { display: none !important; }
+  .print-only  { display: block !important; }
 
-  /* Table shell */
+  /* optional injected header styling (safe to keep) */
+  .print-header      { margin: 0 0 10pt 0; padding-bottom: 6pt; border-bottom: 1px solid #000; }
+  .print-medline     { font-size: 14pt; font-weight: 600; margin: 0 0 2pt 0; }
+  .print-instruction { font-size: 10pt; margin: 0 0 2pt 0; }
+  .print-disclaimer  { font-size: 9pt; font-style: italic; margin: 0 0 8pt 0; }
+
+  /* table shell: use separate borders so border-radius prints cleanly */
   .table, .plan-table {
     width: 100% !important;
-    border-collapse: collapse !important;
+    border-collapse: separate !important;
     border-spacing: 0 !important;
-    table-layout: auto !important;      /* don't force equal columns */
+    table-layout: auto !important;
     background: #fff !important;
   }
   .table thead { display: table-header-group; }
   .table tfoot { display: table-footer-group; }
 
-  /* Borders + default cell */
+  /* base cells (we'll override inside step for bubble look) */
   .table th, .table td,
   .plan-table th, .plan-table td {
     border: 1px solid #000 !important;
     padding: 6pt 8pt !important;
-    background: #fff !important;        /* base before zebra */
+    background: #fff !important;
     color: #000 !important;
-    white-space: pre-line;               /* keep instructions linebreaks */
+    white-space: pre-line;
     font-size: 12px;
-  }
-  .table thead tr:last-child th { font-weight: 600 !important; }
-
-  /* Keep each step (tbody) together */
-  .plan-standard tbody,
-  .plan-patch    tbody {
-    break-inside: avoid !important;
-    page-break-inside: avoid !important;
+    vertical-align: middle;
   }
 
-  /* ZEBRA: shade entire step group (both tablets & patches) */
-  .plan-standard tbody.step-group.step-even td,
-  .plan-patch    tbody.step-group.step-even td {
-    background: #f2f2f2 !important;     /* gentle grey */
-  }
-  /* Fallback if .step-even missing: alternate by position */
-  .plan-standard tbody:not(.step-even):nth-of-type(even) td,
-  .plan-patch    tbody:not(.step-even):nth-of-type(even) td {
-    background: #f2f2f2 !important;
-  }
-
-  /* Rounded outer corners per step group (subtle) */
-  .plan-standard tbody.step-group tr:first-child td:first-child,
-  .plan-patch    tbody.step-group tr:first-child td:first-child {
-    border-top-left-radius: 6pt !important; background-clip: padding-box;
-  }
-  .plan-standard tbody.step-group tr:first-child td:last-child,
-  .plan-patch    tbody.step-group tr:first-child td:last-child {
-    border-top-right-radius: 6pt !important; background-clip: padding-box;
-  }
-  .plan-standard tbody.step-group tr:last-child td:first-child,
-  .plan-patch    tbody.step-group tr:last-child td:first-child {
-    border-bottom-left-radius: 6pt !important; background-clip: padding-box;
-  }
-  .plan-standard tbody.step-group tr:last-child td:last-child,
-  .plan-patch    tbody.step-group tr:last-child td:last-child {
-    border-bottom-right-radius: 6pt !important; background-clip: padding-box;
-  }
-
-  /* STOP/REVIEW merged message cell */
-  .final-cell { font-weight: 700; background: #fff !important; }
-
-  /* Page box */
-  @page { size: A4 portrait; margin: 16mm 12mm; }
-   /* Footer block under the table */
-  .footer-notes, .footer-notes * {
-    color: #000 !important;
-    background: #fff !important;
-    border: 0 !important;
-  }
-  /* Header (column labels): no borders */
+  /* HEADER ROW: only a bottom border */
   .plan-table thead th {
-    border: 0 !important;
+    border-width: 0 0 1px 0 !important;
+    border-style: solid !important;
+    border-color: #000 !important;
     background: #fff !important;
+    text-align: left;
   }
 
-  /* === Tablets/Caps only (.plan-standard) vertical borders inside the step bubble === */
-
-  /* Remove any vertical line after Date → Strength */
-  .plan-standard tbody.step-group td:first-child {
-    border-right: 0 !important; /* no rule between col 1 and 2 */
-  }
-
-  /* No left border on Strength or Instructions (so no rule between col 2→3) */
-  .plan-standard tbody.step-group td:nth-child(2),
-  .plan-standard tbody.step-group td:nth-child(3) {
-    border-left: 0 !important;
-  }
-
-  /* Add left borders before each time-of-day column (Morning/Midday/Dinner/Night) */
-  .plan-standard tbody.step-group td:nth-child(4),
-  .plan-standard tbody.step-group td:nth-child(5),
-  .plan-standard tbody.step-group td:nth-child(6),
-  .plan-standard tbody.step-group td:nth-child(7) {
-    border-left: 1px solid #000 !important;
-  }
-
-  /* Center the AM/MID/DIN/Night columns (header + body) */
+  /* center the time-of-day columns (header + body) */
   .plan-standard thead th:nth-child(4),
   .plan-standard thead th:nth-child(5),
   .plan-standard thead th:nth-child(6),
   .plan-standard thead th:nth-child(7),
-  .plan-standard tbody td:nth-child(4),
-  .plan-standard tbody td:nth-child(5),
-  .plan-standard tbody td:nth-child(6),
-  .plan-standard tbody td:nth-child(7) {
-    text-align: center !important;
-    vertical-align: middle !important;
-  }
-}
-
-  /* Center and middle-align the time-of-day columns */
   .plan-standard td.col-am,
   .plan-standard td.col-mid,
   .plan-standard td.col-din,
@@ -200,42 +128,61 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
     vertical-align: middle !important;
   }
 
-  /* Preserve newlines in Instructions (pairs with textContent in JS) */
-  .plan-table td { white-space: pre-line; }
+  /* === STEP BUBBLE (tablets/caps) === */
+  /* clear inner gridlines; we'll draw only the lines we want */
+  .plan-standard tbody.step-group td { border-color: transparent !important; background-clip: padding-box; }
 
-  /* Inside the step bubble: remove unwanted verticals */
-  /* no rule between Date→Strength, and no left rule on Strength/Instructions */
+  /* outer rectangle of the step (left/right on all rows; top/bottom on first/last) */
+  .plan-standard tbody.step-group tr td:first-child { border-left: 1px solid #000 !important; }
+  .plan-standard tbody.step-group tr td:last-child  { border-right: 1px solid #000 !important; }
+  .plan-standard tbody.step-group tr:first-child td { border-top: 1px solid #000 !important; }
+  .plan-standard tbody.step-group tr:last-child  td { border-bottom: 1px solid #000 !important; }
+
+  /* one horizontal separator between strength rows */
+  .plan-standard tbody.step-group tr + tr td { border-top: 1px solid #000 !important; }
+
+  /* vertical lines INSIDE the step:
+     - no line after Date→Strength (no right on date; no left on strength)
+     - no line after Strength→Instructions (no left on instructions)
+     - YES lines before Morning/Midday/Dinner/Night */
   .plan-standard tbody.step-group td.col-date,
   .plan-standard tbody.step-group td.date-spacer { border-right: 0 !important; }
   .plan-standard tbody.step-group td.col-strength,
   .plan-standard tbody.step-group td.col-instr   { border-left: 0 !important; }
-
-  /* Add vertical rules only before time-of-day columns */
   .plan-standard tbody.step-group td.col-am,
   .plan-standard tbody.step-group td.col-mid,
   .plan-standard tbody.step-group td.col-din,
-  .plan-standard tbody.step-group td.col-pm {
-    border-left: 1px solid #000 !important;
-  }
+  .plan-standard tbody.step-group td.col-pm      { border-left: 1px solid #000 !important; }
+
+  /* make date look merged: remove inter-row top line in the Date cell */
+  .plan-standard tbody.step-group tr + tr td.col-date { border-top: 0 !important; }
+
+  /* rounded corners on the bubble */
+  .plan-standard tbody.step-group tr:first-child td:first-child { border-top-left-radius: 6pt !important; }
+  .plan-standard tbody.step-group tr:first-child td:last-child  { border-top-right-radius: 6pt !important; }
+  .plan-standard tbody.step-group tr:last-child  td:first-child { border-bottom-left-radius: 6pt !important; }
+  .plan-standard tbody.step-group tr:last-child  td:last-child  { border-bottom-right-radius: 6pt !important; }
+
+  /* zebra by whole step (first white, second grey) + fallback if TBODY splits */
+  .plan-standard tbody.step-group.step-odd  td { background: #fff !important; }
+  .plan-standard tbody.step-group.step-even td { background: #f2f2f2 !important; }
+  #outputCard tr[data-step].zebra-even td       { background: #f2f2f2 !important; }
+
+  /* === PATCH TABLE (leave layout as-is; still get bubble + zebra + separators) === */
+  .plan-patch tbody.step-group td { border-color: transparent !important; background-clip: padding-box; }
+  .plan-patch tbody.step-group tr td:first-child { border-left: 1px solid #000 !important; }
+  .plan-patch tbody.step-group tr td:last-child  { border-right: 1px solid #000 !important; }
+  .plan-patch tbody.step-group tr:first-child td { border-top: 1px solid #000 !important; }
+  .plan-patch tbody.step-group tr:last-child  td { border-bottom: 1px solid #000 !important; }
+  .plan-patch tbody.step-group tr + tr td       { border-top: 1px solid #000 !important; }
+  .plan-patch tbody.step-group.tr:first-child td:first-child { border-top-left-radius: 6pt !important; }
+  .plan-patch tbody.step-group.tr:first-child td:last-child  { border-top-right-radius: 6pt !important; }
+  .plan-patch tbody.step-group.tr:last-child  td:first-child { border-bottom-left-radius: 6pt !important; }
+  .plan-patch tbody.step-group.tr:last-child  td:last-child  { border-bottom-right-radius: 6pt !important; }
+  .plan-patch tbody.step-group.step-odd  td { background: #fff !important; }
+  .plan-patch tbody.step-group.step-even td { background: #f2f2f2 !important; }
+
+  /* footer clean & black */
+  .footer-notes, .footer-notes * { color:#000 !important; background:#fff !important; border:0 !important; }
 }
 
-  /* 1) Remove the vertical line immediately left of 'Instructions' */
-  .plan-standard tbody.step-group td.col-instr {
-    border-left: 0 !important;
-  }
-
-  /* 2) Header row: keep only the bottom border */
-  .plan-table thead th {
-    border-width: 0 0 1px 0 !important;
-    border-style: solid !important;
-    border-color: #000 !important;
-    background: #fff !important;
-  }
-
-  /* 3) Make the Date column look merged:
-        suppress the inter-row top line in the Date cell on subsequent lines */
-  .plan-standard tbody.step-group tr + tr td.col-date {
-    border-top: 0 !important;
-  }
-
-}
