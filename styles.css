@@ -56,17 +56,17 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
 .print-only { display: none; }
 
 @media print {
-  /* Ensure printers keep colors (zebra) */
+  /* Keep zebra/shading in print */
   html, body, #outputCard, #outputCard * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* PRINT ONLY the chart area */
+  /* Print only the chart area */
   body.printing .container > * { display: none !important; }
   body.printing #outputCard     { display: block !important; margin: 0 !important; }
 
-  /* Kill any app chrome backgrounds / pseudo overlays (fixes black band) */
+  /* White page, no app chrome / dark bands */
   html, body, main, .container, .card, #outputCard {
     background: #fff !important;
     color: #000 !important;
@@ -76,31 +76,27 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
   .card::before, .card::after,
   #outputCard::before, #outputCard::after { content: none !important; display: none !important; }
 
-  /* Hide on-screen header; show our injected header only */
+  /* Hide on-screen header, show injected print header only */
   .output-head { display: none !important; }
   .print-only  { display: block !important; }
 
-  /* Also hide any table caption like "Medicine: ..." in print */
-  .table caption, .plan-table caption { display: none !important; }
-
-  /* Injected header styles */
   .print-header      { margin: 0 0 10pt 0; padding-bottom: 6pt; border-bottom: 1px solid #000; }
   .print-medline     { font-size: 14pt; font-weight: 600; margin: 0 0 2pt 0; }
   .print-instruction { font-size: 10pt; margin: 0 0 2pt 0; }
   .print-disclaimer  { font-size: 9pt; font-style: italic; margin: 0 0 8pt 0; }
 
-  /* Table shell — use separate borders so border-radius works reliably in print */
+  /* Table shell — separate borders so border-radius works */
   .table, .plan-table {
     width: 100% !important;
-    border-collapse: separate !important;   /* key for rounded corners */
+    border-collapse: separate !important;
     border-spacing: 0 !important;
-    table-layout: auto !important;          /* lets Instructions breathe */
+    table-layout: auto !important;
     background: #fff !important;
   }
   .table thead { display: table-header-group; }
   .table tfoot { display: table-footer-group; }
 
-  /* Borders + cells */
+  /* Base cells (we’ll override inner borders for bubble look below) */
   .table th, .table td,
   .plan-table th, .plan-table td {
     border: 1px solid #000 !important;
@@ -109,104 +105,57 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
     color: #000 !important;
     white-space: pre-line;
     font-size: 12px;
-    vertical-align: middle;                 /* middle align the cells */
+    vertical-align: middle;
   }
   .table thead tr:last-child th { font-weight: 600 !important; }
 
-  /* Zebra per step (<tbody class="step-group">) */
+  /* Center AM/MID/DIN/PM */
+  .plan-standard td:nth-child(4),
+  .plan-standard td:nth-child(5),
+  .plan-standard td:nth-child(6),
+  .plan-standard td:nth-child(7) { text-align: center !important; }
+
+  /* === STEP “BUBBLE” LOOK === */
+  /* Clear inner grid inside each step group */
+  .plan-standard tbody.step-group td,
+  .plan-patch    tbody.step-group td { border-color: transparent !important; background-clip: padding-box; }
+
+  /* Draw the outer rectangle */
+  .plan-standard tbody.step-group tr td:first-child,
+  .plan-patch    tbody.step-group tr td:first-child { border-left: 1px solid #000 !important; }
+  .plan-standard tbody.step-group tr td:last-child,
+  .plan-patch    tbody.step-group tr td:last-child  { border-right: 1px solid #000 !important; }
+  .plan-standard tbody.step-group tr:first-child td,
+  .plan-patch    tbody.step-group tr:first-child td { border-top: 1px solid #000 !important; }
+  .plan-standard tbody.step-group tr:last-child td,
+  .plan-patch    tbody.step-group tr:last-child td  { border-bottom: 1px solid #000 !important; }
+
+  /* Single separator between strength rows */
+  .plan-standard tbody.step-group tr + tr td,
+  .plan-patch    tbody.step-group tr + tr td { border-top: 1px solid #000 !important; }
+
+  /* Rounded corners on the outer rectangle */
+  .plan-standard tbody.step-group tr:first-child td:first-child,
+  .plan-patch    tbody.step-group tr:first-child td:first-child { border-top-left-radius: 6pt !important; }
+  .plan-standard tbody.step-group tr:first-child td:last-child,
+  .plan-patch    tbody.step-group tr:first-child td:last-child  { border-top-right-radius: 6pt !important; }
+  .plan-standard tbody.step-group tr:last-child td:first-child,
+  .plan-patch    tbody.step-group tr:last-child td:first-child  { border-bottom-left-radius: 6pt !important; }
+  .plan-standard tbody.step-group tr:last-child td:last-child,
+  .plan-patch    tbody.step-group tr:last-child td:last-child   { border-bottom-right-radius: 6pt !important; }
+
+  /* Zebra per whole step (and fallback by row if TBODY splits) */
   .plan-standard tbody.step-group.step-even td,
   .plan-patch    tbody.step-group.step-even td { background: #f2f2f2 !important; }
-
-  /* Fallback if a browser splits TBODY: shade by row attribute if present */
   #outputCard tr[data-step]:nth-of-type(even) td { background: #f2f2f2 !important; }
 
-  /* Bubble gap between step groups */
+  /* Bubble spacing between steps */
   .plan-standard tbody.step-group + tbody.step-group tr:first-child td,
   .plan-patch    tbody.step-group + tbody.step-group tr:first-child td {
-    border-top: 6pt solid #fff !important;  /* visual gap between steps */
+    border-top: 6pt solid #fff !important;
   }
 
-  /* Rounded outer corners for each step group (works with separate borders) */
-  .plan-standard tbody.step-group tr:first-child td:first-child,
-  .plan-patch    tbody.step-group tr:first-child td:first-child {
-    border-top-left-radius: 6pt !important; background-clip: padding-box;
-  }
-  .plan-standard tbody.step-group tr:first-child td:last-child,
-  .plan-patch    tbody.step-group tr:first-child td:last-child {
-    border-top-right-radius: 6pt !important; background-clip: padding-box;
-  }
-  .plan-standard tbody.step-group tr:last-child td:first-child,
-  .plan-patch    tbody.step-group tr:last-child td:first-child {
-    border-bottom-left-radius: 6pt !important; background-clip: padding-box;
-  }
-  .plan-standard tbody.step-group tr:last-child td:last-child,
-  .plan-patch    tbody.step-group tr:last-child td:last-child {
-    border-bottom-right-radius: 6pt !important; background-clip: padding-box;
-  }
-/* Center the time-of-day dose counts (AM/MID/DIN/PM) */
-.plan-standard td:nth-child(4),
-.plan-standard td:nth-child(5),
-.plan-standard td:nth-child(6),
-.plan-standard td:nth-child(7) {
-  text-align: center !important;
-}
-
-/* --- STEP “BUBBLE” LOOK: outer border only + rounded corners --- */
-/* 1) Clear default cell borders inside each step group */
-.plan-standard tbody.step-group td,
-.plan-patch    tbody.step-group td {
-  border-color: transparent !important;     /* no per-cell grid */
-  background-clip: padding-box;             /* clean rounded edges */
-}
-
-/* 2) Draw the outer box for the step (left/right edges) */
-.plan-standard tbody.step-group tr td:first-child,
-.plan-patch    tbody.step-group tr td:first-child {
-  border-left: 1px solid #000 !important;
-}
-.plan-standard tbody.step-group tr td:last-child,
-.plan-patch    tbody.step-group tr td:last-child {
-  border-right: 1px solid #000 !important;
-}
-
-/* 3) Draw the outer box (top/bottom edges) */
-.plan-standard tbody.step-group tr:first-child td,
-.plan-patch    tbody.step-group tr:first-child td {
-  border-top: 1px solid #000 !important;
-}
-.plan-standard tbody.step-group tr:last-child td,
-.plan-patch    tbody.step-group tr:last-child td {
-  border-bottom: 1px solid #000 !important;
-}
-
-/* 4) Single horizontal separator between strength rows */
-.plan-standard tbody.step-group tr + tr td,
-.plan-patch    tbody.step-group tr + tr td {
-  border-top: 1px solid #000 !important;    /* one line between rows */
-}
-
-/* 5) Rounded corners on the step bubble (subtle) */
-.plan-standard tbody.step-group tr:first-child td:first-child,
-.plan-patch    tbody.step-group tr:first-child td:first-child { border-top-left-radius: 6pt !important; }
-.plan-standard tbody.step-group tr:first-child td:last-child,
-.plan-patch    tbody.step-group tr:first-child td:last-child  { border-top-right-radius: 6pt !important; }
-.plan-standard tbody.step-group tr:last-child td:first-child,
-.plan-patch    tbody.step-group tr:last-child td:first-child  { border-bottom-left-radius: 6pt !important; }
-.plan-standard tbody.step-group tr:last-child td:last-child,
-.plan-patch    tbody.step-group tr:last-child td:last-child   { border-bottom-right-radius: 6pt !important; }
-
-/* 6) Keep zebra by whole step (works with the bubble) */
-.plan-standard tbody.step-group.step-even td,
-.plan-patch    tbody.step-group.step-even td {
-  background: #f2f2f2 !important;
-}
-
-/* (Optional) Header row keeps its own border grid */
-.plan-table thead th {
-  border: 1px solid #000 !important;
-}
-
-  /* Footer in clean black */
+  /* Footer clean & black */
   .footer-notes, .footer-notes * { color:#000 !important; background:#fff !important; border:0 !important; }
 }
 
