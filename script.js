@@ -103,6 +103,40 @@ function ensureIntervalHints(){
   };
   return [mk("p1IntHint","p1Interval"), mk("p2IntHint","p2Interval")];
 }
+function injectPrintHeader() {
+  const card = document.getElementById("outputCard");
+  if (!card) return () => {};
+
+  // Remove any previous injected header to avoid duplicates
+  document.getElementById("printHeaderBlock")?.remove();
+
+  const header = document.createElement("div");
+  header.id = "printHeaderBlock";
+  header.className = "print-only print-header";
+
+  // Pull current medicine line & special instruction from the screen header
+  const medText = (document.getElementById("hdrMedicine")?.textContent || "")
+    .replace(/^Medicine:\s*/i, ""); // strip leading label
+  const special = document.getElementById("hdrSpecial")?.textContent || "";
+
+  const elMed   = document.createElement("div");
+  const elSpec  = document.createElement("div");
+  const elDisc  = document.createElement("div");
+
+  elMed.className  = "print-medline";
+  elSpec.className = "print-instruction";
+  elDisc.className = "print-disclaimer";
+
+  elMed.textContent  = medText || ""; // e.g., "Morphine SR Tablet"
+  elSpec.textContent = special || ""; // e.g., "Swallow whole, do not halve or crush"
+  elDisc.textContent = "This is a guide only – always follow the advice of your healthcare professional.";
+
+  header.append(elMed, elSpec, elDisc);
+  card.prepend(header);
+
+  // Return a cleanup so we can remove after printing
+  return () => header.remove();
+}
 function injectPrintDisclaimer() {
   const card = document.getElementById("outputCard");
   if (!card) return () => {};
@@ -1407,26 +1441,20 @@ function _printCSS(){
   </style>`;
 }
 function printOutputOnly() {
-  // Only print the output card
   const card = document.getElementById("outputCard");
-  if (!card) {
-    alert("Please generate a chart first.");
-    return;
-  }
+  if (!card) { alert("Please generate a chart first."); return; }
 
-  // Scope the print to the chart only (CSS uses body.printing)
   document.body.classList.add("printing");
 
-  // Optionally add the one-line disclaimer at the very top (safe if helper missing)
-  try { if (typeof injectPrintDisclaimer === "function") injectPrintDisclaimer(); } catch {}
+  // Add the print-only header/disclaimer block
+  let cleanupHeader = () => {};
+  try { cleanupHeader = injectPrintHeader(); } catch {}
 
-  // Open print dialog
   window.print();
 
-  // Clean up after print
   setTimeout(() => {
     document.body.classList.remove("printing");
-    // If your injectPrintDisclaimer() returns a cleanup fn, call it here instead.
+    cleanupHeader();
   }, 100);
 }
 
