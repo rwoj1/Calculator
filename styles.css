@@ -202,5 +202,33 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
     box-shadow: none !important;
     outline: none !important;
   }
+    /* Nuke ALL rounded corners that might be coming from base .table styles */
+  .plan-standard td, .plan-standard th,
+  .plan-patch td,    .plan-patch th,
+  .plan-table td,    .plan-table th,
+  .table td,         .table th,
+  .table tr {
+    border-radius: 0 !important;
+    -webkit-border-radius: 0 !important;
+  }
+
+  /* Also ensure no row-level shadows are making rows look like bubbles */
+  .table tr,
+  .plan-standard tbody.step-group tr,
+  .plan-patch    tbody.step-group tr {
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+
+  /* Belt-and-braces: make absolutely sure NO row gets corner rounding */
+  .plan-standard tbody.step-group tr td:first-child,
+  .plan-standard tbody.step-group tr td:last-child,
+  .plan-patch    tbody.step-group tr td:first-child,
+  .plan-patch    tbody.step-group tr td:last-child {
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+  }
 }
 
