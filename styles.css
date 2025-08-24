@@ -150,4 +150,44 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
     background: #fff !important;
     border: 0 !important;
   }
+  /* Header (column labels): no borders */
+  .plan-table thead th {
+    border: 0 !important;
+    background: #fff !important;
+  }
+
+  /* === Tablets/Caps only (.plan-standard) vertical borders inside the step bubble === */
+
+  /* Remove any vertical line after Date → Strength */
+  .plan-standard tbody.step-group td:first-child {
+    border-right: 0 !important; /* no rule between col 1 and 2 */
+  }
+
+  /* No left border on Strength or Instructions (so no rule between col 2→3) */
+  .plan-standard tbody.step-group td:nth-child(2),
+  .plan-standard tbody.step-group td:nth-child(3) {
+    border-left: 0 !important;
+  }
+
+  /* Add left borders before each time-of-day column (Morning/Midday/Dinner/Night) */
+  .plan-standard tbody.step-group td:nth-child(4),
+  .plan-standard tbody.step-group td:nth-child(5),
+  .plan-standard tbody.step-group td:nth-child(6),
+  .plan-standard tbody.step-group td:nth-child(7) {
+    border-left: 1px solid #000 !important;
+  }
+
+  /* Center the AM/MID/DIN/Night columns (header + body) */
+  .plan-standard thead th:nth-child(4),
+  .plan-standard thead th:nth-child(5),
+  .plan-standard thead th:nth-child(6),
+  .plan-standard thead th:nth-child(7),
+  .plan-standard tbody td:nth-child(4),
+  .plan-standard tbody td:nth-child(5),
+  .plan-standard tbody td:nth-child(6),
+  .plan-standard tbody td:nth-child(7) {
+    text-align: center !important;
+    vertical-align: middle !important;
+  }
+}
 }
