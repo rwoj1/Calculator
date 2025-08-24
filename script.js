@@ -924,11 +924,44 @@ function oxyNxPairLabel(oxyMg){
   return `Oxycodone ${stripZeros(oxy)} mg + naloxone ${stripZeros(nx)} mg SR tablet`;
 }
 /* =================== Dropdowns & dose lines =================== */
+const ANTIPSYCHOTIC_MODE = "hide";
 
-function populateClasses(){
-  const el=$("classSelect"); if(!el) return; el.innerHTML="";
-  CLASS_ORDER.forEach(c=>{ if(CATALOG[c]){ const o=document.createElement("option"); o.value=c; o.textContent=c; el.appendChild(o); }});
+function populateClasses() {
+  const el = $("classSelect");
+  if (!el) return;
+  el.innerHTML = "";
+
+  CLASS_ORDER.forEach(c => {
+    // only add classes that exist in the catalog
+    if (!CATALOG[c]) return;
+
+    // handle Antipsychotic visibility/enable state
+    if (c === "Antipsychotic") {
+      if (ANTIPSYCHOTIC_MODE === "hide") return; // skip entirely
+
+      const o = document.createElement("option");
+      o.value = c;
+      o.textContent = c;
+      if (ANTIPSYCHOTIC_MODE === "disable") {
+        o.disabled = true; // visible but cannot be chosen
+      }
+      el.appendChild(o);
+      return;
+    }
+
+    // normal classes
+    const o = document.createElement("option");
+    o.value = c;
+    o.textContent = c;
+    el.appendChild(o);
+  });
+
+  // Safety: if the current value is Antipsychotic while muted, bump to first available
+  if ((el.value === "Antipsychotic" && ANTIPSYCHOTIC_MODE !== "show") || !el.value) {
+    el.selectedIndex = 0;
+  }
 }
+
 function populateMedicines(){
   const el=$("medicineSelect"), cls=$("classSelect")?.value; if(!el||!cls) return; el.innerHTML="";
   const meds=Object.keys(CATALOG[cls]||{});
