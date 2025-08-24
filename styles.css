@@ -274,22 +274,12 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
     border-bottom-left-radius: 0 !important;
     border-bottom-right-radius: 0 !important;
   }
-/* PRINT: remove the header box only for PATCH tables */
-
-  /* Header row + cells: no borders/box, keep white background */
-  .plan-table thead tr,
-  .plan-table thead th {
-    border: none !important;
-    background: #fff !important;
-    box-shadow: none !important;
-    outline: none !important;
-    border-radius: 0 !important;
+    /* Remove ALL borders from the table header row (top row) */
+  .plan-table thead th,
+  .plan-standard thead th {
+    border: 0 !important;          /* no top/left/right/bottom */
+    background: #fff !important;    /* keep white header background */
   }
-
-  /* Guard against any per-column header lines from other rules */
-  .plan-table thead th + th { border-left: none !important; }
-  .plan-table thead { border-bottom: 0 !important; }
-
   /* Safety: some themes add a border on the <tr> itself */
   .plan-table thead tr,
   .plan-standard thead tr {
@@ -316,5 +306,3 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
 .table thead { display: table-header-group !important; }
 
 }
-
-
