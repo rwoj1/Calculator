@@ -344,61 +344,136 @@ function printOutputOnly() {
   }, 100);
 }
 
-// SAVE AS PDF: export the rendered chart area (#outputCard) only
+// Save as PDF: export the chart only, with header on later pages and no split steps
 async function saveOutputAsPdf() {
-  // Same guard as Print
+  // Same safety gate as Print
   if (window._dirtySinceGenerate) {
-    if (typeof showToast === "function") {
-      showToast("Inputs changed—please Generate to update the plan before printing or saving.");
-    } else {
-      alert("Inputs changed—please Generate to update the plan before printing or saving.");
-    }
+    const msg = "Inputs changed — please Generate Chart before saving.";
+    if (typeof showToast === "function") showToast(msg); else alert(msg);
     return;
   }
 
   const card = document.getElementById("outputCard");
-  if (!card) return;
+  if (!card || !card.querySelector("table")) {
+    if (typeof showToast === "function") showToast("Generate a chart first.");
+    return;
+  }
 
-  // Build a clean, isolated document that uses the same print CSS
+  // --- 1) Clone just the output card we want to export
+  const clone = card.cloneNode(true);
+
+  // --- 2) Inject header + special instruction + disclaimer at top of the clone
+  (function injectHeader(root) {
+    // Remove any previously injected header
+    root.querySelectorAll(".print-only").forEach(n => n.remove());
+
+    const med = document.getElementById("hdrMedicine")?.textContent || "Medicine";
+    const special = document.getElementById("hdrSpecial")?.textContent || "";
+    const hdr = document.createElement("div");
+    hdr.className = "print-only print-header";
+    hdr.innerHTML = `
+      <div class="print-medline">${med}</div>
+      ${special ? `<div class="print-instruction">${special}</div>` : ``}
+      <div class="print-disclaimer">This is a guide only – always follow the advice of your healthcare professional.</div>
+    `;
+    root.prepend(hdr);
+  })(clone);
+
+  // --- 3) Ensure later pages still show the column titles and avoid splitting a step
+  splitTablesByStepForPdf(clone);
+
+  // --- 4) Build an isolated HTML document for html2pdf, with the same print CSS + a few PDF-only tweaks
+  const extraCss = `
+    <style>
+      /* Make html2pdf honor colors and keep layout tidy */
+      html, body { background:#fff; color:#000; }
+      .print-only { display:block !important; }
+      /* Repeat header row per step (we create separate tables) */
+      .step-table thead { display: table-header-group; }
+      /* Do not split a step across pages */
+      .step-table { page-break-inside: avoid; break-inside: avoid; margin: 0 0 10pt 0; }
+      /* Avoid splitting a header from its first row */
+      .step-table thead, .step-table tbody { page-break-inside: avoid; break-inside: avoid; }
+    </style>
+  `;
+
+  const html = `<!doctype html>
+  <html>
+    <head>
+      <meta charset="utf-8">
+      ${typeof _printCSS === "function" ? _printCSS() : ""} 
+      ${extraCss}
+    </head>
+    <body>${clone.outerHTML}</body>
+  </html>`;
+
+  // --- 5) Render via an offscreen iframe so we export only this content
+  const blob = new Blob([html], { type: "text/html" });
+  const url  = URL.createObjectURL(blob);
   const iframe = document.createElement("iframe");
   iframe.style.position = "fixed";
-  iframe.style.right = "100%";    // keep it off-screen
-  iframe.style.width = "0";
-  iframe.style.height = "0";
+  iframe.style.right = "100%";
+  iframe.style.width = "0"; iframe.style.height = "0";
   document.body.appendChild(iframe);
 
-  const doc = iframe.contentDocument;
-  doc.open();
-  doc.write(`<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    ${typeof _printCSS === "function" ? _printCSS() : ""}
-  </head>
-  <body>
-    ${card.outerHTML}
-  </body>
-</html>`);
-  doc.close();
+  const filename = (() => {
+    const t = (document.getElementById("hdrMedicine")?.textContent || "Deprescribing Plan")
+      .replace(/^Medicine:\s*/i, "").replace(/\s+/g, "_");
+    const d = new Date();
+    return `${t}_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}.pdf`;
+  })();
 
-  // Give the iframe a tick to render
-  await new Promise(r => setTimeout(r, 60));
-
-  // Export JUST the chart using html2pdf
   const opts = {
-    margin:       10,
-    filename:     "Deprescribing_Taper_Plan.pdf",
-    image:        { type: "jpeg", quality: 0.98 },
-    html2canvas:  { scale: 2, backgroundColor: "#ffffff" },
-    jsPDF:        { unit: "mm", format: "a4", orientation: "portrait" }
+    filename,
+    pagebreak: { mode: ['css','legacy'], avoid: ['.step-table'] },
+    html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+    jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' },
+    margin: [45, 34, 45, 34]  // ~16mm top/btm, ~12mm sides
   };
 
   try {
-    await html2pdf().from(doc.body).set(opts).save();
+    await new Promise(res => {
+      iframe.onload = res;
+      iframe.src = url;
+    });
+    await html2pdf().set(opts).from(iframe.contentDocument.body).save();
+  } catch (e) {
+    console.error("saveOutputAsPdf error:", e);
+    alert("Sorry — couldn’t create the PDF. See console for details.");
   } finally {
+    URL.revokeObjectURL(url);
     iframe.remove();
   }
 }
+
+/* ---------- helper: split the main table into per-step tables so each has its own header ---------- */
+function splitTablesByStepForPdf(root) {
+  // Handle both tablet/caps (.plan-standard) and patch (.plan-patch) tables
+  root.querySelectorAll("table.plan-standard, table.plan-patch").forEach(orig => {
+    const thead = orig.querySelector("thead");
+    const headHTML = thead ? thead.outerHTML : "";
+    const groups = Array.from(orig.querySelectorAll("tbody.step-group"));
+    if (!groups.length) return;
+
+    const frag = document.createDocumentFragment();
+    groups.forEach(tb => {
+      const mini = document.createElement("table");
+      mini.className = (orig.className + " step-table").trim();
+      mini.innerHTML = headHTML;
+
+      const body = document.createElement("tbody");
+      body.className = tb.className; // preserve zebra classes etc.
+      Array.from(tb.children).forEach(tr => body.appendChild(tr.cloneNode(true)));
+
+      mini.appendChild(body);
+      frag.appendChild(mini);
+    });
+
+    // Replace the big table with a list of small tables (one per step)
+    orig.replaceWith(frag);
+  });
+}
+
 
 
 // --- Suggested practice copy (exact wording from your doc) ---
