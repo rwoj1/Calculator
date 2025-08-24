@@ -1701,7 +1701,6 @@ function init(){
 
 
    updateBestPracticeBox();
-  updateClassFooter(); 
   
   // 7) Live gating + interval hints for patches
   if (typeof ensureIntervalHints === "function") ensureIntervalHints(); // create the hint <div>s once
