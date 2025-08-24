@@ -190,4 +190,33 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
     vertical-align: middle !important;
   }
 }
+@media print {
+  /* Center and middle-align the time-of-day columns */
+  .plan-standard td.col-am,
+  .plan-standard td.col-mid,
+  .plan-standard td.col-din,
+  .plan-standard td.col-pm {
+    text-align: center !important;
+    vertical-align: middle !important;
+  }
+
+  /* Preserve newlines in Instructions (pairs with textContent in JS) */
+  .plan-table td { white-space: pre-line; }
+
+  /* Inside the step bubble: remove unwanted verticals */
+  /* no rule between Date→Strength, and no left rule on Strength/Instructions */
+  .plan-standard tbody.step-group td.col-date,
+  .plan-standard tbody.step-group td.date-spacer { border-right: 0 !important; }
+  .plan-standard tbody.step-group td.col-strength,
+  .plan-standard tbody.step-group td.col-instr   { border-left: 0 !important; }
+
+  /* Add vertical rules only before time-of-day columns */
+  .plan-standard tbody.step-group td.col-am,
+  .plan-standard tbody.step-group td.col-mid,
+  .plan-standard tbody.step-group td.col-din,
+  .plan-standard tbody.step-group td.col-pm {
+    border-left: 1px solid #000 !important;
+  }
+}
+
 }
