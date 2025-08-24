@@ -109,14 +109,24 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
   }
   .table thead tr:last-child th { font-weight: 600 !important; }
 
-/* Center the dose counts (AM/MID/DIN/Night) and middle align vertically */
-.plan-standard td:nth-child(4),
-.plan-standard td:nth-child(5),
-.plan-standard td:nth-child(6),
-.plan-standard td:nth-child(7) {
-  text-align: center !important;
-  vertical-align: middle !important;
-}
+    /* 1) Remove ALL borders from the table header row */
+  .plan-table thead th {
+    border: 0 !important;
+    background: #fff !important; /* keep white header background in print */
+  }
+  
+ /* 2) Center the time-of-day columns (header + body) */
+  .plan-standard thead th:nth-child(4),
+  .plan-standard thead th:nth-child(5),
+  .plan-standard thead th:nth-child(6),
+  .plan-standard thead th:nth-child(7),
+  .plan-standard tbody td:nth-child(4),
+  .plan-standard tbody td:nth-child(5),
+  .plan-standard tbody td:nth-child(6),
+  .plan-standard tbody td:nth-child(7) {
+    text-align: center !important;
+    vertical-align: middle !important;
+  }
 
 /* --- STEP “BUBBLE” LOOK: one rounded outer border + single row separators --- */
 
@@ -172,6 +182,10 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
 /* Fallback if a browser splits TBODY: shade by per-row data-step */
 #outputCard tr[data-step].zebra-even td { background: #f2f2f2 !important; }
 
+    /* 3) Remove the right-hand vertical line after 'Date beginning' */
+  .plan-standard thead th:first-child { border-right: 0 !important; }
+  .plan-standard tbody.step-group tr td:first-child { border-right: 0 !important; }
+}
 
   /* Footer clean & black */
   .footer-notes, .footer-notes * { color:#000 !important; background:#fff !important; border:0 !important; }
