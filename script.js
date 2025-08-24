@@ -51,27 +51,6 @@ function applyPatchIntervalAttributes(){
     });
     return;
   }
-function mapClassToKey(label){
-  const s = String(label || "").toLowerCase();
-  if (s.includes("benzodiazep")) return "bzra";
-  if (s.includes("z-drug") || s.includes("z drug")) return "bzra";
-  if (s.includes("antipsych")) return "antipsychotic";
-  if (s.includes("proton") || s.includes("ppi")) return "ppi";
-  if (s.includes("opioid") || s.includes("fentanyl") || s.includes("buprenorphine")) return "opioids";
-  return null;
-}
-
-function updateClassFooter(){
-  const cls = document.getElementById("classSelect")?.value || "";
-  const key = mapClassToKey(cls) || "_default";
-  const copy = CLASS_FOOTER_COPY[key] || CLASS_FOOTER_COPY._default;
-
-  const ben = document.getElementById("expBenefits");
-  const wd  = document.getElementById("withdrawalInfo");
-
-  if (ben) ben.textContent = copy.benefits || "";
-  if (wd)  wd.textContent  = copy.withdrawal || "";
-}
 
   // Static text (always the same)
   const msg = (rule === 3)
@@ -439,20 +418,6 @@ function updateClassFooter(){
 
   if (ben) ben.textContent = copy.benefits || "";
   if (wd)  wd.textContent  = copy.withdrawal || "";
-}
-
-
-
-// Normalize the dropdown label to one of our keys above
-function mapClassToKey(label) {
-  const s = String(label || "").toLowerCase();
-  if (s.includes("benzodiazep")) return "bzra";
-  if (s.includes("z-drug") || s.includes("z drug")) return "bzra";
-  if (s.includes("antipsych")) return "antipsychotic";
-  if (s.includes("proton") || s.includes("ppi")) return "ppi";
-  // include patches under Opioids class as well
-  if (s.includes("opioid") || s.includes("fentanyl") || s.includes("buprenorphine")) return "opioids";
-  return null;
 }
 
 let _lastPracticeKey = null;
