@@ -1729,9 +1729,8 @@ function init(){
  document.getElementById("classSelect")?.addEventListener("change", updateBestPracticeBox);
   document.getElementById("classSelect")?.addEventListener("change", updateClassFooterLine);
 
-updateClassFooter(classSel?.value);
+  updateClassFooterLine();
    updateBestPracticeBox();
-  updateClassFooter(e.target.value);
   
   // 7) Live gating + interval hints for patches
   if (typeof ensureIntervalHints === "function") ensureIntervalHints(); // create the hint <div>s once
