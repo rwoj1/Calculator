@@ -103,31 +103,6 @@ function ensureIntervalHints(){
   };
   return [mk("p1IntHint","p1Interval"), mk("p2IntHint","p2Interval")];
 }
-
-function normalizeSRLabelForStrengthCell(text) {
-  const formSel = document.getElementById("formSelect");
-  const formText = formSel?.selectedOptions?.[0]?.textContent || "";
-
-  // Only adjust for SR Tablet forms; leave patches/capsules alone
-  const isSRTablet = /SR/i.test(formText) && /Tablet/i.test(formText) && !/Patch/i.test(formText);
-  if (!isSRTablet) return text || "";
-
-  let s = String(text || "");
-
-  // If it's already "SR" and "Tablet" somewhere, leave as-is
-  if (/SR/i.test(s) && /Tablet/i.test(s)) return s;
-
-  // If it says Tablet but no SR, upgrade to SR Tablet
-  if (/Tablet/i.test(s) && !/SR/i.test(s)) {
-    return s.replace(/Tablet/i, "SR Tablet");
-  }
-
-  // If it has neither, append " SR Tablet"
-  // e.g., "Morphine 30 mg" -> "Morphine 30 mg SR Tablet"
-  return s.replace(/\s*$/, " SR Tablet");
-}
-
-
 // --- PRINT DECORATIONS (header, colgroup, zebra fallback, nowrap units) ---
 
 function getPrintTableAndType() {
@@ -353,37 +328,28 @@ function _printCSS(){
   </style>`;
 }
 function printOutputOnly() {
-  if (window._dirtySinceGenerate) {
-    (typeof showToast === "function" ? showToast : alert)(
-      "Inputs changed — please click Generate Chart before printing."
-    );
-    return;
-  }
+  const tableExists = document.querySelector("#scheduleBlock table, #patchBlock table");
+  if (!tableExists) { alert("Please generate a chart first."); return; }
 
-  const card = document.getElementById("outputCard");
-  if (!card || !card.querySelector("table")) {
-    (typeof showToast === "function" && showToast("Generate a chart first.")); 
-    return;
-  }
+  document.body.classList.add("printing");
 
-  // Build per-step tables so steps don't split and headers repeat
-  const restore = splitTablesByStepForPrint(card);
+  // Add print-only header + layout hints; get cleanup
+  const cleanupDecor = preparePrintDecorations();
 
-  // Print and then restore the original DOM
-  const after = () => { restore(); window.removeEventListener("afterprint", after); };
-  window.addEventListener("afterprint", after);
   window.print();
+
+  setTimeout(() => {
+    document.body.classList.remove("printing");
+    cleanupDecor();
+  }, 100);
 }
 
-// Save as PDF via the browser's print engine (matches your Print result)
-function saveOutputAsPdf() {
-  // same safety gate as Print
+// Save as PDF: export the chart only, with header on later pages and no split steps
+async function saveOutputAsPdf() {
+  // Same safety gate as Print
   if (window._dirtySinceGenerate) {
-    if (typeof showToast === "function") {
-      showToast("Inputs changed — please click Generate Chart before saving.");
-    } else {
-      alert("Inputs changed — please click Generate Chart before saving.");
-    }
+    const msg = "Inputs changed — please Generate Chart before saving.";
+    if (typeof showToast === "function") showToast(msg); else alert(msg);
     return;
   }
 
@@ -393,103 +359,120 @@ function saveOutputAsPdf() {
     return;
   }
 
-  // Build a minimal HTML doc that includes your print CSS and only the chart
-  const docHTML = `
-<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    ${typeof _printCSS === "function" ? _printCSS() : ""}
+  // --- 1) Clone just the output card we want to export
+  const clone = card.cloneNode(true);
+
+  // --- 2) Inject header + special instruction + disclaimer at top of the clone
+  (function injectHeader(root) {
+    // Remove any previously injected header
+    root.querySelectorAll(".print-only").forEach(n => n.remove());
+
+    const med = document.getElementById("hdrMedicine")?.textContent || "Medicine";
+    const special = document.getElementById("hdrSpecial")?.textContent || "";
+    const hdr = document.createElement("div");
+    hdr.className = "print-only print-header";
+    hdr.innerHTML = `
+      <div class="print-medline">${med}</div>
+      ${special ? `<div class="print-instruction">${special}</div>` : ``}
+      <div class="print-disclaimer">This is a guide only – always follow the advice of your healthcare professional.</div>
+    `;
+    root.prepend(hdr);
+  })(clone);
+
+  // --- 3) Ensure later pages still show the column titles and avoid splitting a step
+  splitTablesByStepForPdf(clone);
+
+  // --- 4) Build an isolated HTML document for html2pdf, with the same print CSS + a few PDF-only tweaks
+  const extraCss = `
     <style>
-      /* ensure the print-only header is visible in this popup */
-      .output-head { display: none !important; }
-      .print-only  { display: block !important; }
-      /* keep steps intact */
-      tbody.step-group { page-break-inside: avoid; break-inside: avoid; }
-      /* white background, black text */
-      html, body { background:#fff; color:#000; margin:0; }
+      /* Make html2pdf honor colors and keep layout tidy */
+      html, body { background:#fff; color:#000; }
+      .print-only { display:block !important; }
+      /* Repeat header row per step (we create separate tables) */
+      .step-table thead { display: table-header-group; }
+      /* Do not split a step across pages */
+      .step-table { page-break-inside: avoid; break-inside: avoid; margin: 0 0 10pt 0; }
+      /* Avoid splitting a header from its first row */
+      .step-table thead, .step-table tbody { page-break-inside: avoid; break-inside: avoid; }
     </style>
-  </head>
-  <body class="printing">
-    ${card.outerHTML}
-  </body>
-</html>`.trim();
+  `;
 
-  // Open a clean window, write the chart only, and trigger native print (user selects "Save as PDF")
-  const w = window.open("", "_blank");
-  if (!w) { alert("Pop-up blocked — please allow pop-ups for this site."); return; }
+  const html = `<!doctype html>
+  <html>
+    <head>
+      <meta charset="utf-8">
+      ${typeof _printCSS === "function" ? _printCSS() : ""} 
+      ${extraCss}
+    </head>
+    <body>${clone.outerHTML}</body>
+  </html>`;
 
-  w.document.open();
-  w.document.write(docHTML);
-  w.document.close();
+  // --- 5) Render via an offscreen iframe so we export only this content
+  const blob = new Blob([html], { type: "text/html" });
+  const url  = URL.createObjectURL(blob);
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.right = "100%";
+  iframe.style.width = "0"; iframe.style.height = "0";
+  document.body.appendChild(iframe);
 
-  // Give it one tick to lay out, then print
-  setTimeout(() => {
-    try {
-      w.focus();
-      w.print();    // user picks "Save as PDF"
-      // optional: close after a delay if you want
-      // setTimeout(() => w.close(), 500);
-    } catch (e) {
-      console.error(e);
-    }
-  }, 150);
+  const filename = (() => {
+    const t = (document.getElementById("hdrMedicine")?.textContent || "Deprescribing Plan")
+      .replace(/^Medicine:\s*/i, "").replace(/\s+/g, "_");
+    const d = new Date();
+    return `${t}_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}.pdf`;
+  })();
+
+  const opts = {
+    filename,
+    pagebreak: { mode: ['css','legacy'], avoid: ['.step-table'] },
+    html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+    jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' },
+    margin: [45, 34, 45, 34]  // ~16mm top/btm, ~12mm sides
+  };
+
+  try {
+    await new Promise(res => {
+      iframe.onload = res;
+      iframe.src = url;
+    });
+    await html2pdf().set(opts).from(iframe.contentDocument.body).save();
+  } catch (e) {
+    console.error("saveOutputAsPdf error:", e);
+    alert("Sorry — couldn’t create the PDF. See console for details.");
+  } finally {
+    URL.revokeObjectURL(url);
+    iframe.remove();
+  }
 }
 
-
-
 /* ---------- helper: split the main table into per-step tables so each has its own header ---------- */
-// Build per-step mini tables for print/save so each step has its own header and won't split
-function splitTablesByStepForPrint(rootEl) {
-  const originals = [];
-  const clones = [];
-
-  const tables = rootEl.querySelectorAll("table.plan-standard, table.plan-patch");
-  tables.forEach(orig => {
+function splitTablesByStepForPdf(root) {
+  // Handle both tablet/caps (.plan-standard) and patch (.plan-patch) tables
+  root.querySelectorAll("table.plan-standard, table.plan-patch").forEach(orig => {
     const thead = orig.querySelector("thead");
     const headHTML = thead ? thead.outerHTML : "";
-
     const groups = Array.from(orig.querySelectorAll("tbody.step-group"));
     if (!groups.length) return;
 
-    // Holder for the printed version (we'll insert just before the original and hide original)
-    const holder = document.createElement("div");
-    holder.className = "print-split-holder";
-    orig.parentNode.insertBefore(holder, orig);
-
+    const frag = document.createDocumentFragment();
     groups.forEach(tb => {
       const mini = document.createElement("table");
       mini.className = (orig.className + " step-table").trim();
       mini.innerHTML = headHTML;
 
       const body = document.createElement("tbody");
-      body.className = tb.className;  // keep zebra classes, etc.
+      body.className = tb.className; // preserve zebra classes etc.
       Array.from(tb.children).forEach(tr => body.appendChild(tr.cloneNode(true)));
 
       mini.appendChild(body);
-      holder.appendChild(mini);
+      frag.appendChild(mini);
     });
 
-    // Hide the original table for print time
-    orig.dataset._printHidden = "1";
-    orig.style.display = "none";
-
-    originals.push(orig);
-    clones.push(holder);
+    // Replace the big table with a list of small tables (one per step)
+    orig.replaceWith(frag);
   });
-
-  // Return cleanup to restore original DOM after printing
-  return function restorePrintSplit() {
-    clones.forEach(h => h.remove());
-    originals.forEach(o => { 
-      if (o.dataset._printHidden) {
-        o.style.display = "";
-        delete o.dataset._printHidden;
-      }
-    });
-  };
 }
-
 
 
 
@@ -819,9 +802,9 @@ function renderStandardTable(stepRows){
 
       // [2] Strength
       const tdStrength = document.createElement("td");
-      const strengthText = line.strengthLabel || line.strength || "";
-      tdStrength.textContent = normalizeSRLabelForStrengthCell(strengthText);
-
+      tdStrength.className = "col-strength";
+      tdStrength.textContent = line.strength || "";
+      tr.appendChild(tdStrength);
 
       // [3] Instructions — keep \n, print via textContent
       const tdInstr = document.createElement("td");
