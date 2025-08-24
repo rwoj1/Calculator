@@ -56,34 +56,51 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
 .print-only { display: none; }
 
 @media print {
+  /* Ensure printers keep colors (zebra) */
   html, body, #outputCard, #outputCard * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* Print only the chart content */
+  /* PRINT ONLY the chart area */
   body.printing .container > * { display: none !important; }
-  body.printing #outputCard     { display: block !important; margin: 0 !important; background:#fff !important; color:#000 !important; }
+  body.printing #outputCard     { display: block !important; margin: 0 !important; }
 
-  /* Header block (print-only) */
-  .print-only { display: block !important; }
-  .print-header { margin: 0 0 10pt 0; padding-bottom: 6pt; border-bottom: 1px solid #000; }
-  .print-medline { font-size: 14pt; font-weight: 600; margin: 0 0 2pt 0; }
+  /* Kill any app chrome backgrounds / pseudo overlays (fixes black band) */
+  html, body, main, .container, .card, #outputCard {
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+  }
+  .container::before, .container::after,
+  .card::before, .card::after,
+  #outputCard::before, #outputCard::after { content: none !important; display: none !important; }
+
+  /* Hide on-screen header; show our injected header only */
+  .output-head { display: none !important; }
+  .print-only  { display: block !important; }
+
+  /* Also hide any table caption like "Medicine: ..." in print */
+  .table caption, .plan-table caption { display: none !important; }
+
+  /* Injected header styles */
+  .print-header      { margin: 0 0 10pt 0; padding-bottom: 6pt; border-bottom: 1px solid #000; }
+  .print-medline     { font-size: 14pt; font-weight: 600; margin: 0 0 2pt 0; }
   .print-instruction { font-size: 10pt; margin: 0 0 2pt 0; }
-  .print-disclaimer { font-size: 9pt; font-style: italic; margin: 0 0 8pt 0; }
+  .print-disclaimer  { font-size: 9pt; font-style: italic; margin: 0 0 8pt 0; }
 
-  /* Table shell */
+  /* Table shell — use separate borders so border-radius works reliably in print */
   .table, .plan-table {
     width: 100% !important;
-    border-collapse: collapse !important;
+    border-collapse: separate !important;   /* key for rounded corners */
     border-spacing: 0 !important;
-    table-layout: auto !important;           /* columns can breathe */
+    table-layout: auto !important;          /* lets Instructions breathe */
     background: #fff !important;
   }
   .table thead { display: table-header-group; }
   .table tfoot { display: table-footer-group; }
 
-  /* Borders + cell padding */
+  /* Borders + cells */
   .table th, .table td,
   .plan-table th, .plan-table td {
     border: 1px solid #000 !important;
@@ -92,30 +109,24 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
     color: #000 !important;
     white-space: pre-line;
     font-size: 12px;
-    vertical-align: middle;                  /* 4) middle align cells */
+    vertical-align: middle;                 /* middle align the cells */
   }
+  .table thead tr:last-child th { font-weight: 600 !important; }
 
-  /* Align time-of-day numeric columns center for neatness */
-  .table td:nth-child(4),
-  .table td:nth-child(5),
-  .table td:nth-child(6),
-  .table td:nth-child(7) {
-    text-align: center !important;
-  }
-
-  /* Zebra per step – works even if tbody splits, via [data-step] fallback */
+  /* Zebra per step (<tbody class="step-group">) */
   .plan-standard tbody.step-group.step-even td,
   .plan-patch    tbody.step-group.step-even td { background: #f2f2f2 !important; }
-  /* Fallback: shade by row attribute if browser splits TBODY across pages */
+
+  /* Fallback if a browser splits TBODY: shade by row attribute if present */
   #outputCard tr[data-step]:nth-of-type(even) td { background: #f2f2f2 !important; }
 
-  /* “Bubble” spacing between steps (white gap) */
+  /* Bubble gap between step groups */
   .plan-standard tbody.step-group + tbody.step-group tr:first-child td,
   .plan-patch    tbody.step-group + tbody.step-group tr:first-child td {
-    border-top: 6pt solid #fff !important;   /* creates visual gap */
+    border-top: 6pt solid #fff !important;  /* visual gap between steps */
   }
 
-  /* Round outer corners subtly */
+  /* Rounded outer corners for each step group (works with separate borders) */
   .plan-standard tbody.step-group tr:first-child td:first-child,
   .plan-patch    tbody.step-group tr:first-child td:first-child {
     border-top-left-radius: 6pt !important; background-clip: padding-box;
@@ -133,7 +144,7 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
     border-bottom-right-radius: 6pt !important; background-clip: padding-box;
   }
 
-  /* Footer clean & black */
+  /* Footer in clean black */
   .footer-notes, .footer-notes * { color:#000 !important; background:#fff !important; border:0 !important; }
 }
 
