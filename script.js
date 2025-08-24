@@ -103,6 +103,31 @@ function ensureIntervalHints(){
   };
   return [mk("p1IntHint","p1Interval"), mk("p2IntHint","p2Interval")];
 }
+
+function normalizeSRLabelForStrengthCell(text) {
+  const formSel = document.getElementById("formSelect");
+  const formText = formSel?.selectedOptions?.[0]?.textContent || "";
+
+  // Only adjust for SR Tablet forms; leave patches/capsules alone
+  const isSRTablet = /SR/i.test(formText) && /Tablet/i.test(formText) && !/Patch/i.test(formText);
+  if (!isSRTablet) return text || "";
+
+  let s = String(text || "");
+
+  // If it's already "SR" and "Tablet" somewhere, leave as-is
+  if (/SR/i.test(s) && /Tablet/i.test(s)) return s;
+
+  // If it says Tablet but no SR, upgrade to SR Tablet
+  if (/Tablet/i.test(s) && !/SR/i.test(s)) {
+    return s.replace(/Tablet/i, "SR Tablet");
+  }
+
+  // If it has neither, append " SR Tablet"
+  // e.g., "Morphine 30 mg" -> "Morphine 30 mg SR Tablet"
+  return s.replace(/\s*$/, " SR Tablet");
+}
+
+
 // --- PRINT DECORATIONS (header, colgroup, zebra fallback, nowrap units) ---
 
 function getPrintTableAndType() {
@@ -328,20 +353,26 @@ function _printCSS(){
   </style>`;
 }
 function printOutputOnly() {
-  const tableExists = document.querySelector("#scheduleBlock table, #patchBlock table");
-  if (!tableExists) { alert("Please generate a chart first."); return; }
+  if (window._dirtySinceGenerate) {
+    (typeof showToast === "function" ? showToast : alert)(
+      "Inputs changed — please click Generate Chart before printing."
+    );
+    return;
+  }
 
-  document.body.classList.add("printing");
+  const card = document.getElementById("outputCard");
+  if (!card || !card.querySelector("table")) {
+    (typeof showToast === "function" && showToast("Generate a chart first.")); 
+    return;
+  }
 
-  // Add print-only header + layout hints; get cleanup
-  const cleanupDecor = preparePrintDecorations();
+  // Build per-step tables so steps don't split and headers repeat
+  const restore = splitTablesByStepForPrint(card);
 
+  // Print and then restore the original DOM
+  const after = () => { restore(); window.removeEventListener("afterprint", after); };
+  window.addEventListener("afterprint", after);
   window.print();
-
-  setTimeout(() => {
-    document.body.classList.remove("printing");
-    cleanupDecor();
-  }, 100);
 }
 
 // Save as PDF via the browser's print engine (matches your Print result)
@@ -408,32 +439,57 @@ function saveOutputAsPdf() {
 
 
 /* ---------- helper: split the main table into per-step tables so each has its own header ---------- */
-function splitTablesByStepForPdf(root) {
-  // Handle both tablet/caps (.plan-standard) and patch (.plan-patch) tables
-  root.querySelectorAll("table.plan-standard, table.plan-patch").forEach(orig => {
+// Build per-step mini tables for print/save so each step has its own header and won't split
+function splitTablesByStepForPrint(rootEl) {
+  const originals = [];
+  const clones = [];
+
+  const tables = rootEl.querySelectorAll("table.plan-standard, table.plan-patch");
+  tables.forEach(orig => {
     const thead = orig.querySelector("thead");
     const headHTML = thead ? thead.outerHTML : "";
+
     const groups = Array.from(orig.querySelectorAll("tbody.step-group"));
     if (!groups.length) return;
 
-    const frag = document.createDocumentFragment();
+    // Holder for the printed version (we'll insert just before the original and hide original)
+    const holder = document.createElement("div");
+    holder.className = "print-split-holder";
+    orig.parentNode.insertBefore(holder, orig);
+
     groups.forEach(tb => {
       const mini = document.createElement("table");
       mini.className = (orig.className + " step-table").trim();
       mini.innerHTML = headHTML;
 
       const body = document.createElement("tbody");
-      body.className = tb.className; // preserve zebra classes etc.
+      body.className = tb.className;  // keep zebra classes, etc.
       Array.from(tb.children).forEach(tr => body.appendChild(tr.cloneNode(true)));
 
       mini.appendChild(body);
-      frag.appendChild(mini);
+      holder.appendChild(mini);
     });
 
-    // Replace the big table with a list of small tables (one per step)
-    orig.replaceWith(frag);
+    // Hide the original table for print time
+    orig.dataset._printHidden = "1";
+    orig.style.display = "none";
+
+    originals.push(orig);
+    clones.push(holder);
   });
+
+  // Return cleanup to restore original DOM after printing
+  return function restorePrintSplit() {
+    clones.forEach(h => h.remove());
+    originals.forEach(o => { 
+      if (o.dataset._printHidden) {
+        o.style.display = "";
+        delete o.dataset._printHidden;
+      }
+    });
+  };
 }
+
 
 
 
@@ -763,9 +819,9 @@ function renderStandardTable(stepRows){
 
       // [2] Strength
       const tdStrength = document.createElement("td");
-      tdStrength.className = "col-strength";
-      tdStrength.textContent = line.strength || "";
-      tr.appendChild(tdStrength);
+      const strengthText = line.strengthLabel || line.strength || "";
+      tdStrength.textContent = normalizeSRLabelForStrengthCell(strengthText);
+
 
       // [3] Instructions — keep \n, print via textContent
       const tdInstr = document.createElement("td");
