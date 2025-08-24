@@ -1697,6 +1697,8 @@ function init(){
   document.getElementById("printBtn")?.addEventListener("click", printOutputOnly);
   document.getElementById("savePdfBtn")?.addEventListener("click", saveOutputAsPdf);
  document.getElementById("classSelect")?.addEventListener("change", updateBestPracticeBox);
+  document.getElementById("classSelect")?.addEventListener("change", updateClassFooterLine);
+
 
    updateBestPracticeBox();
   updateClassFooter(); 
