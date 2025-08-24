@@ -366,33 +366,11 @@ const SUGGESTED_PRACTICE = {
 
 // ---- Class-specific footer copy ----
 const CLASS_FOOTER_COPY = {
-  opioids: {
-    benefits:
-      "May improve alertness, constipation, falls risk and overall function.",
-    withdrawal:
-      "Short-term flu-like symptoms, pain flare, irritability or insomnia can occur. Slow or pause taper if needed."
-  },
-  bzra: {
-    benefits:
-      "Improved daytime alertness, memory and coordination; reduced falls, crashes, and dependence risk.",
-    withdrawal:
-      "Rebound insomnia/anxiety, irritability, tremor may occur. Prefer slower taper; avoid alcohol/other sedatives."
-  },
-  antipsychotic: {
-    benefits:
-      "Lower sedation, metabolic and extrapyramidal adverse effects; improved daytime function where appropriate.",
-    withdrawal:
-      "Monitor for symptom return, insomnia or agitation. Taper gradually with close clinical review."
-  },
-  ppi: {
-    benefits:
-      "Lower long-term pill burden; may reduce risks tied to prolonged acid suppression in some patients.",
-    withdrawal:
-      "Transient rebound acid symptoms may occur. Consider on-demand therapy or non-drug strategies."
-  },
-  _default: {
-    benefits: "Potential to reduce adverse effects and pill burden.",
-    withdrawal: "If troublesome symptoms occur, pause or slow the taper and review."
+  opioids: 'Insert specific footer + disclaimer for Opioids',
+  bzra: 'Insert specific footer + disclaimer for Benzodiazpeines / Z Drugs',
+  antipsychotic:'Insert specific footer + disclaimer for Antipsychotics',
+  ppi: 'Insert specific footer + disclaimer for Proton Pump Inhibitors',
+  _default: 'Insert generic footer'"
   }
 };
 
