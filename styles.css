@@ -109,7 +109,6 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
   }
   .table thead tr:last-child th { font-weight: 600 !important; }
 
-@media print {
   /* 0) Header row: no borders */
   .plan-table thead th { border: 0 !important; background: #fff !important; }
 
@@ -180,7 +179,7 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
 
   /* 8) Preserve line breaks in Instructions (pairs with textContent in JS) */
   .plan-table td { white-space: pre-line; }
-}
+
   /* Footer clean & black */
   .footer-notes, .footer-notes * { color:#000 !important; background:#fff !important; border:0 !important; }
 }
