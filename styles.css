@@ -218,5 +218,26 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
     border-left: 1px solid #000 !important;
   }
 }
+@media print {
+  /* 1) Remove the vertical line immediately left of 'Instructions' */
+  .plan-standard tbody.step-group td.col-instr {
+    border-left: 0 !important;
+  }
+
+  /* 2) Header row: keep only the bottom border */
+  .plan-table thead th {
+    border-width: 0 0 1px 0 !important;
+    border-style: solid !important;
+    border-color: #000 !important;
+    background: #fff !important;
+  }
+
+  /* 3) Make the Date column look merged:
+        suppress the inter-row top line in the Date cell on subsequent lines */
+  .plan-standard tbody.step-group tr + tr td.col-date {
+    border-top: 0 !important;
+  }
+}
+
 
 }
