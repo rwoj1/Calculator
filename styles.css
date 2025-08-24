@@ -138,19 +138,7 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
   .plan-patch    tbody.step-group tr:last-child td:last-child {
     border-bottom-right-radius: 6pt !important; background-clip: padding-box;
   }
-/* Soft rounding for every printed row */
-  .table tbody tr td:first-child,
-  .plan-table tbody tr td:first-child {
-    border-top-left-radius: 4pt !important;
-    border-bottom-left-radius: 4pt !important;
-    background-clip: padding-box;
-  }
-  .table tbody tr td:last-child,
-  .plan-table tbody tr td:last-child {
-    border-top-right-radius: 4pt !important;
-    border-bottom-right-radius: 4pt !important;
-    background-clip: padding-box;
-  }
+
   /* STOP/REVIEW merged message cell */
   .final-cell { font-weight: 700; background: #fff !important; }
 
