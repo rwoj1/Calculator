@@ -328,102 +328,20 @@ function _printCSS(){
   </style>`;
 }
 function printOutputOnly() {
-  if (window._dirtySinceGenerate) {
-    (typeof showToast === "function" ? showToast : alert)(
-      "Inputs changed — please click Generate Chart before printing."
-    );
-    return;
-  }
+  const tableExists = document.querySelector("#scheduleBlock table, #patchBlock table");
+  if (!tableExists) { alert("Please generate a chart first."); return; }
 
-  const card = document.getElementById("outputCard");
-  if (!card) return alert("Generate the chart first.");
+  document.body.classList.add("printing");
 
-  // pick the visible table (tablets/caps vs patches)
-  const schedTbl = card.querySelector("#scheduleBlock table");
-  const patchTbl = card.querySelector("#patchBlock table");
-  const srcTable = (patchTbl && patchTbl.offsetParent !== null) ? patchTbl : schedTbl;
-  if (!srcTable) return alert("No chart to print. Please generate first.");
+  // Add print-only header + layout hints; get cleanup
+  const cleanupDecor = preparePrintDecorations();
 
-  // --- Build a print-only root (isolated from app UI) ---
-  const overlay = document.createElement("div");
-  overlay.id = "printOverlayOnly";
-
-  const printRoot = document.createElement("div");
-  printRoot.id = "printOnlyRoot";
-  overlay.appendChild(printRoot);
-
-  // 1) Header (Medicine + special instruction) — CLONE from the live card
-  const head = card.querySelector(".output-head");
-  if (head) {
-    const headClone = head.cloneNode(true);
-    headClone.style.display = "block";           // make sure it shows in print
-    printRoot.appendChild(headClone);
-  }
-
-  // 2) Disclaimer (if you render one above/below table)
-  const disclaimer = document.getElementById("headerDisclaimer");
-  if (disclaimer) {
-    printRoot.appendChild(disclaimer.cloneNode(true));
-  }
-
-  // 3) Build one mini-table per step, but include THEAD only on the FIRST one
-  const thead = srcTable.querySelector("thead");
-  const groups = srcTable.querySelectorAll("tbody.step-group");
-
-  groups.forEach((g, idx) => {
-    const mini = document.createElement("table");
-    mini.className = (srcTable.className + " print-chunk").trim();
-    mini.style.width = "100%";
-    mini.style.borderCollapse = "separate";
-    mini.style.borderSpacing = "0";
-    mini.style.margin = "0 0 8mm 0";
-    // very strong no-split guards
-    mini.style.breakInside = "avoid";
-    mini.style.pageBreakInside = "avoid";
-
-    // include the column header ONLY on the very first step
-    if (thead && idx === 0) mini.appendChild(thead.cloneNode(true));
-
-    // clone this step's rows
-    const tb = document.createElement("tbody");
-    tb.className = g.className; // preserves zebra classes etc.
-    g.querySelectorAll("tr").forEach(tr => tb.appendChild(tr.cloneNode(true)));
-    mini.appendChild(tb);
-
-    printRoot.appendChild(mini);
-  });
-
-  // 4) Footer notes (Expected Benefits / Withdrawal)
-  const foot = card.querySelector(".footer-notes");
-  if (foot) printRoot.appendChild(foot.cloneNode(true));
-
-  // 5) Print-only CSS & app UI hiding
-  const hideStyle = document.createElement("style");
-  hideStyle.textContent = `
-    @media print {
-      /* show only our overlay; hide the app UI */
-      body > *:not(#printOverlayOnly) { display: none !important; }
-      #printOverlayOnly { display: block !important; }
-
-      /* make sure header is visible */
-      #printOnlyRoot .output-head { display: block !important; color: #000 !important; }
-
-      /* step tables should not split */
-      .print-chunk { page-break-inside: avoid; break-inside: avoid; }
-
-      /* keep things black/white and crisp */
-      html, body { background:#fff !important; color:#000 !important; }
-      .table th, .table td { color:#000 !important; background:#fff !important; }
-    }
-  `;
-  overlay.appendChild(hideStyle);
-
-  // attach & print
-  document.body.appendChild(overlay);
   window.print();
 
-  // cleanup immediately after print
-  setTimeout(() => overlay.remove(), 0);
+  setTimeout(() => {
+    document.body.classList.remove("printing");
+    cleanupDecor();
+  }, 100);
 }
 
 // Save as PDF: export the chart only, with header on later pages and no split steps
@@ -1785,15 +1703,15 @@ function perStrengthRowsFractional(r){
 function setFooterText(cls){
   const exp = {
     Opioid: "Expected benefits: Improved function and reduced opioid-related harms.",
-    "Benzodiazepines / Z-Drug (BZRA)": "Improved cognition, daytime alertness, and reduced falls.",
-    "Proton Pump Inhibitor": "Review at 4–12 weeks; incorporate non-drug strategies (sleep, diet, positioning).",
-    Antipsychotic: "Lower risk of metabolic/extrapyramidal adverse effects.",
+    "Benzodiazepines / Z-Drug (BZRA)": "Expected benefits: Improved cognition, daytime alertness, and reduced falls.",
+    "Proton Pump Inhibitor": "Expected benefits: Review at 4–12 weeks; incorporate non-drug strategies (sleep, diet, positioning).",
+    Antipsychotic: "Expected benefits: Lower risk of metabolic/extrapyramidal adverse effects.",
   }[cls] || "—";
   const wdr = {
-    Opioid: "transient pain flare, cravings, mood changes.",
-    "Benzodiazepines / Z-Drug (BZRA)": "insomnia, anxiety, irritability.",
-    "Proton Pump Inhibitor": "rebound heartburn.",
-    Antipsychotic: "sleep disturbance, anxiety, return of target symptoms.",
+    Opioid: "Withdrawal: transient pain flare, cravings, mood changes.",
+    "Benzodiazepines / Z-Drug (BZRA)": "Withdrawal: insomnia, anxiety, irritability.",
+    "Proton Pump Inhibitor": "Withdrawal: rebound heartburn.",
+    Antipsychotic: "Withdrawal: sleep disturbance, anxiety, return of target symptoms.",
   }[cls] || "—";
 const e = $("expBenefits");     if (e) e.textContent = exp;
 const w = $("withdrawalInfo");  if (w) w.textContent = wdr;
