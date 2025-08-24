@@ -365,20 +365,13 @@ const SUGGESTED_PRACTICE = {
 };
 
 // ---- Class-specific footer copy (placeholder text) ----
-// ---- Class-specific footer copy (placeholder text) ----
 const CLASS_FOOTER_COPY = {
-  opioids:
-    "Insert specific footer + disclaimer for Opioids",
-  bzra:
-    "Insert specific footer + disclaimer for Benzodiazepines / Z Drugs (BZRA)",
-  antipsychotic:
-    "Insert specific footer + disclaimer for Antipsychotics",
-  ppi:
-    "Insert specific footer + disclaimer for Proton Pump Inhibitors",
-  _default: ""
+  opioids:       "Insert specific footer + disclaimer for Opioids",
+  bzra:          "Insert specific footer + disclaimer for Benzodiazepines / Z Drugs (BZRA)",
+  antipsychotic: "Insert specific footer + disclaimer for Antipsychotics",
+  ppi:           "Insert specific footer + disclaimer for Proton Pump Inhibitors",
+  _default:      ""
 };
-
-
 
 // Map the visible class label to a key in CLASS_FOOTER_COPY
 function mapClassToKey(label){
@@ -401,23 +394,14 @@ function footerKeyFromLabel(label) {
   return null;
 }
 
-// The function your code is trying to call
-function updateClassFooter(selectedClassLabel) {
+function updateClassFooter() {
+  const cls = document.getElementById("classSelect")?.value || "";
+  const key = mapClassToKey(cls);                     // "opioids" | "bzra" | "antipsychotic" | "ppi" | null
+  const text = (key && CLASS_FOOTER_COPY[key]) || CLASS_FOOTER_COPY._default;
   const target = document.getElementById("classFooter");
-  if (!target) return;
-
-  // Prefer the explicit label passed in; fall back to the current select value.
-  const label = selectedClassLabel ?? document.getElementById("classSelect")?.value ?? "";
-  const key = footerKeyFromLabel(label);
-
-  const text =
-    (key && CLASS_FOOTER_COPY[key]) ??
-    CLASS_FOOTER_COPY._default;
-
-  // Show/hide & set text
-  target.style.display = text ? "" : "none";
-  target.textContent = text;
+  if (target) target.textContent = text;
 }
+
 
 let _lastPracticeKey = null;
 
@@ -1726,11 +1710,13 @@ function init(){
   document.getElementById("resetBtn")?.addEventListener("click", ()=>location.reload());
   document.getElementById("printBtn")?.addEventListener("click", printOutputOnly);
   document.getElementById("savePdfBtn")?.addEventListener("click", saveOutputAsPdf);
- document.getElementById("classSelect")?.addEventListener("change", updateBestPracticeBox);
-  document.getElementById("classSelect")?.addEventListener("change", updateClassFooter);
-
+document.getElementById("classSelect")?.addEventListener("change", () => {
+  updateBestPracticeBox();
   updateClassFooter();
-   updateBestPracticeBox();
+});
+
+updateBestPracticeBox();
+updateClassFooter();
   
   // 7) Live gating + interval hints for patches
   if (typeof ensureIntervalHints === "function") ensureIntervalHints(); // create the hint <div>s once
