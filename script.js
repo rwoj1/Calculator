@@ -97,13 +97,6 @@ function ensureIntervalHints(){
   };
   return [mk("p1IntHint","p1Interval"), mk("p2IntHint","p2Interval")];
 }
-function setFooterByClass(cls) {
-  const copy = FOOTER_COPY[cls] || FOOTER_COPY._default;
-  const b = document.getElementById("expBenefits");
-  const w = document.getElementById("withdrawalInfo");
-  if (b) b.textContent = copy.benefits || "";
-  if (w) w.textContent = copy.withdrawal || "";
-}
 
 // --- PRINT DECORATIONS (header, colgroup, zebra fallback, nowrap units) ---
 
