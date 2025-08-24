@@ -314,48 +314,61 @@ function patchSignature(list) {
   return arr.join("+"); // "" if no patches
 }
 
-// Save as PDF (export only the rendered output card, same styling as Print)
-function saveOutputAsPdf() {
-  if (_dirtySinceGenerate) {
-    showToast("Inputs changed—please Generate to update the plan before printing or saving.");
+/* ===== Minimal print / save helpers (do NOT duplicate elsewhere) ===== */
+
+// PRINT: use your existing print CSS and guard against stale charts
+function printOutputOnly() {
+  if (window._dirtySinceGenerate) {
+    if (typeof showToast === "function") {
+      showToast("Inputs changed—please click Generate Chart before printing.");
+    } else {
+      alert("Inputs changed—please click Generate Chart before printing.");
+    }
     return;
   }
-console.info("Unified saveOutputAsPdf() running…");
-  const card = document.getElementById("outputCard");
-  if (!card) return;
-
-  // Build a minimal HTML doc that uses the same print CSS
-  const html = `<!doctype html><html><head><meta charset="utf-8">${_printCSS()}</head><body>${card.outerHTML}</body></html>`;
-
-  // Render that HTML via an offscreen iframe so html2pdf gets clean DOM
-  const blob = new Blob([html], { type: "text/html" });
-  const url = URL.createObjectURL(blob);
-  const iframe = document.createElement("iframe");
-  iframe.style.display = "none";
-  document.body.appendChild(iframe);
-
-  iframe.onload = () => {
-    const opt = {
-      margin: [12, 12, 12, 12],
-      filename: "Deprescribing Taper Planner.pdf",
-      html2canvas: { scale: 2, useCORS: true },
-      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }
-    };
-
-    html2pdf().set(opt).from(iframe.contentDocument.body).save()
-      .then(() => {
-        URL.revokeObjectURL(url);
-        iframe.remove();
-      })
-      .catch(() => {
-        URL.revokeObjectURL(url);
-        iframe.remove();
-      });
-  };
-
-  iframe.src = url;
+  window.print();
 }
 
+// SAVE AS PDF: export the rendered chart area (#outputCard) only
+async function saveOutputAsPdf() {
+  if (window._dirtySinceGenerate) {
+    if (typeof showToast === "function") {
+      showToast("Inputs changed—please click Generate Chart before saving.");
+    } else {
+      alert("Inputs changed—please click Generate Chart before saving.");
+    }
+    return;
+  }
+
+  const card = document.getElementById("outputCard");
+  if (!card || !card.querySelector("table")) {
+    if (typeof showToast === "function") showToast("Generate a chart first.");
+    return;
+  }
+
+  // Build a filename like "Morphine_SR_tablet_2025-08-24.pdf"
+  const title = (document.getElementById("hdrMedicine")?.textContent || "Deprescribing Plan")
+    .replace(/^Medicine:\s*/i, "")
+    .replace(/\s+/g, "_");
+  const d = new Date();
+  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,"0"), day = String(d.getDate()).padStart(2,"0");
+  const filename = `${title}_${y}-${m}-${day}.pdf`;
+
+  const opt = {
+    filename,
+    pagebreak: { mode: ["css", "legacy"], avoid: ["tbody.step-group"] },
+    html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
+    jsPDF: { unit: "pt", format: "a4", orientation: "portrait" },
+    margin: [45, 34, 45, 34] // ~16mm top/bottom, ~12mm sides
+  };
+
+  try {
+    await html2pdf().set(opt).from(card).save();
+  } catch (err) {
+    console.error("saveOutputAsPdf error:", err);
+    alert("Sorry—couldn’t create the PDF. See console for details.");
+  }
+}
 
 // --- Suggested practice copy (exact wording from your doc) ---
 const SUGGESTED_PRACTICE = {
