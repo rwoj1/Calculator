@@ -375,9 +375,8 @@ function splitTablesByStepForPdf(rootEl, { repeatHeader = false } = {}) {
   });
 }
 
-// ===== Save only the rendered chart as a PDF (no screen UI captured) =====
+// Save chart as PDF using a clean popup (does NOT touch Print or on-screen view)
 async function saveOutputAsPdf() {
-  // Safety gate (keep your existing flag)
   if (window._dirtySinceGenerate) {
     const msg = "Inputs changed — please click Generate Chart before saving.";
     if (typeof showToast === "function") showToast(msg); else alert(msg);
@@ -390,86 +389,102 @@ async function saveOutputAsPdf() {
     return;
   }
 
-  // --- Clone only the output card (so we export just the chart) ---
+  // 1) Clone only the chart
   const clone = card.cloneNode(true);
 
-  // Inject a one-line disclaimer at top of the clone
+  // Add disclaimer at top of the clone
   const disclaimer = document.createElement("div");
   disclaimer.className = "print-disclaimer";
   disclaimer.textContent = "This is a guide only – always follow the advice of your healthcare professional.";
   clone.prepend(disclaimer);
 
-  // Convert the big table into per-step tables so a step won't split across pages
-  splitTablesByStepForPdf(clone, { repeatHeader: false }); // match your Print look (header once)
+  // 2) Convert the big table into mini tables (one per step) so a step won't split
+  (function splitTablesByStepForPdf(rootEl, repeatHeader = false) {
+    rootEl.querySelectorAll("table.plan-standard, table.plan-patch").forEach(orig => {
+      const thead = orig.querySelector("thead");
+      const headHTML = thead ? thead.outerHTML : "";
+      const groups = Array.from(orig.querySelectorAll("tbody.step-group"));
+      if (!groups.length) return;
 
-  // --- Build a minimal print-like document for html2pdf ---
+      const frag = document.createDocumentFragment();
+      groups.forEach((tb, idx) => {
+        const mini = document.createElement("table");
+        mini.className = (orig.className + " step-table").trim();
+        if (headHTML && (repeatHeader || idx === 0)) {
+          mini.insertAdjacentHTML("afterbegin", headHTML); // header once (or every step if repeatHeader=true)
+        }
+        const body = document.createElement("tbody");
+        body.className = tb.className;
+        Array.from(tb.children).forEach(tr => body.appendChild(tr.cloneNode(true)));
+        mini.appendChild(body);
+        frag.appendChild(mini);
+      });
+      orig.replaceWith(frag);
+    });
+  })(clone, /* repeatHeader */ false);
+
+  // 3) Build a self-contained HTML for the popup (uses your print CSS + a few PDF guards)
+  const title = (document.getElementById("hdrMedicine")?.textContent || "Deprescribing Taper Plan")
+                  .replace(/^Medicine:\s*/i,"").replace(/\s+/g,"_").replace(/[^A-Za-z0-9_]/g,"");
+  const today = new Date();
+  const filename = `${title}_${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}.pdf`;
+
+  const basePrintCss = (typeof _printCSS === "function" ? _printCSS() : "");
   const extraCss = `
     <style>
       html, body { background:#fff; color:#000; margin:0; }
-      * { box-sizing: border-box; }
-      /* Make sure header inside the card shows */
       .output-head { display:block !important; color:#000 !important; }
       .pill { border:1px solid #000; color:#000; }
-      /* Table look */
-      table.table { width:100%; border-collapse: collapse; table-layout: fixed; }
+      table.table { width:100%; border-collapse:collapse; table-layout:fixed; }
       thead th { text-align:left; font-weight:600; padding:8px 10px; border-bottom:1px solid #000; color:#000; }
-      td, th { padding:8px 10px; vertical-align: middle; color:#000; }
+      td, th { padding:8px 10px; vertical-align:middle; color:#000; }
       td.instructions-pre { white-space: pre-wrap; }
-      /* Keep each step together */
-      .step-table { page-break-inside: avoid; break-inside: avoid; margin: 0 0 10pt 0; }
-      .step-table thead { display: table-header-group; } /* header on first mini-table only since we add thead once */
-      .step-table tbody { page-break-inside: avoid; break-inside: avoid; }
-      .footer-notes { margin-top: 10pt; font-size: 10pt; color:#000; }
+      /* keep each step together */
+      .step-table { page-break-inside:avoid; break-inside:avoid; margin:0 0 10pt 0; }
+      .step-table thead { display:table-header-group; }
+      .footer-notes { margin-top:10pt; font-size:10pt; color:#000; }
       .footer-notes strong { color:#000; }
+      @page { size:A4 portrait; margin:16mm 12mm; }
     </style>
   `;
 
-  const html = `<!doctype html>
-  <html>
-    <head>
-      <meta charset="utf-8">
-      ${typeof _printCSS === "function" ? _printCSS() : ""}  <!-- reuse your print palette -->
-      ${extraCss}
-    </head>
-    <body>${clone.outerHTML}</body>
-  </html>`;
+  const popupHtml = `
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  ${basePrintCss}
+  ${extraCss}
+  <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+</head>
+<body>
+  ${clone.outerHTML}
+  <script>
+    (function () {
+      const opt = {
+        filename: ${JSON.stringify(filename)},
+        pagebreak: { mode: ['css','legacy'], avoid: ['.step-table'] },
+        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 1200 },
+        jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' },
+        margin: [45, 34, 45, 34]
+      };
+      window.addEventListener('load', function () {
+        window.html2pdf().set(opt).from(document.body).save().then(function(){
+          setTimeout(function(){ window.close(); }, 300);
+        });
+      });
+    })();
+  </script>
+</body>
+</html>`.trim();
 
-  // --- Render that HTML in an off-screen iframe and export via html2pdf ---
-  const blob = new Blob([html], { type: "text/html" });
-  const url  = URL.createObjectURL(blob);
-  const iframe = document.createElement("iframe");
-  iframe.style.position = "fixed";
-  iframe.style.width = "0"; iframe.style.height = "0";
-  iframe.style.right = "100%";
-  document.body.appendChild(iframe);
-
-  const filename = (() => {
-    const title = (document.getElementById("hdrMedicine")?.textContent || "Deprescribing Taper Plan")
-      .replace(/^Medicine:\s*/i,"").replace(/\s+/g,"_");
-    const d = new Date();
-    return `${title}_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}.pdf`;
-  })();
-
-  const opts = {
-    filename,
-    pagebreak: { mode: ['css','legacy'], avoid: ['.step-table'] },
-    html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 1200 },
-    jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' },
-    margin: [45, 34, 45, 34]   // ~16mm top/bottom, ~12mm sides
-  };
-
-  try {
-    await new Promise(res => { iframe.onload = res; iframe.src = url; });
-    await html2pdf().set(opts).from(iframe.contentDocument.body).save();
-  } catch (e) {
-    console.error("saveOutputAsPdf error:", e);
-    alert("Sorry—couldn’t create the PDF. See console for details.");
-  } finally {
-    URL.revokeObjectURL(url);
-    iframe.remove();
-  }
+  // 4) Open a clean popup and let it export itself (prevents “screen corner” captures)
+  const w = window.open("", "_blank");
+  if (!w) { alert("Pop-up blocked — please allow pop-ups for this site."); return; }
+  w.document.open();
+  w.document.write(popupHtml);
+  w.document.close();
 }
-
 
 /* ---------- helper: split the main table into per-step tables so each has its own header ---------- */
 function splitTablesByStepForPdf(root) {
