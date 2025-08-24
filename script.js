@@ -103,39 +103,140 @@ function ensureIntervalHints(){
   };
   return [mk("p1IntHint","p1Interval"), mk("p2IntHint","p2Interval")];
 }
+// --- PRINT DECORATIONS (header, colgroup, zebra fallback, nowrap units) ---
+
+function getPrintTableAndType() {
+  const std = document.querySelector("#scheduleBlock table");
+  if (std) return { table: std, type: "standard" };
+  const pat = document.querySelector("#patchBlock table");
+  if (pat) return { table: pat, type: "patch" };
+  return { table: null, type: null };
+}
+// 1) Inject print-only header (Medicine, special instruction, disclaimer)
 function injectPrintHeader() {
   const card = document.getElementById("outputCard");
   if (!card) return () => {};
-
-  // Remove any previous injected header to avoid duplicates
   document.getElementById("printHeaderBlock")?.remove();
 
   const header = document.createElement("div");
   header.id = "printHeaderBlock";
   header.className = "print-only print-header";
 
-  // Pull current medicine line & special instruction from the screen header
   const medText = (document.getElementById("hdrMedicine")?.textContent || "")
-    .replace(/^Medicine:\s*/i, ""); // strip leading label
+    .replace(/^Medicine:\s*/i, "");
   const special = document.getElementById("hdrSpecial")?.textContent || "";
 
-  const elMed   = document.createElement("div");
-  const elSpec  = document.createElement("div");
-  const elDisc  = document.createElement("div");
+  const elMed  = document.createElement("div");
+  const elSpec = document.createElement("div");
+  const elDisc = document.createElement("div");
 
   elMed.className  = "print-medline";
   elSpec.className = "print-instruction";
   elDisc.className = "print-disclaimer";
 
-  elMed.textContent  = medText || ""; // e.g., "Morphine SR Tablet"
-  elSpec.textContent = special || ""; // e.g., "Swallow whole, do not halve or crush"
+  elMed.textContent  = medText || "";
+  elSpec.textContent = special || "";
   elDisc.textContent = "This is a guide only – always follow the advice of your healthcare professional.";
 
   header.append(elMed, elSpec, elDisc);
   card.prepend(header);
 
-  // Return a cleanup so we can remove after printing
   return () => header.remove();
+}
+// 2) Add <colgroup> with sane proportions for print only
+function injectPrintColgroup(table, type) {
+  if (!table) return () => {};
+  // Remove any prior colgroup we injected
+  table.querySelector("colgroup.print-colgroup")?.remove();
+
+  const cg = document.createElement("colgroup");
+  cg.className = "print-colgroup";
+  const addCol = (w) => { const c = document.createElement("col"); c.style.width = w; cg.appendChild(c); };
+
+  if (type === "standard") {
+    // Date | Strength | Instructions | M | Mi | D | N  -> totals 100%
+    ["18%", "28%", "42%", "3%", "3%", "3%", "3%"].forEach(addCol);
+  } else {
+    // Patches: Apply | Remove | Strength(s) | Instructions
+    ["18%", "18%", "34%", "30%"].forEach(addCol);
+  }
+
+  table.insertBefore(cg, table.firstElementChild);
+  return () => cg.remove();
+}
+
+// 3) Zebra fallback: tag each row with its step index (survives tbody splits)
+function tagRowsWithStepIndex() {
+  const bodies = document.querySelectorAll("#outputCard tbody.step-group");
+  const changed = [];
+  bodies.forEach((tb, i) => {
+    tb.querySelectorAll("tr").forEach(tr => {
+      if (!tr.hasAttribute("data-step")) { tr.setAttribute("data-step", String(i)); changed.push(tr); }
+    });
+  });
+  // cleanup returns a remover
+  return () => changed.forEach(tr => tr.removeAttribute("data-step"));
+}
+
+// 4) Strength whitespace: add non-breaking joins for units (print-only)
+function tightenStrengthUnits() {
+  const cells = document.querySelectorAll("#outputCard td:nth-child(2)"); // Strength column
+  const originals = new Map();
+  const nbsp = "\u00A0";
+
+  const fix = (s) => {
+    if (!s) return s;
+    // Common unit pairs: "30 mg", "12 mcg/hr", "SR tablet", "CR tablet", "Patch", "Capsule"
+    return s
+      .replace(/(\d+(\.\d+)?)\s*mg\b/g,        (_,n)=> n+nbsp+"mg")
+      .replace(/(\d+(\.\d+)?)\s*mcg\/hr\b/g,   (_,n)=> n+nbsp+"mcg/hr")
+      .replace(/\bSR\s+tablet\b/i,             "SR"+nbsp+"tablet")
+      .replace(/\bCR\s+tablet\b/i,             "CR"+nbsp+"tablet")
+      .replace(/\bIR\s+tablet\b/i,             "IR"+nbsp+"tablet")
+      .replace(/\bSR\s+capsule\b/i,            "SR"+nbsp+"capsule")
+      .replace(/\bCR\s+capsule\b/i,            "CR"+nbsp+"capsule")
+      .replace(/\bPatch\b/i,                   "Patch"); // label already tight
+  };
+
+  cells.forEach(td => {
+    const key = td;
+    originals.set(key, td.textContent || "");
+    td.textContent = fix(td.textContent || "");
+  });
+  return () => { originals.forEach((val, td) => { td.textContent = val; }); };
+}
+
+// 5) Add short weekday to the Date cell (print only), without bolding
+function addWeekdayToDates() {
+  const dateCells = document.querySelectorAll("#outputCard tbody.step-group tr:first-child td:first-child");
+  const originals = new Map();
+  const weekday = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const parseDMY = (s) => {
+    // expects DD/MM/YYYY
+    const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (!m) return null;
+    const [_, d, mo, y] = m.map(Number);
+    return new Date(y, mo - 1, d);
+  };
+  dateCells.forEach(td => {
+    const orig = td.textContent || "";
+    originals.set(td, orig);
+    const dt = parseDMY(orig.trim());
+    if (dt) td.textContent = `${weekday[dt.getDay()]} ${orig}`;
+  });
+  return () => { originals.forEach((val, td) => { td.textContent = val; }); };
+}
+
+// Prepare all print-only decorations and return a cleanup function
+function preparePrintDecorations() {
+  const { table, type } = getPrintTableAndType();
+  const cleanups = [];
+  cleanups.push(injectPrintHeader());
+  if (table) cleanups.push(injectPrintColgroup(table, type || "standard"));
+  cleanups.push(tagRowsWithStepIndex());
+  cleanups.push(tightenStrengthUnits());
+  cleanups.push(addWeekdayToDates());
+  return () => cleanups.forEach(fn => { try { fn(); } catch {} });
 }
 function injectPrintDisclaimer() {
   const card = document.getElementById("outputCard");
@@ -1441,20 +1542,19 @@ function _printCSS(){
   </style>`;
 }
 function printOutputOnly() {
-  const card = document.getElementById("outputCard");
-  if (!card) { alert("Please generate a chart first."); return; }
+  const tableExists = document.querySelector("#scheduleBlock table, #patchBlock table");
+  if (!tableExists) { alert("Please generate a chart first."); return; }
 
   document.body.classList.add("printing");
 
-  // Add the print-only header/disclaimer block
-  let cleanupHeader = () => {};
-  try { cleanupHeader = injectPrintHeader(); } catch {}
+  // Add print-only header + layout hints; get cleanup
+  const cleanupDecor = preparePrintDecorations();
 
   window.print();
 
   setTimeout(() => {
     document.body.classList.remove("printing");
-    cleanupHeader();
+    cleanupDecor();
   }, 100);
 }
 
