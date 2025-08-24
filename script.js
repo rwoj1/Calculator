@@ -365,13 +365,20 @@ const SUGGESTED_PRACTICE = {
 };
 
 // ---- Class-specific footer copy (placeholder text) ----
+// ---- Class-specific footer copy (placeholder text) ----
 const CLASS_FOOTER_COPY = {
-  "Opioid": "Insert specific footer + disclaimer for Opioids",
-  "Benzodiazepines / Z-Drug (BZRA)": "Insert specific footer + disclaimer for Benzodiazepines / Z Drugs (BZRA)",
-  "Antipsychotic": "Insert specific footer + disclaimer for Antipsychotics",
-  "Proton Pump Inhibitor": "Insert specific footer + disclaimer for Proton Pump Inhibitors",
+  opioids:
+    "Insert specific footer + disclaimer for Opioids",
+  bzra:
+    "Insert specific footer + disclaimer for Benzodiazepines / Z Drugs (BZRA)",
+  antipsychotic:
+    "Insert specific footer + disclaimer for Antipsychotics",
+  ppi:
+    "Insert specific footer + disclaimer for Proton Pump Inhibitors",
   _default: ""
 };
+
+
 
 // Map the visible class label to a key in CLASS_FOOTER_COPY
 function mapClassToKey(label){
@@ -384,11 +391,32 @@ function mapClassToKey(label){
   return null;
 }
 
-function updateClassFooterLine() {
-  const cls = document.getElementById("classSelect")?.value || "";
-  const text = CLASS_FOOTER_COPY[cls] ?? CLASS_FOOTER_COPY._default;
+// Normalize a visible label to one of our keys above
+function footerKeyFromLabel(label) {
+  const s = String(label || "").toLowerCase();
+  if (s.includes("opioid") || s.includes("fentanyl") || s.includes("buprenorphine")) return "opiods" || "opioids";
+  if (s.includes("benzodiazep") || s.includes("z-drug") || s.includes("z drug")) return "bzra";
+  if (s.includes("antipsych")) return "antipsychotic";
+  if (s.includes("proton") || s.includes("ppi")) return "ppi";
+  return null;
+}
+
+// The function your code is trying to call
+function updateClassFooter(selectedClassLabel) {
   const target = document.getElementById("classFooter");
-  if (target) target.textContent = text;
+  if (!target) return;
+
+  // Prefer the explicit label passed in; fall back to the current select value.
+  const label = selectedClassLabel ?? document.getElementById("classSelect")?.value ?? "";
+  const key = footerKeyFromLabel(label);
+
+  const text =
+    (key && CLASS_FOOTER_COPY[key]) ??
+    CLASS_FOOTER_COPY._default;
+
+  // Show/hide & set text
+  target.style.display = text ? "" : "none";
+  target.textContent = text;
 }
 
 let _lastPracticeKey = null;
@@ -1636,6 +1664,8 @@ function init(){
   if (p1PctEl) { p1PctEl.value = ""; p1PctEl.placeholder = "%"; }
   if (p1IntEl) { p1IntEl.value = ""; p1IntEl.placeholder = "days"; }
 
+  const classSel = document.getElementById("classSelect");
+  
   // 3) Populate selects and force an initial selection
   populateClasses();
   populateMedicines();
@@ -1699,8 +1729,9 @@ function init(){
  document.getElementById("classSelect")?.addEventListener("change", updateBestPracticeBox);
   document.getElementById("classSelect")?.addEventListener("change", updateClassFooterLine);
 
-
+updateClassFooter(classSel?.value);
    updateBestPracticeBox();
+  updateClassFooter(e.target.value);
   
   // 7) Live gating + interval hints for patches
   if (typeof ensureIntervalHints === "function") ensureIntervalHints(); // create the hint <div>s once
