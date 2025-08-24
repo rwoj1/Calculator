@@ -184,5 +184,23 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
 
   /* footer clean & black */
   .footer-notes, .footer-notes * { color:#000 !important; background:#fff !important; border:0 !important; }
+    /* A) Square corners: remove rounded edges on step bubbles */
+  .plan-standard tbody.step-group tr:first-child td:first-child,
+  .plan-standard tbody.step-group tr:first-child td:last-child,
+  .plan-standard tbody.step-group tr:last-child  td:first-child,
+  .plan-standard tbody.step-group tr:last-child  td:last-child,
+  .plan-patch    tbody.step-group tr:first-child td:first-child,
+  .plan-patch    tbody.step-group tr:first-child td:last-child,
+  .plan-patch    tbody.step-group tr:last-child  td:first-child,
+  .plan-patch    tbody.step-group tr:last-child  td:last-child {
+    border-radius: 0 !important;   /* was 6pt */
+  }
+
+  /* B) Remove any outer page/card border & shadows */
+  #outputCard, .card, .container, main {
+    border: 0 !important;
+    box-shadow: none !important;
+    outline: none !important;
+  }
 }
 
