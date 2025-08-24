@@ -56,72 +56,66 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
 .print-only { display: none; }
 
 @media print {
-  /* Ensure background colors print (for zebra) */
   html, body, #outputCard, #outputCard * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* Print ONLY the chart; keep the rest off-page */
+  /* Print only the chart content */
   body.printing .container > * { display: none !important; }
-  body.printing #outputCard     { display: block !important; margin: 0 !important; }
+  body.printing #outputCard     { display: block !important; margin: 0 !important; background:#fff !important; color:#000 !important; }
 
-  /* Make the page white; kill any app chrome */
-  html, body, #outputCard { background: #fff !important; color: #000 !important; }
-  #outputCard::before, #outputCard::after,
-  .card::before, .card::after { content: none !important; display: none !important; }
-  .output-head { display: none !important; }   /* hide on-screen header in print */
-  .pill { background: #fff !important; border: 1px solid #000 !important; color: #000 !important; }
-
-  /* Show the injected print-only header */
+  /* Header block (print-only) */
   .print-only { display: block !important; }
-  .print-header      { margin: 0 0 10pt 0; }
-  .print-medline     { font-size: 14pt; font-weight: 600; margin-bottom: 2pt; }
-  .print-instruction { font-size: 10pt; margin-bottom: 2pt; }
-  .print-disclaimer  { font-size: 9pt; font-style: italic; margin-bottom: 8pt; }
+  .print-header { margin: 0 0 10pt 0; padding-bottom: 6pt; border-bottom: 1px solid #000; }
+  .print-medline { font-size: 14pt; font-weight: 600; margin: 0 0 2pt 0; }
+  .print-instruction { font-size: 10pt; margin: 0 0 2pt 0; }
+  .print-disclaimer { font-size: 9pt; font-style: italic; margin: 0 0 8pt 0; }
 
   /* Table shell */
   .table, .plan-table {
     width: 100% !important;
     border-collapse: collapse !important;
     border-spacing: 0 !important;
-    table-layout: auto !important;      /* don't force equal columns */
+    table-layout: auto !important;           /* columns can breathe */
     background: #fff !important;
   }
   .table thead { display: table-header-group; }
   .table tfoot { display: table-footer-group; }
 
-  /* Borders + default cell */
+  /* Borders + cell padding */
   .table th, .table td,
   .plan-table th, .plan-table td {
     border: 1px solid #000 !important;
     padding: 6pt 8pt !important;
-    background: #fff !important;        /* base before zebra */
+    background: #fff !important;
     color: #000 !important;
-    white-space: pre-line;               /* keep instructions linebreaks */
+    white-space: pre-line;
     font-size: 12px;
-  }
-  .table thead tr:last-child th { font-weight: 600 !important; }
-
-  /* Keep each step (tbody) together */
-  .plan-standard tbody,
-  .plan-patch    tbody {
-    break-inside: avoid !important;
-    page-break-inside: avoid !important;
+    vertical-align: middle;                  /* 4) middle align cells */
   }
 
-  /* ZEBRA: shade entire step group (both tablets & patches) */
+  /* Align time-of-day numeric columns center for neatness */
+  .table td:nth-child(4),
+  .table td:nth-child(5),
+  .table td:nth-child(6),
+  .table td:nth-child(7) {
+    text-align: center !important;
+  }
+
+  /* Zebra per step – works even if tbody splits, via [data-step] fallback */
   .plan-standard tbody.step-group.step-even td,
-  .plan-patch    tbody.step-group.step-even td {
-    background: #f2f2f2 !important;     /* gentle grey */
-  }
-  /* Fallback if .step-even missing: alternate by position */
-  .plan-standard tbody:not(.step-even):nth-of-type(even) td,
-  .plan-patch    tbody:not(.step-even):nth-of-type(even) td {
-    background: #f2f2f2 !important;
+  .plan-patch    tbody.step-group.step-even td { background: #f2f2f2 !important; }
+  /* Fallback: shade by row attribute if browser splits TBODY across pages */
+  #outputCard tr[data-step]:nth-of-type(even) td { background: #f2f2f2 !important; }
+
+  /* “Bubble” spacing between steps (white gap) */
+  .plan-standard tbody.step-group + tbody.step-group tr:first-child td,
+  .plan-patch    tbody.step-group + tbody.step-group tr:first-child td {
+    border-top: 6pt solid #fff !important;   /* creates visual gap */
   }
 
-  /* Rounded outer corners per step group (subtle) */
+  /* Round outer corners subtly */
   .plan-standard tbody.step-group tr:first-child td:first-child,
   .plan-patch    tbody.step-group tr:first-child td:first-child {
     border-top-left-radius: 6pt !important; background-clip: padding-box;
@@ -139,32 +133,8 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
     border-bottom-right-radius: 6pt !important; background-clip: padding-box;
   }
 
-  /* Footer block under the table */
-  .footer-notes, .footer-notes * {
-    color: #000 !important;
-    background: #fff !important;
-    border: 0 !important;
-  }
-
-   /* Soft rounding for every printed row */
-  .table tbody tr td:first-child,
-  .plan-table tbody tr td:first-child {
-    border-top-left-radius: 4pt !important;
-    border-bottom-left-radius: 4pt !important;
-    background-clip: padding-box;
-  }
-  .table tbody tr td:last-child,
-  .plan-table tbody tr td:last-child {
-    border-top-right-radius: 4pt !important;
-    border-bottom-right-radius: 4pt !important;
-    background-clip: padding-box;
-  }
-
-  /* STOP/REVIEW merged message cell */
-  .final-cell { font-weight: 700; background: #fff !important; }
-
-  /* Page box */
-  @page { size: A4 portrait; margin: 16mm 12mm; }
+  /* Footer clean & black */
+  .footer-notes, .footer-notes * { color:#000 !important; background:#fff !important; border:0 !important; }
 }
 
 
