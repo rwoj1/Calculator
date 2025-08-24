@@ -1727,9 +1727,9 @@ function init(){
   document.getElementById("printBtn")?.addEventListener("click", printOutputOnly);
   document.getElementById("savePdfBtn")?.addEventListener("click", saveOutputAsPdf);
  document.getElementById("classSelect")?.addEventListener("change", updateBestPracticeBox);
-  document.getElementById("classSelect")?.addEventListener("change", updateClassFooterLine);
+  document.getElementById("classSelect")?.addEventListener("change", updateClassFooter);
 
-  updateClassFooterLine();
+  updateClassFooter();
    updateBestPracticeBox();
   
   // 7) Live gating + interval hints for patches
