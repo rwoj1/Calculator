@@ -370,8 +370,6 @@ const CLASS_FOOTER_COPY = {
   bzra: 'Insert specific footer + disclaimer for Benzodiazpeines / Z Drugs',
   antipsychotic:'Insert specific footer + disclaimer for Antipsychotics',
   ppi: 'Insert specific footer + disclaimer for Proton Pump Inhibitors',
-  _default: 'Insert generic footer'"
-  }
 };
 
 // Map the visible class label to a key in CLASS_FOOTER_COPY
