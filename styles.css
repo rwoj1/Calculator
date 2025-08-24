@@ -241,20 +241,4 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
   .plan-standard thead tr {
     border: 0 !important;
   }
-    /* keep table header repeating on each page */
-  .plan-standard thead,
-  .plan-patch thead { display: table-header-group; }
-
-  /* strongest possible 'no split' for step groups and their rows */
-  .plan-standard tbody.step-group,
-  .plan-patch   tbody.step-group {
-    break-inside: avoid;
-    page-break-inside: avoid;
-  }
-  .plan-standard tbody.step-group tr,
-  .plan-patch   tbody.step-group tr {
-    break-inside: avoid;
-    page-break-inside: avoid;
-  }
 }
-
