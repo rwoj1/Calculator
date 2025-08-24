@@ -343,12 +343,43 @@ function printOutputOnly() {
     cleanupDecor();
   }, 100);
 }
+// Turn the main plan tables into one mini-table per step (so steps don't split)
+function splitTablesByStepForPdf(rootEl, { repeatHeader = false } = {}) {
+  rootEl.querySelectorAll("table.plan-standard, table.plan-patch").forEach(orig => {
+    const thead = orig.querySelector("thead");
+    const headHTML = thead ? thead.outerHTML : "";
+    const groups = Array.from(orig.querySelectorAll("tbody.step-group"));
+    if (!groups.length) return;
 
-// Save as PDF: export the chart only, with header on later pages and no split steps
+    const frag = document.createDocumentFragment();
+
+    groups.forEach((tb, idx) => {
+      const mini = document.createElement("table");
+      mini.className = (orig.className + " step-table").trim();
+
+      // Add THEAD only on the first mini-table to match your Print look
+      if (repeatHeader || idx === 0) {
+        if (headHTML) mini.insertAdjacentHTML("afterbegin", headHTML);
+      }
+
+      const body = document.createElement("tbody");
+      body.className = tb.className; // keep zebra classes, etc.
+      Array.from(tb.children).forEach(tr => body.appendChild(tr.cloneNode(true)));
+
+      mini.appendChild(body);
+      frag.appendChild(mini);
+    });
+
+    // Replace original with the list of mini-tables
+    orig.replaceWith(frag);
+  });
+}
+
+// ===== Save only the rendered chart as a PDF (no screen UI captured) =====
 async function saveOutputAsPdf() {
-  // Same safety gate as Print
+  // Safety gate (keep your existing flag)
   if (window._dirtySinceGenerate) {
-    const msg = "Inputs changed — please Generate Chart before saving.";
+    const msg = "Inputs changed — please click Generate Chart before saving.";
     if (typeof showToast === "function") showToast(msg); else alert(msg);
     return;
   }
@@ -359,41 +390,37 @@ async function saveOutputAsPdf() {
     return;
   }
 
-  // --- 1) Clone just the output card we want to export
+  // --- Clone only the output card (so we export just the chart) ---
   const clone = card.cloneNode(true);
 
-  // --- 2) Inject header + special instruction + disclaimer at top of the clone
-  (function injectHeader(root) {
-    // Remove any previously injected header
-    root.querySelectorAll(".print-only").forEach(n => n.remove());
+  // Inject a one-line disclaimer at top of the clone
+  const disclaimer = document.createElement("div");
+  disclaimer.className = "print-disclaimer";
+  disclaimer.textContent = "This is a guide only – always follow the advice of your healthcare professional.";
+  clone.prepend(disclaimer);
 
-    const med = document.getElementById("hdrMedicine")?.textContent || "Medicine";
-    const special = document.getElementById("hdrSpecial")?.textContent || "";
-    const hdr = document.createElement("div");
-    hdr.className = "print-only print-header";
-    hdr.innerHTML = `
-      <div class="print-medline">${med}</div>
-      ${special ? `<div class="print-instruction">${special}</div>` : ``}
-      <div class="print-disclaimer">This is a guide only – always follow the advice of your healthcare professional.</div>
-    `;
-    root.prepend(hdr);
-  })(clone);
+  // Convert the big table into per-step tables so a step won't split across pages
+  splitTablesByStepForPdf(clone, { repeatHeader: false }); // match your Print look (header once)
 
-  // --- 3) Ensure later pages still show the column titles and avoid splitting a step
-  splitTablesByStepForPdf(clone);
-
-  // --- 4) Build an isolated HTML document for html2pdf, with the same print CSS + a few PDF-only tweaks
+  // --- Build a minimal print-like document for html2pdf ---
   const extraCss = `
     <style>
-      /* Make html2pdf honor colors and keep layout tidy */
-      html, body { background:#fff; color:#000; }
-      .print-only { display:block !important; }
-      /* Repeat header row per step (we create separate tables) */
-      .step-table thead { display: table-header-group; }
-      /* Do not split a step across pages */
+      html, body { background:#fff; color:#000; margin:0; }
+      * { box-sizing: border-box; }
+      /* Make sure header inside the card shows */
+      .output-head { display:block !important; color:#000 !important; }
+      .pill { border:1px solid #000; color:#000; }
+      /* Table look */
+      table.table { width:100%; border-collapse: collapse; table-layout: fixed; }
+      thead th { text-align:left; font-weight:600; padding:8px 10px; border-bottom:1px solid #000; color:#000; }
+      td, th { padding:8px 10px; vertical-align: middle; color:#000; }
+      td.instructions-pre { white-space: pre-wrap; }
+      /* Keep each step together */
       .step-table { page-break-inside: avoid; break-inside: avoid; margin: 0 0 10pt 0; }
-      /* Avoid splitting a header from its first row */
-      .step-table thead, .step-table tbody { page-break-inside: avoid; break-inside: avoid; }
+      .step-table thead { display: table-header-group; } /* header on first mini-table only since we add thead once */
+      .step-table tbody { page-break-inside: avoid; break-inside: avoid; }
+      .footer-notes { margin-top: 10pt; font-size: 10pt; color:#000; }
+      .footer-notes strong { color:#000; }
     </style>
   `;
 
@@ -401,50 +428,48 @@ async function saveOutputAsPdf() {
   <html>
     <head>
       <meta charset="utf-8">
-      ${typeof _printCSS === "function" ? _printCSS() : ""} 
+      ${typeof _printCSS === "function" ? _printCSS() : ""}  <!-- reuse your print palette -->
       ${extraCss}
     </head>
     <body>${clone.outerHTML}</body>
   </html>`;
 
-  // --- 5) Render via an offscreen iframe so we export only this content
+  // --- Render that HTML in an off-screen iframe and export via html2pdf ---
   const blob = new Blob([html], { type: "text/html" });
   const url  = URL.createObjectURL(blob);
   const iframe = document.createElement("iframe");
   iframe.style.position = "fixed";
-  iframe.style.right = "100%";
   iframe.style.width = "0"; iframe.style.height = "0";
+  iframe.style.right = "100%";
   document.body.appendChild(iframe);
 
   const filename = (() => {
-    const t = (document.getElementById("hdrMedicine")?.textContent || "Deprescribing Plan")
-      .replace(/^Medicine:\s*/i, "").replace(/\s+/g, "_");
+    const title = (document.getElementById("hdrMedicine")?.textContent || "Deprescribing Taper Plan")
+      .replace(/^Medicine:\s*/i,"").replace(/\s+/g,"_");
     const d = new Date();
-    return `${t}_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}.pdf`;
+    return `${title}_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}.pdf`;
   })();
 
   const opts = {
     filename,
     pagebreak: { mode: ['css','legacy'], avoid: ['.step-table'] },
-    html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+    html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 1200 },
     jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' },
-    margin: [45, 34, 45, 34]  // ~16mm top/btm, ~12mm sides
+    margin: [45, 34, 45, 34]   // ~16mm top/bottom, ~12mm sides
   };
 
   try {
-    await new Promise(res => {
-      iframe.onload = res;
-      iframe.src = url;
-    });
+    await new Promise(res => { iframe.onload = res; iframe.src = url; });
     await html2pdf().set(opts).from(iframe.contentDocument.body).save();
   } catch (e) {
     console.error("saveOutputAsPdf error:", e);
-    alert("Sorry — couldn’t create the PDF. See console for details.");
+    alert("Sorry—couldn’t create the PDF. See console for details.");
   } finally {
     URL.revokeObjectURL(url);
     iframe.remove();
   }
 }
+
 
 /* ---------- helper: split the main table into per-step tables so each has its own header ---------- */
 function splitTablesByStepForPdf(root) {
