@@ -313,65 +313,49 @@ function patchSignature(list) {
   const arr = Array.isArray(list) ? list.slice().map(Number).sort((a,b)=>a-b) : [];
   return arr.join("+"); // "" if no patches
 }
-// --- Save as PDF (matches Print layout) ---
-async function saveOutputAsPdf() {
-  // Safety gate: require a fresh Generate
-  if (window._dirtySinceGenerate) {
-    showToast("Please click Generate Chart, then Save as PDF.");
+
+// Save as PDF (export only the rendered output card, same styling as Print)
+function saveOutputAsPdf() {
+  if (_dirtySinceGenerate) {
+    showToast("Inputs changed—please Generate to update the plan before printing or saving.");
     return;
   }
 
   const card = document.getElementById("outputCard");
   if (!card) return;
 
-  // Apply the same decorations you use for printing
-  const cleanup = (typeof preparePrintDecorations === "function")
-    ? preparePrintDecorations()
-    : () => {};
+  // Build a minimal HTML doc that uses the same print CSS
+  const html = `<!doctype html><html><head><meta charset="utf-8">${_printCSS()}</head><body>${card.outerHTML}</body></html>`;
 
-  try {
-    // Clone only the output card so we export exactly the print content
-    const clone = card.cloneNode(true);
+  // Render that HTML via an offscreen iframe so html2pdf gets clean DOM
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const iframe = document.createElement("iframe");
+  iframe.style.display = "none";
+  document.body.appendChild(iframe);
 
-    // Ensure print-only bits are visible in the clone
-    clone.querySelectorAll(".print-only").forEach(el => { el.style.display = "block"; });
-
-    // Wrap in a white container so the PDF background is clean
-    const wrapper = document.createElement("div");
-    wrapper.style.background = "#ffffff";
-    wrapper.style.color = "#000000";
-    wrapper.style.padding = "16px";
-    wrapper.style.maxWidth = "100%";
-    wrapper.appendChild(clone);
-
-    // Build a nice filename e.g. "Morphine_SR_tablet_2025-08-24.pdf"
-    const makeFileName = () => {
-      const title = (document.getElementById("hdrMedicine")?.textContent || "Deprescribing Plan")
-        .replace(/^Medicine:\s*/i, "")
-        .replace(/\s+/g, "_");
-      const d = new Date();
-      const date = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-      return `${title}_${date}.pdf`;
-    };
-
-    // html2pdf options (A4 portrait; crisp capture)
+  iframe.onload = () => {
     const opt = {
-      margin:       [10, 10, 10, 10],
-      filename:     makeFileName(),
-      image:        { type: "jpeg", quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
-      jsPDF:        { unit: "mm", format: "a4", orientation: "portrait" }
+      margin: [12, 12, 12, 12],
+      filename: "Deprescribing Taper Planner.pdf",
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }
     };
 
-    await html2pdf().set(opt).from(wrapper).save();
-  } catch (e) {
-    console.error("saveOutputAsPdf error:", e);
-    alert("Sorry—couldn’t create the PDF. See console for details.");
-  } finally {
-    // Put the DOM back how it was for on-screen viewing
-    cleanup && cleanup();
-  }
+    html2pdf().set(opt).from(iframe.contentDocument.body).save()
+      .then(() => {
+        URL.revokeObjectURL(url);
+        iframe.remove();
+      })
+      .catch(() => {
+        URL.revokeObjectURL(url);
+        iframe.remove();
+      });
+  };
+
+  iframe.src = url;
 }
+
 
 // --- Suggested practice copy (exact wording from your doc) ---
 const SUGGESTED_PRACTICE = {
@@ -1640,28 +1624,6 @@ function printOutputOnly() {
     document.body.classList.remove("printing");
     cleanupDecor();
   }, 100);
-}
-
-function saveOutputAsPdf() {
-  const card = document.getElementById("outputCard");
-  if (!card) return;
-
-  const opt = {
-    margin:       [10, 10, 10, 10],
-    filename:     'deprescribing-plan.pdf',
-    image:        { type: 'jpeg', quality: 0.98 },
-    html2canvas:  { scale: 2, useCORS: true },
-    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-    pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
-  };
-
-  // Temporarily switch to print layout for consistent PDF styling
-  document.body.classList.add("printing");
-  html2pdf().set(opt).from(card).save().then(() => {
-    document.body.classList.remove("printing");
-  }).catch(() => {
-    document.body.classList.remove("printing");
-  });
 }
 
 /* =================== Build & init =================== */
