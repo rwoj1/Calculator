@@ -190,7 +190,7 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
     vertical-align: middle !important;
   }
 }
-@media print {
+
   /* Center and middle-align the time-of-day columns */
   .plan-standard td.col-am,
   .plan-standard td.col-mid,
