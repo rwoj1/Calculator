@@ -46,52 +46,47 @@
       <div id="bestPracticeBox"></div>
     </section>
 
-    <section class="card">
-      <h2>Taper controls</h2>
+<section class="card">
+  <h2>Taper controls</h2>
 
-      <div class="grid compact">
-        <!-- Phase 1 -->
-        <div>
-          <h3>Phase 1</h3>
-          <label>Reduce by (%)
-            <input id="p1Percent" type="number" min="1" max="100" placeholder="%" />
-          </label>
-          <label>Every (days)
-            <input id="p1Interval" type="number" min="1" placeholder="days" />
-          </label>
-        </div>
+  <div class="taper-block">
+    <h3>Phase 1</h3>
+    <div class="taper-inline">
+      <label>Reduce by (%)
+        <input id="p1Percent" type="number" min="1" max="100" placeholder="%" />
+      </label>
+      <label>Every (days)
+        <input id="p1Interval" type="number" min="1" placeholder="days" />
+      </label>
+    </div>
 
-        <!-- Phase 2 (optional) -->
-<div>
-  <h3>Phase 2 <span class="muted">(optional)</span></h3>
+    <h3>Phase 2 <span class="muted">(optional)</span></h3>
+    <div class="taper-inline">
+      <label>Start Phase 2 from
+        <input id="p2StartDate" class="datepick" placeholder="DD/MM/YYYY" />
+      </label>
+      <label>Reduce by (%)
+        <input id="p2Percent" type="number" min="1" max="100" placeholder="%" />
+      </label>
+      <label>Every (days)
+        <input id="p2Interval" type="number" min="1" placeholder="days" />
+      </label>
+    </div>
 
-  <!-- Moved first -->
-  <label>Start Phase 2 from
-    <input id="p2StartDate" class="datepick" placeholder="DD/MM/YYYY" />
-  </label>
+    <p class="hint">
+      If Phase 2 is partially complete or empty, only a single-phase taper will generate.
+      Hard limit: 3 months (or review date, if earlier).
+    </p>
+  </div>
 
-  <label>Reduce by (%)
-    <input id="p2Percent" type="number" min="1" max="100" placeholder="%" />
-  </label>
-  <label>Every (days)
-    <input id="p2Interval" type="number" min="1" placeholder="days" />
-  </label>
+  <div class="actions">
+    <button id="generateBtn" type="button">Generate Chart</button>
+    <button id="printBtn" type="button" class="secondary">Print</button>
+    <button id="savePdfBtn" type="button" class="secondary">Save as PDF…</button>
+    <button id="resetBtn" type="button" class="ghost">Reset</button>
+  </div>
+</section>
 
-  <p class="hint">
-    If Phase 2 is partially complete or empty, only a single-phase taper will generate.
-    Hard limit: 3 months (or review date, if earlier).
-  </p>
-</div>
-        </div>
-      </div>
-
-      <div class="actions">
-        <button id="generateBtn" type="button">Generate Chart</button>
-        <button id="printBtn" type="button" class="secondary">Print</button>
-        <button id="savePdfBtn" type="button" class="secondary">Save as PDF</button>
-        <button id="resetBtn" type="button" class="ghost">Reset</button>
-      </div>
-    </section>
 
  <section id="outputCard" class="card output">
   <div class="output-head">
