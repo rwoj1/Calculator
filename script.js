@@ -635,7 +635,7 @@ function renderStandardTable(stepRows){
 
       const tdInstr = document.createElement("td");
       tdInstr.className = "instructions-pre";
-      tdInstr.innerHTML = (line.instr || "").replace(/\n/g, "<br>");
+      tdInstr.textContent = (line.instr || "");
 
       const tdM  = document.createElement("td"); tdM.textContent  = line.am  || "";
       const tdMi = document.createElement("td"); tdMi.textContent = line.mid || "";
