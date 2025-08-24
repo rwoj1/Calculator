@@ -52,96 +52,99 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
 /* ======================================
    PRINT-ONLY STYLES (table-only output)
    ====================================== */
-@media print {
+/* Print-only visibility toggle (used by JS) */
+.print-only { display: none; }
 
-  /* Make sure printers keep background colors (for zebra) */
+@media print {
+  /* Ensure background colors print (for zebra) */
   html, body, #outputCard, #outputCard * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* Hide everything except the output card */
-  body * { visibility: hidden !important; }
-  #outputCard, #outputCard * { visibility: visible !important; }
-  #outputCard { position: relative !important; left: 0 !important; top: 0 !important; }
+  /* Print ONLY the chart; keep the rest off-page */
+  body.printing .container > * { display: none !important; }
+  body.printing #outputCard     { display: block !important; margin: 0 !important; }
 
-  /* Hard reset: black text, white background */
-  body, #outputCard {
-    color: #000 !important;
-    background: #fff !important;
-  }
+  /* Make the page white; kill any app chrome */
+  html, body, #outputCard { background: #fff !important; color: #000 !important; }
+  #outputCard::before, #outputCard::after,
+  .card::before, .card::after { content: none !important; display: none !important; }
+  .output-head { display: none !important; }   /* hide on-screen header in print */
+  .pill { background: #fff !important; border: 1px solid #000 !important; color: #000 !important; }
 
-  /* Header block (Medicine line, special instruction, disclaimer) */
-  #outputCard .print-header { margin: 0 0 10pt 0; }
-  #outputCard .print-medline {
-    font-size: 14pt; font-weight: 600; margin-bottom: 2pt;
-  }
-  #outputCard .print-instruction {
-    font-size: 10pt; margin-bottom: 2pt;
-  }
-  #outputCard .print-disclaimer {
-    font-size: 9pt; font-style: italic; margin-bottom: 8pt;
-  }
+  /* Show the injected print-only header */
+  .print-only { display: block !important; }
+  .print-header      { margin: 0 0 10pt 0; }
+  .print-medline     { font-size: 14pt; font-weight: 600; margin-bottom: 2pt; }
+  .print-instruction { font-size: 10pt; margin-bottom: 2pt; }
+  .print-disclaimer  { font-size: 9pt; font-style: italic; margin-bottom: 8pt; }
 
-  /* Base table look (standard + patch) */
-  .plan-table, .plan-standard, .plan-patch {
+  /* Table shell */
+  .table, .plan-table {
     width: 100% !important;
     border-collapse: collapse !important;
-    table-layout: fixed !important;
+    border-spacing: 0 !important;
+    table-layout: auto !important;      /* don't force equal columns */
     background: #fff !important;
   }
+  .table thead { display: table-header-group; }
+  .table tfoot { display: table-footer-group; }
 
-  .plan-table thead th,
-  .plan-table tbody td {
+  /* Borders + default cell */
+  .table th, .table td,
+  .plan-table th, .plan-table td {
     border: 1px solid #000 !important;
     padding: 6pt 8pt !important;
-    background: #fff !important;   /* default row */
+    background: #fff !important;        /* base before zebra */
+    color: #000 !important;
+    white-space: pre-line;               /* keep instructions linebreaks */
+    font-size: 12px;
   }
+  .table thead tr:last-child th { font-weight: 600 !important; }
 
-  /* Column header row */
-  .plan-table thead tr:last-child th {
-    font-weight: 600 !important;
-  }
-
-  /* Zebra per *step* (one <tbody> per step in your renderers) */
-  .plan-standard tbody.step-group.step-even td,
-  .plan-patch    tbody.step-group.step-even td {
-    background: #f2f2f2 !important;   /* gentle grey for whole step */
-  }
-
-  /* Avoid page breaks inside a step */
-  .plan-standard tbody.step-group,
-  .plan-patch    tbody.step-group {
+  /* Keep each step (tbody) together */
+  .plan-standard tbody,
+  .plan-patch    tbody {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
 
-  /* Keep merged Date column tidy */
-  .plan-standard tbody.step-group td:first-child,
-  .plan-patch    tbody.step-group td:first-child {
-    vertical-align: top !important;
-    white-space: nowrap !important;
+  /* ZEBRA: shade entire step group (both tablets & patches) */
+  .plan-standard tbody.step-group.step-even td,
+  .plan-patch    tbody.step-group.step-even td {
+    background: #f2f2f2 !important;     /* gentle grey */
+  }
+  /* Fallback if .step-even missing: alternate by position */
+  .plan-standard tbody:not(.step-even):nth-of-type(even) td,
+  .plan-patch    tbody:not(.step-even):nth-of-type(even) td {
+    background: #f2f2f2 !important;
   }
 
-  /* Remove any app “pill” / card chrome in print */
-  .output-head, .pill, .card, .card * {
-    background: transparent !important;
-    box-shadow: none !important;
-    border: 0 !important;
-    color: #000 !important;
+  /* Rounded outer corners per step group (subtle) */
+  .plan-standard tbody.step-group tr:first-child td:first-child,
+  .plan-patch    tbody.step-group tr:first-child td:first-child {
+    border-top-left-radius: 6pt !important; background-clip: padding-box;
+  }
+  .plan-standard tbody.step-group tr:first-child td:last-child,
+  .plan-patch    tbody.step-group tr:first-child td:last-child {
+    border-top-right-radius: 6pt !important; background-clip: padding-box;
+  }
+  .plan-standard tbody.step-group tr:last-child td:first-child,
+  .plan-patch    tbody.step-group tr:last-child td:first-child {
+    border-bottom-left-radius: 6pt !important; background-clip: padding-box;
+  }
+  .plan-standard tbody.step-group tr:last-child td:last-child,
+  .plan-patch    tbody.step-group tr:last-child td:last-child {
+    border-bottom-right-radius: 6pt !important; background-clip: padding-box;
   }
 
-  /* Optional: slightly round the whole step “bubble” without changing cell borders */
-  .plan-standard tbody.step-group tr:first-child td,
-  .plan-patch    tbody.step-group tr:first-child td {
-    border-top-left-radius: 6pt !important;
-    border-top-right-radius: 6pt !important;
-  }
-  .plan-standard tbody.step-group tr:last-child td,
-  .plan-patch    tbody.step-group tr:last-child td {
-    border-bottom-left-radius: 6pt !important;
-    border-bottom-right-radius: 6pt !important;
-  }
+  /* STOP/REVIEW merged message cell */
+  .final-cell { font-weight: 700; background: #fff !important; }
+
+  /* Page box */
+  @page { size: A4 portrait; margin: 16mm 12mm; }
 }
+
 
 
