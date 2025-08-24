@@ -1598,34 +1598,6 @@ const e = $("expBenefits");     if (e) e.textContent = exp;
 const w = $("withdrawalInfo");  if (w) w.textContent = wdr;
 }
 
-/* ===== Unified print/PDF styling + guards ===== */
-function _printCSS(){
-  return `<style>
-    body{font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#000;background:#fff;margin:16px;}
-    table{width:100%;border-collapse:separate;border-spacing:0 6px}
-    thead th{text-align:left;padding:8px;border-bottom:1px solid #ddd}
-    tbody td{border:1px solid #ddd;padding:8px;vertical-align:top}
-    .instructions-pre{white-space:pre-line}
-    @page{size:A4;margin:12mm}
-  </style>`;
-}
-function printOutputOnly() {
-  const tableExists = document.querySelector("#scheduleBlock table, #patchBlock table");
-  if (!tableExists) { alert("Please generate a chart first."); return; }
-
-  document.body.classList.add("printing");
-
-  // Add print-only header + layout hints; get cleanup
-  const cleanupDecor = preparePrintDecorations();
-
-  window.print();
-
-  setTimeout(() => {
-    document.body.classList.remove("printing");
-    cleanupDecor();
-  }, 100);
-}
-
 /* =================== Build & init =================== */
 
 function buildPlan(){
