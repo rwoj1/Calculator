@@ -31,6 +31,19 @@ function snapIntervalToRule(input, rule){
   const snapped = Math.max(rule, Math.ceil(v / rule) * rule);
   if (snapped !== v) input.value = snapped;
 }
+function trimMg(n) {
+  const v = Math.round(Number(n) * 100) / 100;
+  return String(v).replace(/\.0+$/,'').replace(/(\.\d*[1-9])0+$/, '$1');
+}
+
+function formSuffixWithSR(formLabel) {
+  const f = String(formLabel || '').toLowerCase();
+  if (f.includes('patch'))   return 'patch';
+  if (f.includes('sr') && f.includes('tablet')) return 'SR Tablet';
+  if (f.includes('tablet'))  return 'Tablet';
+  if (f.includes('capsule')) return 'Capsule';
+  return 'Tablet'; // safe default for tablet-like forms
+}
 
 // Apply step/min and static hint text for patch intervals
 function applyPatchIntervalAttributes(){
@@ -1548,20 +1561,31 @@ function td(text, cls){ const el=document.createElement("td"); if(cls) el.classN
 
 /* Fractional grouping for BZRA/AP-IR */
 function perStrengthRowsFractional(r){
-  const baseAsc = strengthsForSelected().map(parseMgFromStrength).filter(v=>v>0).sort((a,b)=>a-b);
+  const baseAsc  = strengthsForSelected().map(parseMgFromStrength).filter(v=>v>0).sort((a,b)=>a-b);
   const baseDesc = baseAsc.slice().sort((a,b)=>b-a);
   const split = canSplitTablets(r.cls, r.form, r.med);
-  const byBase = {}; const ensure = (b)=>{ byBase[b]=byBase[b]||{AM:0,MID:0,DIN:0,PM:0}; return byBase[b]; };
+  const byBase = {}; 
+  const ensure = (b)=>{ byBase[b]=byBase[b]||{AM:0,MID:0,DIN:0,PM:0}; return byBase[b]; };
 
+  // bucket pieces -> quarters/halves/whole counts per base strength
   ["AM","MID","DIN","PM"].forEach(slot=>{
     Object.entries(r.packs[slot]||{}).forEach(([pieceStr, count])=>{
       const piece=+pieceStr; let mapped=false;
+
       for(const b of baseDesc){ if(Math.abs(piece - b) < 1e-6){ ensure(b)[slot] += 4*count; mapped=true; break; } }
       if(mapped) return;
-      if(split.half){ for(const b of baseDesc){ if(Math.abs(piece - b/2) < 1e-6){ ensure(b)[slot] += 2*count; mapped=true; break; } } }
+
+      if(split.half){
+        for(const b of baseDesc){ if(Math.abs(piece - b/2) < 1e-6){ ensure(b)[slot] += 2*count; mapped=true; break; } }
+      }
       if(mapped) return;
-      if(split.quarter){ for(const b of baseDesc){ if(Math.abs(piece - b/4) < 1e-6){ ensure(b)[slot] += 1*count; mapped=true; break; } } }
+
+      if(split.quarter){
+        for(const b of baseDesc){ if(Math.abs(piece - b/4) < 1e-6){ ensure(b)[slot] += 1*count; mapped=true; break; } }
+      }
       if(mapped) return;
+
+      // last-resort approximation to the smallest base
       const b0 = baseDesc[0];
       const qApprox = Math.max(1, Math.round(piece/(b0/4)));
       ensure(b0)[slot] += qApprox * count;
@@ -1571,11 +1595,15 @@ function perStrengthRowsFractional(r){
   const rows=[];
   const mkCell = (q)=> q ? qToCell(q) : "";
 
+  // Order: prefer any AM presence first, then by mg desc
   const bases = Object.keys(byBase).map(parseFloat).sort((a,b)=>{
     const aHasAM = byBase[a].AM>0, bHasAM = byBase[b].AM>0;
     if(aHasAM!==bHasAM) return aHasAM ? -1 : 1;
     return b-a;
   });
+
+  const medName = String(r.med || '');
+  const suffix  = formSuffixWithSR(r.form);
 
   bases.forEach(b=>{
     const q=byBase[b], lines=[];
@@ -1583,12 +1611,26 @@ function perStrengthRowsFractional(r){
     if(q.MID) lines.push(`Take ${tabletsPhraseDigits(q.MID)} at midday`);
     if(q.DIN) lines.push(`Take ${tabletsPhraseDigits(q.DIN)} at dinner`);
     if(q.PM)  lines.push(`Take ${tabletsPhraseDigits(q.PM)} at night`);
+
+    // Build the Strength label
+    let strengthText = '';
+    const isOxyNal = /\boxycodone\b/i.test(medName) && /\bnaloxone\b/i.test(medName);
+    if (isOxyNal) {
+      // Follow oxycodone component for steps; naloxone is 1/2 of oxy
+      const oxy = b;
+      const nal = b / 2;
+      strengthText = `Oxycodone ${trimMg(oxy)} mg + naloxone ${trimMg(nal)} mg ${suffix}`;
+    } else {
+      strengthText = `${medName} ${trimMg(b)} mg ${suffix}`;
+    }
+
     rows.push({
-      strengthLabel: `${r.med} ${b} mg ${/Tablet$/i.test(r.form)?"Tablet":formLabelCapsSR(r.form)}`,
+      strengthLabel: strengthText,
       instructions: lines.join("\n"),
       am: mkCell(q.AM), mid: mkCell(q.MID), din: mkCell(q.DIN), pm: mkCell(q.PM)
     });
   });
+
   return rows;
 }
 
