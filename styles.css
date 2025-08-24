@@ -43,6 +43,28 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
   .grid.compact{grid-template-columns:1fr}
   .actions{flex-direction:column;align-items:flex-start}
 }
+/* Taper controls: one-line "Label: [input]" pairs */
+.taper-row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:16px 24px;          /* row gap / column gap */
+  align-items:center;
+  margin-bottom:8px;
+}
+.inline-label{
+  display:inline-flex;    /* "Text: [input]" on one line */
+  align-items:center;
+  gap:8px;
+  white-space:nowrap;     /* keep label text on one line on wide screens */
+}
+.inline-label input[type="number"]{ width:110px; }
+.inline-label .datepick{ width:170px; }
+
+/* stack pairs nicely on small screens */
+@media (max-width:700px){
+  .inline-label{ white-space:normal; }
+  .taper-row{ gap:12px 16px; }
+}
 
 
 /* ==============================
@@ -264,45 +286,5 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
 .table thead { display: table-header-group !important; }
 
 }
-/* --- Taper controls: inline label + input pairs --- */
-.taper-block h3{
-  margin: 12px 0 8px;
-}
 
-.taper-inline{
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px 28px;          /* row gap / column gap */
-  align-items: center;
-}
-
-/* Make each label a single inline row: "Text  [input]" */
-.taper-inline label{
-  display: inline-flex;    /* override any block label defaults */
-  align-items: center;
-  gap: 8px;                /* space between text and input */
-  white-space: nowrap;     /* keep the label text on one line */
-  margin: 0;
-  flex: 0 0 auto;          /* don't stretch */
-}
-
-/* Size the inputs so the pairs align nicely */
-.taper-inline input[type="number"]{
-  width: 110px;            /* % and days */
-}
-
-.taper-inline .datepick{
-  width: 170px;            /* Start Phase 2 from */
-}
-
-/* Narrow screens: stack pairs cleanly */
-@media (max-width: 700px){
-  .taper-inline{
-    gap: 12px 16px;
-  }
-  .taper-inline label{
-    flex-basis: 100%;
-    white-space: normal;   /* allow wrapping on small screens */
-  }
-}
 
