@@ -385,6 +385,64 @@ const SUGGESTED_PRACTICE = {
 [INSERT ALGORITHM]  [INSERT SUMMARY OF EVIDENCE]   [INSERT GUIDE TO RULESET]`,
 };
 
+// ---- Class-specific footer copy ----
+const CLASS_FOOTER_COPY = {
+  opioids: {
+    benefits:
+      "May improve alertness, constipation, falls risk and overall function.",
+    withdrawal:
+      "Short-term flu-like symptoms, pain flare, irritability or insomnia can occur. Slow or pause taper if needed."
+  },
+  bzra: {
+    benefits:
+      "Improved daytime alertness, memory and coordination; reduced falls, crashes, and dependence risk.",
+    withdrawal:
+      "Rebound insomnia/anxiety, irritability, tremor may occur. Prefer slower taper; avoid alcohol/other sedatives."
+  },
+  antipsychotic: {
+    benefits:
+      "Lower sedation, metabolic and extrapyramidal adverse effects; improved daytime function where appropriate.",
+    withdrawal:
+      "Monitor for symptom return, insomnia or agitation. Taper gradually with close clinical review."
+  },
+  ppi: {
+    benefits:
+      "Lower long-term pill burden; may reduce risks tied to prolonged acid suppression in some patients.",
+    withdrawal:
+      "Transient rebound acid symptoms may occur. Consider on-demand therapy or non-drug strategies."
+  },
+  _default: {
+    benefits: "Potential to reduce adverse effects and pill burden.",
+    withdrawal: "If troublesome symptoms occur, pause or slow the taper and review."
+  }
+};
+
+// Map the visible class label to a key in CLASS_FOOTER_COPY
+function mapClassToKey(label){
+  const s = String(label || "").toLowerCase();
+  if (s.includes("benzodiazep")) return "bzra";
+  if (s.includes("z-drug") || s.includes("z drug")) return "bzra";
+  if (s.includes("antipsych")) return "antipsychotic";
+  if (s.includes("proton") || s.includes("ppi")) return "ppi";
+  if (s.includes("opioid") || s.includes("fentanyl") || s.includes("buprenorphine")) return "opioids";
+  return null;
+}
+
+// Write the footer spans based on the selected class
+function updateClassFooter(){
+  const clsLabel = document.getElementById("classSelect")?.value || "";
+  const key = mapClassToKey(clsLabel) || "_default";
+  const copy = CLASS_FOOTER_COPY[key] || CLASS_FOOTER_COPY._default;
+
+  const ben = document.getElementById("expBenefits");
+  const wd  = document.getElementById("withdrawalInfo");
+
+  if (ben) ben.textContent = copy.benefits || "";
+  if (wd)  wd.textContent  = copy.withdrawal || "";
+}
+
+
+
 // Normalize the dropdown label to one of our keys above
 function mapClassToKey(label) {
   const s = String(label || "").toLowerCase();
