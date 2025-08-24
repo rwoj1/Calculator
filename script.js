@@ -313,6 +313,65 @@ function patchSignature(list) {
   const arr = Array.isArray(list) ? list.slice().map(Number).sort((a,b)=>a-b) : [];
   return arr.join("+"); // "" if no patches
 }
+// --- Save as PDF (matches Print layout) ---
+async function saveOutputAsPdf() {
+  // Safety gate: require a fresh Generate
+  if (window._dirtySinceGenerate) {
+    showToast("Please click Generate Chart, then Save as PDF.");
+    return;
+  }
+
+  const card = document.getElementById("outputCard");
+  if (!card) return;
+
+  // Apply the same decorations you use for printing
+  const cleanup = (typeof preparePrintDecorations === "function")
+    ? preparePrintDecorations()
+    : () => {};
+
+  try {
+    // Clone only the output card so we export exactly the print content
+    const clone = card.cloneNode(true);
+
+    // Ensure print-only bits are visible in the clone
+    clone.querySelectorAll(".print-only").forEach(el => { el.style.display = "block"; });
+
+    // Wrap in a white container so the PDF background is clean
+    const wrapper = document.createElement("div");
+    wrapper.style.background = "#ffffff";
+    wrapper.style.color = "#000000";
+    wrapper.style.padding = "16px";
+    wrapper.style.maxWidth = "100%";
+    wrapper.appendChild(clone);
+
+    // Build a nice filename e.g. "Morphine_SR_tablet_2025-08-24.pdf"
+    const makeFileName = () => {
+      const title = (document.getElementById("hdrMedicine")?.textContent || "Deprescribing Plan")
+        .replace(/^Medicine:\s*/i, "")
+        .replace(/\s+/g, "_");
+      const d = new Date();
+      const date = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+      return `${title}_${date}.pdf`;
+    };
+
+    // html2pdf options (A4 portrait; crisp capture)
+    const opt = {
+      margin:       [10, 10, 10, 10],
+      filename:     makeFileName(),
+      image:        { type: "jpeg", quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
+      jsPDF:        { unit: "mm", format: "a4", orientation: "portrait" }
+    };
+
+    await html2pdf().set(opt).from(wrapper).save();
+  } catch (e) {
+    console.error("saveOutputAsPdf error:", e);
+    alert("Sorry—couldn’t create the PDF. See console for details.");
+  } finally {
+    // Put the DOM back how it was for on-screen viewing
+    cleanup && cleanup();
+  }
+}
 
 // --- Suggested practice copy (exact wording from your doc) ---
 const SUGGESTED_PRACTICE = {
@@ -320,19 +379,19 @@ const SUGGESTED_PRACTICE = {
 • < 3 months use: reduce the dose by 10% to 25% every week
 • >3 months use: reduce the dose by 10% to 25% every 4 weeks
 • Long-term opioid use (e.g. 1> year) or on high doses: slower tapering and frequent monitoring
-[INSERT ALGORITHM][INSERT SUMMARY OF EVIDENCE] [INSERT GUIDE TO RULESET]`,
+[INSERT ALGORITHM]  [INSERT SUMMARY OF EVIDENCE] [INSERT GUIDE TO RULESET]`,
 
-  bzra: `Taper slowly with the patient; e.g., 25% every 2 weeks.
+  bzra: `• Taper slowly with the patient; e.g., 25% every 2 weeks.
 • Near end: consider 12.5% reductions and/or planned drug-free days.
-[INSERT ALGORITHM][INSERT SUMMARY OF EVIDENCE] [INSERT GUIDE TO RULESET]`,
+[INSERT ALGORITHM]  [INSERT SUMMARY OF EVIDENCE] [INSERT GUIDE TO RULESET]`,
 
-  antipsychotic: `Reduce ~25–50% every 1–2 weeks with close monitoring.
+  antipsychotic: `• Reduce ~25–50% every 1–2 weeks with close monitoring.
 • Slower taper may be appropriate depending on symptoms.
-[INSERT ALGORITHM][INSERT SUMMARY OF EVIDENCE] [INSERT GUIDE TO RULESET]`,
+[INSERT ALGORITHM]  [INSERT SUMMARY OF EVIDENCE] [INSERT GUIDE TO RULESET]`,
 
-  ppi: `Step-down to lowest effective dose, alternate-day dosing, or stop and use on-demand.
+  ppi: `• Step-down to lowest effective dose, alternate-day dosing, or stop and use on-demand.
 • Review at 4–12 weeks.
-[INSERT ALGORITHM][INSERT SUMMARY OF EVIDENCE] [INSERT GUIDE TO RULESET]`,
+[INSERT ALGORITHM]  [INSERT SUMMARY OF EVIDENCE]   [INSERT GUIDE TO RULESET]`,
 };
 
 // Normalize the dropdown label to one of our keys above
