@@ -1622,7 +1622,6 @@ function buildPlan(){
     const med  = document.getElementById("medicineSelect")?.value;
   const form = document.getElementById("formSelect")?.value;
   const cls = document.getElementById("classSelect")?.value || "";
-  setFooterText(cls);
   
   if (!cls || !med || !form) {
     alert("Please select a class, medicine, and form first.");
