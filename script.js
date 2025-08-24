@@ -375,7 +375,7 @@ function splitTablesByStepForPdf(rootEl, { repeatHeader = false } = {}) {
   });
 }
 
-// Save chart as PDF (popup, A4-fit, step-safe, header repeated on each step)
+// Save chart as PDF to match the current PRINT look (A4-fit, white/black, header repeats, steps intact)
 async function saveOutputAsPdf() {
   if (window._dirtySinceGenerate) {
     const msg = "Inputs changed — please click Generate Chart before saving.";
@@ -392,14 +392,14 @@ async function saveOutputAsPdf() {
   // Clone only the rendered chart
   const clone = card.cloneNode(true);
 
-  // One-line disclaimer at the very top
+  // --- Disclaimer at top (same sentence you use for print) ---
   const disclaimer = document.createElement("div");
   disclaimer.className = "print-disclaimer";
   disclaimer.textContent = "This is a guide only – always follow the advice of your healthcare professional.";
   clone.prepend(disclaimer);
 
-  // --- helper: split one big table into one mini-table per step (prevents splits) ---
-  function splitTablesByStepForPdf(rootEl, repeatHeader = false) {
+  // --- Helper: split into one mini-table per step so a step never splits across pages ---
+  function splitTablesByStepForPdf(rootEl) {
     rootEl.querySelectorAll("table.plan-standard, table.plan-patch").forEach(orig => {
       const thead = orig.querySelector("thead");
       const headHTML = thead ? thead.outerHTML : "";
@@ -407,12 +407,10 @@ async function saveOutputAsPdf() {
       if (!groups.length) return;
 
       const frag = document.createDocumentFragment();
-      groups.forEach((tb, idx) => {
+      groups.forEach(tb => {
         const mini = document.createElement("table");
         mini.className = (orig.className + " step-table").trim();
-        if (headHTML && (repeatHeader || idx === 0)) {
-          mini.insertAdjacentHTML("afterbegin", headHTML);
-        }
+        if (headHTML) mini.insertAdjacentHTML("afterbegin", headHTML);
         const body = document.createElement("tbody");
         body.className = tb.className;
         Array.from(tb.children).forEach(tr => body.appendChild(tr.cloneNode(true)));
@@ -422,39 +420,37 @@ async function saveOutputAsPdf() {
       orig.replaceWith(frag);
     });
   }
-  splitTablesByStepForPdf(clone, /* repeatHeader */ false);
+  splitTablesByStepForPdf(clone);
 
-  // Inject your .output-head into every mini-table thead so it repeats each page
+  // --- Repeat the page header (.output-head) on every step table (so it appears on each page) ---
   (function injectHeaderPerMiniTable(rootEl){
     const headSrc = rootEl.querySelector(".output-head");
     if (!headSrc) return;
     const headHTML = headSrc.outerHTML;
     rootEl.querySelectorAll("table.step-table").forEach(tbl => {
       const thCount = (tbl.querySelectorAll("thead tr:last-child th").length) || 1;
-      let thead = tbl.querySelector("thead");
-      if (!thead) { thead = document.createElement("thead"); tbl.insertBefore(thead, tbl.firstChild); }
+      const thead = tbl.querySelector("thead") || tbl.insertBefore(document.createElement("thead"), tbl.firstChild);
       const tr = document.createElement("tr");
       const th = document.createElement("th");
       th.colSpan = thCount;
-      th.innerHTML = headHTML;
+      th.innerHTML = headHTML;      // includes Medicine + special instruction pill
       tr.className = "page-rep-head";
       thead.insertBefore(tr, thead.firstChild);
     });
   })(clone);
 
-  // === A4 content width calculation ===
-  // A4: 210 mm. We use 12 mm left + 12 mm right margins (same as your print).
-  // Content width = 210 - 24 = 186 mm. Convert to CSS px at ~96 dpi → ~705 px.
-  const pxPerMm = 96 / 25.4;         // 3.7795
-  const contentPx = Math.round(186 * pxPerMm); // ~705
+  // ===== A4 width that fits INSIDE margins (so html2pdf won’t crop) =====
+  // jsPDF A4 width = 595.28pt; use 34pt margins L/R (≈12mm): content = 595.28 - 68 = 527.28pt
+  // Convert to px at 96dpi: px = pt * (96/72) => ~ 730 px
+  const contentPx = Math.round((595.28 - 68) * (96/72));  // ≈ 730
 
-  // File name
+  // Filename
   const title = (document.getElementById("hdrMedicine")?.textContent || "Deprescribing Taper Plan")
     .replace(/^Medicine:\s*/i,"").replace(/\s+/g,"_").replace(/[^A-Za-z0-9_]/g,"");
   const d = new Date();
   const filename = `${title}_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}.pdf`;
 
-  // Popup HTML (loads your styles.css + tight A4-fit overrides only for the popup)
+  // === Popup HTML: load your styles + force PRINT-like overrides only in popup ===
   const popupHtml = `
 <!doctype html>
 <html>
@@ -462,43 +458,50 @@ async function saveOutputAsPdf() {
   <meta charset="utf-8">
   <link rel="stylesheet" href="styles.css">
   <style>
+    /* Page + base */
     html, body { background:#fff; color:#000; margin:0; }
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-    /* EXACT content width so nothing gets cropped */
+    /* Exact content width that matches jsPDF inner box (avoids cropping) */
     #pdfRoot { width: ${contentPx}px; margin: 0 auto; }
-    /* Light theme for the popup only */
-    #pdfRoot .card { max-width:none !important; background:#fff !important; box-shadow:none !important; border:none !important; }
-    #pdfRoot .output-head { color:#000 !important; }
-    #pdfRoot .pill { border:1px solid #000 !important; color:#000 !important; background:#fff !important; }
-    /* Table look similar to print */
+
+    /* Make everything white/black (kill dark theme bubbles) */
+    #pdfRoot, #pdfRoot * { color:#000 !important; }
+    /* remove dark surfaces / rounded chips that appear on screen */
+    #pdfRoot .card, #pdfRoot .pill, #pdfRoot .chip, #pdfRoot .bubble, #pdfRoot .dose-chip {
+      background:#fff !important; color:#000 !important; border-color:#000 !important; border-radius:0 !important;
+      box-shadow:none !important;
+    }
+
+    /* Table look to match print */
     #pdfRoot table.table { width:100% !important; table-layout:fixed; border-collapse:separate; border-spacing:0; }
     #pdfRoot thead th {
       color:#000 !important; background:#fff !important;
       font-weight:600; padding:8px 10px; border-bottom:1px solid #000; text-align:left;
     }
-    #pdfRoot td, #pdfRoot th { color:#000 !important; }
+    #pdfRoot .table th, #pdfRoot .table td { background:#fff !important; }
     #pdfRoot td { padding:8px 10px; vertical-align:middle; }
     #pdfRoot td.instructions-pre { white-space: pre-wrap; }
-    /* Column widths */
-    #pdfRoot .plan-standard th:nth-child(1), #pdfRoot .plan-standard td:nth-child(1) { width:16%; }
-    #pdfRoot .plan-standard th:nth-child(2), #pdfRoot .plan-standard td:nth-child(2) { width:24%; }
-    #pdfRoot .plan-standard th:nth-child(3), #pdfRoot .plan-standard td:nth-child(3) { width:34%; }
-    #pdfRoot .plan-standard th:nth-child(4), #pdfRoot .plan-standard td:nth-child(4),
-    #pdfRoot .plan-standard th:nth-child(5), #pdfRoot .plan-standard td:nth-child(5),
-    #pdfRoot .plan-standard th:nth-child(6), #pdfRoot .plan-standard td:nth-child(6),
-    #pdfRoot .plan-standard th:nth-child(7), #pdfRoot .plan-standard td:nth-child(7) { width:6%; text-align:center; }
+    /* Column widths (same spirit as your print CSS) */
+    #pdfRoot .plan-standard th:nth-child(1), #pdfRoot .plan-standard td:nth-child(1) { width:16%; }  /* Date */
+    #pdfRoot .plan-standard th:nth-child(2), #pdfRoot .plan-standard td:nth-child(2) { width:24%; }  /* Strength */
+    #pdfRoot .plan-standard th:nth-child(3), #pdfRoot .plan-standard td:nth-child(3) { width:34%; }  /* Instructions */
+    #pdfRoot .plan-standard th:nth-child(n+4), #pdfRoot .plan-standard td:nth-child(n+4) { width:6%; text-align:center; }
+
     #pdfRoot .plan-patch th:nth-child(1), #pdfRoot .plan-patch td:nth-child(1) { width:18%; }
     #pdfRoot .plan-patch th:nth-child(2), #pdfRoot .plan-patch td:nth-child(2) { width:18%; }
     #pdfRoot .plan-patch th:nth-child(3), #pdfRoot .plan-patch td:nth-child(3) { width:34%; }
     #pdfRoot .plan-patch th:nth-child(4), #pdfRoot .plan-patch td:nth-child(4) { width:30%; }
-    /* Keep steps together */
+
+    /* Keep each step together */
     #pdfRoot .step-table { page-break-inside: avoid; break-inside: avoid; margin: 0 0 10pt 0; }
-    /* Header row we insert per step */
+    /* The header we inject at top of each step table */
     #pdfRoot .page-rep-head th { border:0; padding:0 0 6px 0; }
     #pdfRoot .page-rep-head .output-head { margin:0 0 4px 0; }
+
     /* Footer text black */
     #pdfRoot .footer-notes, #pdfRoot .footer-notes strong { color:#000 !important; }
-    /* Page box and margins to match your print (16mm top/bottom, 12mm sides) */
+
+    /* A4 margins to mirror your print flow (top/btm ~16mm, sides ~12mm) */
     @page { size: A4 portrait; margin:16mm 12mm; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
@@ -514,10 +517,12 @@ async function saveOutputAsPdf() {
           scale: 2,
           useCORS: true,
           backgroundColor: '#ffffff',
-          windowWidth: ${contentPx}   // *** match #pdfRoot width so it fits the page ***
+          windowWidth: ${contentPx},   // render at the same width we set in CSS
+          scrollY: 0
         },
         jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' },
-        margin: [45, 34, 45, 34]     // top, right, bottom, left (≈16mm, 12mm, 16mm, 12mm)
+        // margins handled by @page above; keep jsPDF margins minimal to avoid double-margins
+        margin: [0, 0, 0, 0]
       };
       window.addEventListener('load', function () {
         window.html2pdf().set(opt).from(document.getElementById('pdfRoot')).save().then(function(){
@@ -535,8 +540,6 @@ async function saveOutputAsPdf() {
   w.document.write(popupHtml);
   w.document.close();
 }
-
-
 
 /* ---------- helper: split the main table into per-step tables so each has its own header ---------- */
 function splitTablesByStepForPdf(rootEl, repeatHeader = false) {
