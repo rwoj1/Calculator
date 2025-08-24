@@ -1703,15 +1703,15 @@ function perStrengthRowsFractional(r){
 function setFooterText(cls){
   const exp = {
     Opioid: "Expected benefits: Improved function and reduced opioid-related harms.",
-    "Benzodiazepines / Z-Drug (BZRA)": "Expected benefits: Improved cognition, daytime alertness, and reduced falls.",
-    "Proton Pump Inhibitor": "Expected benefits: Review at 4–12 weeks; incorporate non-drug strategies (sleep, diet, positioning).",
-    Antipsychotic: "Expected benefits: Lower risk of metabolic/extrapyramidal adverse effects.",
+    "Benzodiazepines / Z-Drug (BZRA)": "Improved cognition, daytime alertness, and reduced falls.",
+    "Proton Pump Inhibitor": "Review at 4–12 weeks; incorporate non-drug strategies (sleep, diet, positioning).",
+    Antipsychotic: "Lower risk of metabolic/extrapyramidal adverse effects.",
   }[cls] || "—";
   const wdr = {
-    Opioid: "Withdrawal: transient pain flare, cravings, mood changes.",
-    "Benzodiazepines / Z-Drug (BZRA)": "Withdrawal: insomnia, anxiety, irritability.",
-    "Proton Pump Inhibitor": "Withdrawal: rebound heartburn.",
-    Antipsychotic: "Withdrawal: sleep disturbance, anxiety, return of target symptoms.",
+    Opioid: "transient pain flare, cravings, mood changes.",
+    "Benzodiazepines / Z-Drug (BZRA)": "insomnia, anxiety, irritability.",
+    "Proton Pump Inhibitor": "rebound heartburn.",
+    Antipsychotic: "sleep disturbance, anxiety, return of target symptoms.",
   }[cls] || "—";
 const e = $("expBenefits");     if (e) e.textContent = exp;
 const w = $("withdrawalInfo");  if (w) w.textContent = wdr;
