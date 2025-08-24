@@ -97,7 +97,6 @@ function ensureIntervalHints(){
   };
   return [mk("p1IntHint","p1Interval"), mk("p2IntHint","p2Interval")];
 }
-
 // --- PRINT DECORATIONS (header, colgroup, zebra fallback, nowrap units) ---
 
 function getPrintTableAndType() {
@@ -364,44 +363,6 @@ const SUGGESTED_PRACTICE = {
 • Review at 4–12 weeks.
 [INSERT ALGORITHM]  [INSERT SUMMARY OF EVIDENCE]   [INSERT GUIDE TO RULESET]`,
 };
-
-/* ===== Footer copy by medicine class ===== */
-const FOOTER_COPY = {
-  "Opioid": {
-    benefits:
-      "Reduced overdose risk; improved alertness, constipation, falls risk, cognition and driving safety.",
-    withdrawal:
-      "Possible transient pain flare, anxiety, insomnia, sweating, GI upset. Slow or pause taper if severe."
-  },
-
-  "Benzodiazepines / Z-Drug (BZRA)": {
-    benefits:
-      "Improved daytime alertness, memory and coordination; reduced falls, crashes, and dependence risk.",
-    withdrawal:
-      "Rebound insomnia/anxiety, irritability, tremor may occur. Prefer slower taper; avoid alcohol/other sedatives."
-  },
-
-  "Antipsychotic": {
-    benefits:
-      "Lower sedation, metabolic and extrapyramidal adverse effects; improved daytime function where appropriate.",
-    withdrawal:
-      "Monitor for symptom return, insomnia or agitation. Taper gradually with close clinical review."
-  },
-
-  "Proton Pump Inhibitors": {
-    benefits:
-      "Lower long-term pill burden; may reduce risks tied to prolonged acid suppression in some patients.",
-    withdrawal:
-      "Transient rebound acid symptoms may occur. Consider on-demand therapy or non-drug strategies."
-  },
-
-  // Fallback if an unmapped class is selected
-  _default: {
-    benefits: "Potential to reduce adverse effects and pill burden.",
-    withdrawal: "If troublesome symptoms occur, pause or slow the taper and review."
-  }
-};
-
 
 // Normalize the dropdown label to one of our keys above
 function mapClassToKey(label) {
