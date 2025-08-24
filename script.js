@@ -1646,8 +1646,7 @@ function buildPlan(){
     return; // invalid interval → abort build
   }
 
-  const cls  = document.getElementById("classSelect")?.value;
-  const med  = document.getElementById("medicineSelect")?.value;
+    const med  = document.getElementById("medicineSelect")?.value;
   const form = document.getElementById("formSelect")?.value;
   const cls = document.getElementById("classSelect")?.value || "";
   setFooterText(cls);
