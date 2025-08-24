@@ -78,13 +78,7 @@ if (!inp._patchSnapAttached){
 }
   });
 }
-// Remove duplicated labels from footer spans (leave the strong labels in HTML)
-function normalizeFooterSpans(){
-  const exp = document.getElementById("expBenefits");
-  const wd  = document.getElementById("withdrawalInfo");
-  if (exp) exp.textContent = (exp.textContent || "").replace(/^Expected\s*benefits:\s*/i, "");
-  if (wd)  wd.textContent  = (wd.textContent  || "").replace(/^Withdrawal:\s*/i, "");
-}
+
 // ensure the hint <div>s exist under the inputs; returns [h1, h2]
 function ensureIntervalHints(){
   const mk = (id, inputId) => {
@@ -1615,25 +1609,6 @@ function perStrengthRowsFractional(r){
     });
   });
   return rows;
-}
-
-/* =================== Footer =================== *//* =================== Footer =================== */
-
-function setFooterText(cls){
-  const exp = {
-    Opioid: "Expected benefits: Improved function and reduced opioid-related harms.",
-    "Benzodiazepines / Z-Drug (BZRA)": "Expected benefits: Improved cognition, daytime alertness, and reduced falls.",
-    "Proton Pump Inhibitor": "Expected benefits: Review at 4–12 weeks; incorporate non-drug strategies (sleep, diet, positioning).",
-    Antipsychotic: "Expected benefits: Lower risk of metabolic/extrapyramidal adverse effects.",
-  }[cls] || "—";
-  const wdr = {
-    Opioid: "Withdrawal: transient pain flare, cravings, mood changes.",
-    "Benzodiazepines / Z-Drug (BZRA)": "Withdrawal: insomnia, anxiety, irritability.",
-    "Proton Pump Inhibitor": "Withdrawal: rebound heartburn.",
-    Antipsychotic: "Withdrawal: sleep disturbance, anxiety, return of target symptoms.",
-  }[cls] || "—";
-const e = $("expBenefits");     if (e) e.textContent = exp;
-const w = $("withdrawalInfo");  if (w) w.textContent = wdr;
 }
 
 /* =================== Build & init =================== */
