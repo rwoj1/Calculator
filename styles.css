@@ -230,5 +230,16 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
     border-bottom-left-radius: 0 !important;
     border-bottom-right-radius: 0 !important;
   }
+    /* Remove ALL borders from the table header row (top row) */
+  .plan-table thead th,
+  .plan-standard thead th {
+    border: 0 !important;          /* no top/left/right/bottom */
+    background: #fff !important;    /* keep white header background */
+  }
+  /* Safety: some themes add a border on the <tr> itself */
+  .plan-table thead tr,
+  .plan-standard thead tr {
+    border: 0 !important;
+  }
 }
 
