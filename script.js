@@ -51,6 +51,27 @@ function applyPatchIntervalAttributes(){
     });
     return;
   }
+function mapClassToKey(label){
+  const s = String(label || "").toLowerCase();
+  if (s.includes("benzodiazep")) return "bzra";
+  if (s.includes("z-drug") || s.includes("z drug")) return "bzra";
+  if (s.includes("antipsych")) return "antipsychotic";
+  if (s.includes("proton") || s.includes("ppi")) return "ppi";
+  if (s.includes("opioid") || s.includes("fentanyl") || s.includes("buprenorphine")) return "opioids";
+  return null;
+}
+
+function updateClassFooter(){
+  const cls = document.getElementById("classSelect")?.value || "";
+  const key = mapClassToKey(cls) || "_default";
+  const copy = CLASS_FOOTER_COPY[key] || CLASS_FOOTER_COPY._default;
+
+  const ben = document.getElementById("expBenefits");
+  const wd  = document.getElementById("withdrawalInfo");
+
+  if (ben) ben.textContent = copy.benefits || "";
+  if (wd)  wd.textContent  = copy.withdrawal || "";
+}
 
   // Static text (always the same)
   const msg = (rule === 3)
@@ -1595,7 +1616,7 @@ function buildPlan(){
     rows = (typeof buildPlanTablets === "function") ? buildPlanTablets() : [];
     if (typeof renderStandardTable === "function") renderStandardTable(rows);
   }
-
+  updateClassFooter(); // keep footer in sync with current class
   setGenerateEnabled(); // keep button/print gating in sync
   setDirty(false);
 }
@@ -1685,6 +1706,7 @@ function init(){
  document.getElementById("classSelect")?.addEventListener("change", updateBestPracticeBox);
 
    updateBestPracticeBox();
+  updateClassFooter(); 
   
   // 7) Live gating + interval hints for patches
   if (typeof ensureIntervalHints === "function") ensureIntervalHints(); // create the hint <div>s once
