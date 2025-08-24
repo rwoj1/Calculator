@@ -35,7 +35,8 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
 .center{text-align:center}
 .instructions-pre{white-space:pre-line}
 .output-head{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:8px}
-.footer-notes{margin-top:12px;color:#cbd5e1}
+.footer-notes { margin-top: 12px; padding-top: 8px; border-top: 1px solid #e5e5e5; }
+.class-footer  { white-space: pre-wrap; line-height: 1.35; font-size: 0.95rem; }
 
 @media (max-width:800px){
   .grid{grid-template-columns:1fr}
@@ -255,6 +256,9 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
   page-break-inside: avoid !important;
 }
 
+    .footer-notes { margin-top: 8pt; padding-top: 6pt; border-top: 1pt solid #000; }
+  .class-footer { color: #000; }
+  
 /* Keep the header row repeating at the top of each printed page */
 .table thead { display: table-header-group !important; }
 
