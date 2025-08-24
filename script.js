@@ -364,12 +364,13 @@ const SUGGESTED_PRACTICE = {
 [INSERT ALGORITHM]  [INSERT SUMMARY OF EVIDENCE]   [INSERT GUIDE TO RULESET]`,
 };
 
-// ---- Class-specific footer copy ----
+// ---- Class-specific footer copy (placeholder text) ----
 const CLASS_FOOTER_COPY = {
-  opioids: 'Insert specific footer + disclaimer for Opioids',
-  bzra: 'Insert specific footer + disclaimer for Benzodiazpeines / Z Drugs',
-  antipsychotic:'Insert specific footer + disclaimer for Antipsychotics',
-  ppi: 'Insert specific footer + disclaimer for Proton Pump Inhibitors',
+  "Opioid": "Insert specific footer + disclaimer for Opioids",
+  "Benzodiazepines / Z-Drug (BZRA)": "Insert specific footer + disclaimer for Benzodiazepines / Z Drugs (BZRA)",
+  "Antipsychotic": "Insert specific footer + disclaimer for Antipsychotics",
+  "Proton Pump Inhibitor": "Insert specific footer + disclaimer for Proton Pump Inhibitors",
+  _default: ""
 };
 
 // Map the visible class label to a key in CLASS_FOOTER_COPY
@@ -383,17 +384,11 @@ function mapClassToKey(label){
   return null;
 }
 
-// Write the footer spans based on the selected class
-function updateClassFooter(){
-  const clsLabel = document.getElementById("classSelect")?.value || "";
-  const key = mapClassToKey(clsLabel) || "_default";
-  const copy = CLASS_FOOTER_COPY[key] || CLASS_FOOTER_COPY._default;
-
-  const ben = document.getElementById("expBenefits");
-  const wd  = document.getElementById("withdrawalInfo");
-
-  if (ben) ben.textContent = copy.benefits || "";
-  if (wd)  wd.textContent  = copy.withdrawal || "";
+function updateClassFooterLine() {
+  const cls = document.getElementById("classSelect")?.value || "";
+  const text = CLASS_FOOTER_COPY[cls] ?? CLASS_FOOTER_COPY._default;
+  const target = document.getElementById("classFooter");
+  if (target) target.textContent = text;
 }
 
 let _lastPracticeKey = null;
