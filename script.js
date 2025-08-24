@@ -113,17 +113,20 @@ function getPrintTableAndType() {
   return { table: null, type: null };
 }
 // 1) Inject print-only header (Medicine, special instruction, disclaimer)
+// De-duped print header: Medicine + special instruction + disclaimer
 function injectPrintHeader() {
   const card = document.getElementById("outputCard");
   if (!card) return () => {};
-  document.getElementById("printHeaderBlock")?.remove();
+
+  // Remove ANY previous injected header(s) to avoid duplicates
+  card.querySelectorAll("#printHeaderBlock, .print-header").forEach(el => el.remove());
 
   const header = document.createElement("div");
   header.id = "printHeaderBlock";
   header.className = "print-only print-header";
 
   const medText = (document.getElementById("hdrMedicine")?.textContent || "")
-    .replace(/^Medicine:\s*/i, "");
+    .replace(/^Medicine:\s*/i, ""); // strip the label in print
   const special = document.getElementById("hdrSpecial")?.textContent || "";
 
   const elMed  = document.createElement("div");
@@ -134,8 +137,8 @@ function injectPrintHeader() {
   elSpec.className = "print-instruction";
   elDisc.className = "print-disclaimer";
 
-  elMed.textContent  = medText || "";
-  elSpec.textContent = special || "";
+  elMed.textContent  = medText || "";   // e.g. "Morphine SR Tablet"
+  elSpec.textContent = special || "";   // e.g. "Swallow whole…"
   elDisc.textContent = "This is a guide only – always follow the advice of your healthcare professional.";
 
   header.append(elMed, elSpec, elDisc);
@@ -143,6 +146,7 @@ function injectPrintHeader() {
 
   return () => header.remove();
 }
+
 // 2) Add <colgroup> with sane proportions for print only
 function injectPrintColgroup(table, type) {
   if (!table) return () => {};
