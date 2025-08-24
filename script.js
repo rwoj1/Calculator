@@ -522,6 +522,7 @@ function renderPrintHeader(container){
    - Zebra per step-group (CSS)
    - Stop/Review merged cell after date
    ========================================== */
+
 function renderStandardTable(stepRows){
   const scheduleHost = document.getElementById("scheduleBlock");
   const patchHost    = document.getElementById("patchBlock");
@@ -536,7 +537,7 @@ function renderStandardTable(stepRows){
   const table = document.createElement("table");
   table.className = "table plan-standard";
 
-  // Column headers ONLY (on-screen look unchanged)
+  // Column headers (on-screen unchanged)
   const thead = document.createElement("thead");
   const trCols = document.createElement("tr");
   ["Date beginning","Strength","Instructions","Morning","Midday","Dinner","Night"].forEach(t=>{
@@ -547,7 +548,7 @@ function renderStandardTable(stepRows){
   thead.appendChild(trCols);
   table.appendChild(thead);
 
-  // 1) Expand each step into per-strength lines (so Strength/Instructions are populated)
+  // 1) Expand each step into per-strength lines
   const expanded = [];
   (stepRows || []).forEach(step => {
     // STOP / REVIEW pass-through
@@ -590,16 +591,19 @@ function renderStandardTable(stepRows){
     current.items.push(row);
   });
 
-  // 3) Render groups with merged date + zebra-ready <tbody class="step-group">
+  // 3) Render groups with a consistent 7-cell layout (no rowspan)
   groups.forEach((g, idx) => {
     const tbody = document.createElement("tbody");
     tbody.className = "step-group " + (idx % 2 ? "step-even" : "step-odd");
 
-    // STOP / REVIEW row
+    // STOP / REVIEW row (7 cells total: Date + message spanning 6)
     if (g.kind === "STOP" || g.kind === "REVIEW") {
       const tr = document.createElement("tr");
+      tr.setAttribute("data-step", String(idx));
+      if (idx % 2 === 1) tr.classList.add("zebra-even");
 
       const tdDate = document.createElement("td");
+      tdDate.className = "col-date";
       tdDate.textContent = g.dateStr || "";
 
       const tdMsg = document.createElement("td");
@@ -617,32 +621,49 @@ function renderStandardTable(stepRows){
 
     // Normal date group
     const lines = g.items.filter(x => x.kind === "LINE");
-    const span  = Math.max(1, lines.length);
 
     lines.forEach((line, i) => {
       const tr = document.createElement("tr");
+      tr.setAttribute("data-step", String(idx));
+      if (idx % 2 === 1) tr.classList.add("zebra-even");
 
-      // Merge date cell once per group
+      // [1] Date — first row shows the date; subsequent rows keep a blank spacer cell
+      const tdDate = document.createElement("td");
+      tdDate.className = "col-date";
       if (i === 0) {
-        const tdDate = document.createElement("td");
-        tdDate.rowSpan = span;
         tdDate.textContent = g.dateStr || "";
-        tr.appendChild(tdDate);
+      } else {
+        tdDate.classList.add("date-spacer"); // visually merged date
+        tdDate.textContent = "";            // keep column structure
       }
+      tr.appendChild(tdDate);
 
+      // [2] Strength
       const tdStrength = document.createElement("td");
-      tdStrength.textContent = line.strength;
+      tdStrength.className = "col-strength";
+      tdStrength.textContent = line.strength || "";
+      tr.appendChild(tdStrength);
 
+      // [3] Instructions — keep \n, print via textContent
       const tdInstr = document.createElement("td");
-      tdInstr.className = "instructions-pre";
+      tdInstr.className = "col-instr instructions-pre";
       tdInstr.textContent = (line.instr || "");
+      tr.appendChild(tdInstr);
 
-      const tdM  = document.createElement("td"); tdM.textContent  = line.am  || "";
-      const tdMi = document.createElement("td"); tdMi.textContent = line.mid || "";
-      const tdD  = document.createElement("td"); tdD.textContent  = line.din || "";
-      const tdN  = document.createElement("td"); tdN.textContent  = line.pm  || "";
+      // helper for dose cells
+      const doseCell = (val, cls) => {
+        const td = document.createElement("td");
+        td.className = cls;
+        td.textContent = (val ?? "") === "" ? "" : String(val);
+        return td;
+      };
 
-      tr.append(tdStrength, tdInstr, tdM, tdMi, tdD, tdN);
+      // [4..7] Morning / Midday / Dinner / Night
+      tr.appendChild(doseCell(line.am,  "col-am"));
+      tr.appendChild(doseCell(line.mid, "col-mid"));
+      tr.appendChild(doseCell(line.din, "col-din"));
+      tr.appendChild(doseCell(line.pm,  "col-pm"));
+
       tbody.appendChild(tr);
     });
 
