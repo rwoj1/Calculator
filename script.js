@@ -346,44 +346,60 @@ function printOutputOnly() {
 
 // SAVE AS PDF: export the rendered chart area (#outputCard) only
 async function saveOutputAsPdf() {
+  // Same guard as Print
   if (window._dirtySinceGenerate) {
     if (typeof showToast === "function") {
-      showToast("Inputs changed—please click Generate Chart before saving.");
+      showToast("Inputs changed—please Generate to update the plan before printing or saving.");
     } else {
-      alert("Inputs changed—please click Generate Chart before saving.");
+      alert("Inputs changed—please Generate to update the plan before printing or saving.");
     }
     return;
   }
 
   const card = document.getElementById("outputCard");
-  if (!card || !card.querySelector("table")) {
-    if (typeof showToast === "function") showToast("Generate a chart first.");
-    return;
-  }
+  if (!card) return;
 
-  // Build a filename like "Morphine_SR_tablet_2025-08-24.pdf"
-  const title = (document.getElementById("hdrMedicine")?.textContent || "Deprescribing Plan")
-    .replace(/^Medicine:\s*/i, "")
-    .replace(/\s+/g, "_");
-  const d = new Date();
-  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,"0"), day = String(d.getDate()).padStart(2,"0");
-  const filename = `${title}_${y}-${m}-${day}.pdf`;
+  // Build a clean, isolated document that uses the same print CSS
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.right = "100%";    // keep it off-screen
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  document.body.appendChild(iframe);
 
-  const opt = {
-    filename,
-    pagebreak: { mode: ["css", "legacy"], avoid: ["tbody.step-group"] },
-    html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
-    jsPDF: { unit: "pt", format: "a4", orientation: "portrait" },
-    margin: [45, 34, 45, 34] // ~16mm top/bottom, ~12mm sides
+  const doc = iframe.contentDocument;
+  doc.open();
+  doc.write(`<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    ${typeof _printCSS === "function" ? _printCSS() : ""}
+  </head>
+  <body>
+    ${card.outerHTML}
+  </body>
+</html>`);
+  doc.close();
+
+  // Give the iframe a tick to render
+  await new Promise(r => setTimeout(r, 60));
+
+  // Export JUST the chart using html2pdf
+  const opts = {
+    margin:       10,
+    filename:     "Deprescribing_Taper_Plan.pdf",
+    image:        { type: "jpeg", quality: 0.98 },
+    html2canvas:  { scale: 2, backgroundColor: "#ffffff" },
+    jsPDF:        { unit: "mm", format: "a4", orientation: "portrait" }
   };
 
   try {
-    await html2pdf().set(opt).from(card).save();
-  } catch (err) {
-    console.error("saveOutputAsPdf error:", err);
-    alert("Sorry—couldn’t create the PDF. See console for details.");
+    await html2pdf().from(doc.body).set(opts).save();
+  } finally {
+    iframe.remove();
   }
 }
+
 
 // --- Suggested practice copy (exact wording from your doc) ---
 const SUGGESTED_PRACTICE = {
