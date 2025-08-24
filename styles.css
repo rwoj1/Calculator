@@ -241,5 +241,11 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
   .plan-standard thead tr {
     border: 0 !important;
   }
+   /* Each mini step-table should keep its header and avoid splitting */
+  .step-table thead { display: table-header-group; }
+  .step-table { page-break-inside: avoid; break-inside: avoid; }
+
+  /* If you see extra spacing, you can tighten the gap between step-tables a bit */
+  .step-table { margin: 0 0 10pt 0; }
 }
 
