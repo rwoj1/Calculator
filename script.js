@@ -320,7 +320,7 @@ function saveOutputAsPdf() {
     showToast("Inputs changed—please Generate to update the plan before printing or saving.");
     return;
   }
-
+console.info("Unified saveOutputAsPdf() running…");
   const card = document.getElementById("outputCard");
   if (!card) return;
 
