@@ -151,7 +151,6 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
         Instructions→Morning (col 3→4),
         and between time-of-day columns (4/5/6/7).
         NOTE: We intentionally DO NOT draw a line after Date (no line between col 1 and 2). */
-  .plan-standard tbody.step-group td:nth-child(3), /* left border for Instructions */
   .plan-standard tbody.step-group td:nth-child(4), /* left border for Morning */
   .plan-standard tbody.step-group td:nth-child(5), /* left border for Midday */
   .plan-standard tbody.step-group td:nth-child(6), /* left border for Dinner */
