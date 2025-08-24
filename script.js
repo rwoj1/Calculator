@@ -344,109 +344,67 @@ function printOutputOnly() {
   }, 100);
 }
 
-// === Save only the output card as a PDF (auto-download) ===
-// Requires html2pdf.bundle.min.js to be loaded in index.html
-async function saveOutputAsPdf() {
+// Save as PDF via the browser's print engine (matches your Print result)
+function saveOutputAsPdf() {
+  // same safety gate as Print
+  if (window._dirtySinceGenerate) {
+    if (typeof showToast === "function") {
+      showToast("Inputs changed — please click Generate Chart before saving.");
+    } else {
+      alert("Inputs changed — please click Generate Chart before saving.");
+    }
+    return;
+  }
+
   const card = document.getElementById("outputCard");
-  if (!card) return;
+  if (!card || !card.querySelector("table")) {
+    if (typeof showToast === "function") showToast("Generate a chart first.");
+    return;
+  }
 
-  // Build a standalone clone so we control exactly what goes into the PDF
-  const clone = card.cloneNode(true);
+  // Build a minimal HTML doc that includes your print CSS and only the chart
+  const docHTML = `
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    ${typeof _printCSS === "function" ? _printCSS() : ""}
+    <style>
+      /* ensure the print-only header is visible in this popup */
+      .output-head { display: none !important; }
+      .print-only  { display: block !important; }
+      /* keep steps intact */
+      tbody.step-group { page-break-inside: avoid; break-inside: avoid; }
+      /* white background, black text */
+      html, body { background:#fff; color:#000; margin:0; }
+    </style>
+  </head>
+  <body class="printing">
+    ${card.outerHTML}
+  </body>
+</html>`.trim();
 
-  // Ensure header & special instruction are visible in the clone
-  // (Your live header is already inside #outputCard, so this keeps it)
-  // Add disclaimer at top of the clone
-  const disclaimer = document.createElement("div");
-  disclaimer.className = "print-disclaimer";
-  disclaimer.textContent = "This is a guide only – always follow the advice of your healthcare professional";
-  clone.prepend(disclaimer);
+  // Open a clean window, write the chart only, and trigger native print (user selects "Save as PDF")
+  const w = window.open("", "_blank");
+  if (!w) { alert("Pop-up blocked — please allow pop-ups for this site."); return; }
 
-  // We’ll inject minimal, print-safe CSS inline so the PDF matches your Print layout
-  const style = document.createElement("style");
-  style.textContent = `
-    /* Reset */
-    * { box-sizing: border-box; }
-    body { margin: 0; font: 12pt/1.35 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; color: #000; }
-    #pdf-wrap { padding: 16mm 14mm; }
+  w.document.open();
+  w.document.write(docHTML);
+  w.document.close();
 
-    /* Header & chips */
-    .output-head { margin-bottom: 10mm; }
-    .output-head h2 { margin: 0 0 2mm 0; font-size: 18pt; font-weight: 700; color: #000; }
-    .pill { display:inline-block; border:1px solid #000; color:#000; padding:4px 8px; border-radius:999px; font-size:10pt; }
-
-    /* Disclaimer */
-    .print-disclaimer { margin: 0 0 6mm 0; font-size: 10pt; color: #000; }
-
-    /* Table shell */
-    table.table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    table.table thead th {
-      text-align: left; font-weight: 600; padding: 8px 10px; border-bottom: 1px solid #000; color: #000;
+  // Give it one tick to lay out, then print
+  setTimeout(() => {
+    try {
+      w.focus();
+      w.print();    // user picks "Save as PDF"
+      // optional: close after a delay if you want
+      // setTimeout(() => w.close(), 500);
+    } catch (e) {
+      console.error(e);
     }
-    /* Column widths (Instructions wide; M/Mi/D/N equal) */
-    .col-date       { width: 26mm; }
-    .col-strength   { width: 45mm; }
-    .col-instr      { width: auto; }
-    .col-dose       { width: 14mm; text-align: center; }
-
-    /* Step wrapper (“bubble”) with zebra background per step */
-    tbody.step-group { 
-      border: 1px solid #000; border-radius: 8px; overflow: hidden; 
-      margin: 6mm 0; display: block; 
-      page-break-inside: avoid; /* don’t split a step across pages */
-      background: #fff;
-    }
-    /* Zebra: set on tbody via alternating class from JS */
-    tbody.step-group.step-odd { background: #FAFAFA; }
-    tbody.step-group.step-even { background: #FFFFFF; }
-
-    /* Rows inside a step */
-    tbody.step-group tr { display: table; width: 100%; table-layout: fixed; border-bottom: 1px solid #000; }
-    tbody.step-group tr:last-child { border-bottom: none; }
-
-    td, th { vertical-align: middle; padding: 8px 10px; color: #000; }
-    td.instructions-pre { white-space: pre-wrap; }
-
-    /* Merged date cell (row-span) styling */
-    td.merged-date { border-right: 1px solid #000; }
-
-    /* Footer notes inside card */
-    .footer-notes { margin-top: 8mm; font-size: 10pt; color: #000; }
-    .footer-notes strong { color: #000; }
-
-    /* Page size */
-    @page { size: A4 portrait; margin: 12mm; }
-  `;
-
-  // Wrap clone in an isolated container so html2pdf grabs just this
-  const wrap = document.createElement("div");
-  wrap.id = "pdf-wrap";
-  wrap.appendChild(style);
-  wrap.appendChild(clone);
-
-  // html2pdf options tuned for crisp output and good pagination
-  const opt = {
-    margin:       0,
-    filename:     buildPdfFileName(), // builds something like "Deprescribing_Taper_Plan_2025-08-22.pdf"
-    image:        { type: 'jpeg', quality: 0.98 },
-    html2canvas:  { scale: 2, useCORS: true, windowWidth: 1200 },
-    pagebreak:    { mode: ['css', 'legacy'] },
-    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-  };
-
-  // Important: ensure your tables use <tbody class="step-group step-odd/even"> so zebra works.
-  // Your current render functions already output that grouping; we’re just cloning it.
-
-  await html2pdf().set(opt).from(wrap).save();
+  }, 150);
 }
 
-// Helper: build a friendly filename
-function buildPdfFileName(){
-  const title = (document.getElementById("hdrMedicine")?.textContent || "Deprescribing Taper Plan")
-                  .replace(/\s+/g, "_").replace(/[^A-Za-z0-9_]/g,"");
-  const today = new Date();
-  const iso = today.toISOString().slice(0,10);
-  return `${title}_${iso}.pdf`;
-}
 
 
 /* ---------- helper: split the main table into per-step tables so each has its own header ---------- */
