@@ -328,21 +328,93 @@ function _printCSS(){
   </style>`;
 }
 function printOutputOnly() {
-  const tableExists = document.querySelector("#scheduleBlock table, #patchBlock table");
-  if (!tableExists) { alert("Please generate a chart first."); return; }
+  const card = document.getElementById("outputCard");
+  if (!card) return alert("Generate the chart first.");
 
-  document.body.classList.add("printing");
+  // Pick the visible table (tablets or patches)
+  const schedTbl = card.querySelector("#scheduleBlock table");
+  const patchTbl = card.querySelector("#patchBlock table");
+  const srcTable = (patchTbl && patchTbl.offsetParent !== null) ? patchTbl : schedTbl;
+  if (!srcTable) return alert("No chart to print. Please generate first.");
 
-  // Add print-only header + layout hints; get cleanup
-  const cleanupDecor = preparePrintDecorations();
+  // Build a print-only root
+  const printRoot = document.createElement("div");
+  printRoot.id = "printOnlyRoot";
+  printRoot.style.all = "initial"; // isolate
+  printRoot.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+  printRoot.style.color = "#000";
+  printRoot.style.padding = "0";
+  printRoot.style.margin = "0";
 
+  // Header (clone) — uses your existing output head
+  const head = card.querySelector(".output-head");
+  if (head) printRoot.appendChild(head.cloneNode(true));
+
+  // Disclaimer if you render one near the table already
+  const disclaimer = document.getElementById("headerDisclaimer");
+  if (disclaimer) printRoot.appendChild(disclaimer.cloneNode(true));
+
+  // Create per-step mini tables so each step stays on one page
+  const thead = srcTable.querySelector("thead");
+  const groups = srcTable.querySelectorAll("tbody.step-group");
+
+  groups.forEach((g, idx) => {
+    const mini = document.createElement("table");
+    mini.className = srcTable.className + " print-chunk";
+    mini.style.width = "100%";
+    mini.style.borderCollapse = "separate";
+    mini.style.borderSpacing = "0";
+
+    // Header
+    if (thead) mini.appendChild(thead.cloneNode(true));
+
+    // This step's body (rows cloned)
+    const tb = document.createElement("tbody");
+    tb.className = "step-group";
+    g.querySelectorAll("tr").forEach(tr => tb.appendChild(tr.cloneNode(true)));
+    mini.appendChild(tb);
+
+    // Very strong "no-split" guard for this chunk
+    mini.style.breakInside = "avoid";
+    mini.style.pageBreakInside = "avoid";
+
+    // Optional little vertical gap between steps
+    mini.style.margin = "0 0 8mm 0";
+
+    printRoot.appendChild(mini);
+  });
+
+  // Footer (clone) — you have a footer notes section under the table
+  const foot = card.querySelector(".footer-notes");
+  if (foot) printRoot.appendChild(foot.cloneNode(true));
+
+  // Create an overlay container that hides app UI during print
+  const overlay = document.createElement("div");
+  overlay.id = "printOverlayOnly";
+  overlay.appendChild(printRoot);
+  document.body.appendChild(overlay);
+
+  // Hide the app UI while printing so only our printRoot appears
+  const hideStyle = document.createElement("style");
+  hideStyle.textContent = `
+    @media print {
+      body > *:not(#printOverlayOnly) { display: none !important; }
+      #printOverlayOnly { display: block !important; }
+      /* keep headers repeating and step groups intact (backstop) */
+      .plan-standard thead, .plan-patch thead { display: table-header-group; }
+      .plan-standard tbody.step-group, .plan-patch tbody.step-group { break-inside: avoid; page-break-inside: avoid; }
+      .plan-standard tbody.step-group tr, .plan-patch tbody.step-group tr { break-inside: avoid; page-break-inside: avoid; }
+    }
+  `;
+  overlay.appendChild(hideStyle);
+
+  // Print and clean up
   window.print();
-
   setTimeout(() => {
-    document.body.classList.remove("printing");
-    cleanupDecor();
-  }, 100);
+    overlay.remove();
+  }, 0);
 }
+
 
 // Save as PDF: export the chart only, with header on later pages and no split steps
 async function saveOutputAsPdf() {
