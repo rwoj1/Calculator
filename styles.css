@@ -52,127 +52,114 @@ button.ghost{background:transparent;border:1px solid var(--border);color:var(--t
 /* ==============================
    PRINT / PDF rules
    ============================== */
+  /* Print-only visibility toggle (used by JS) */
+.print-only { display: none; }
+
 @media print {
-  /* Global reset */
-  * {
-    color: #000 !important;
-    -webkit-text-fill-color: #000 !important;
-    background: transparent !important;
+  /* Ensure background colors print (for zebra) */
+  html, body, #outputCard, #outputCard * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
-  html, body { background: #fff !important; }
 
-  /* Print only the chart */
+  /* Print ONLY the chart; keep the rest off-page */
   body.printing .container > * { display: none !important; }
-  body.printing #outputCard {
-    display: block !important;
-    margin: 0 !important;
-    border: none !important;
-    box-shadow: none !important;
-  }
+  body.printing #outputCard     { display: block !important; margin: 0 !important; }
 
-  /* Chips light in print */
-  .pill, .pill * {
-    background: #fff !important;
-    border-color: #000 !important;
-    color: #000 !important;
-  }
+  /* Make the page white; kill any app chrome */
+  html, body, #outputCard { background: #fff !important; color: #000 !important; }
+  #outputCard::before, #outputCard::after,
+  .card::before, .card::after { content: none !important; display: none !important; }
+  .output-head { display: none !important; }   /* hide on-screen header in print */
+  .pill { background: #fff !important; border: 1px solid #000 !important; color: #000 !important; }
 
-  /* Optional disclaimer injected by JS */
-  #printDisclaimer.print-disclaimer,
-  .print-disclaimer {
-    margin: 0 0 8px 0 !important;
-    font-size: 12px !important;
-    font-style: italic;
-    color: #000 !important;
-    background: #fff !important;
-  }
+  /* Show the injected print-only header */
+  .print-only { display: block !important; }
+  .print-header      { margin: 0 0 10pt 0; }
+  .print-medline     { font-size: 14pt; font-weight: 600; margin-bottom: 2pt; }
+  .print-instruction { font-size: 10pt; margin-bottom: 2pt; }
+  .print-disclaimer  { font-size: 9pt; font-style: italic; margin-bottom: 8pt; }
 
   /* Table shell */
   .table, .plan-table {
-    width: 100%;
-    table-layout: auto;               /* let Instructions breathe */
+    width: 100% !important;
     border-collapse: collapse !important;
     border-spacing: 0 !important;
+    table-layout: auto !important;      /* don't force equal columns */
     background: #fff !important;
   }
+  .table thead { display: table-header-group; }
+  .table tfoot { display: table-footer-group; }
 
-  /* Repeat header/footer rows if present */
-  .table thead, .plan-table thead  { display: table-header-group; }
-  .table tfoot, .plan-table tfoot  { display: table-footer-group; }
-
-  /* Column header row */
-  .table thead tr:last-child th,
-  .plan-table thead tr:last-child th {
-    font-weight: 600;
-    text-align: left;
-    border: 1px solid #000 !important;
-    padding: 6px 8px;
-    background: #fff !important;
-  }
-
-  /* Generic cell rules (grid ON) */
+  /* Borders + default cell */
   .table th, .table td,
   .plan-table th, .plan-table td {
     border: 1px solid #000 !important;
-    padding: 6px 8px;
-    vertical-align: top;
-    background: #fff !important;
-    white-space: pre-line;
+    padding: 6pt 8pt !important;
+    background: #fff !important;        /* base before zebra */
+    color: #000 !important;
+    white-space: pre-line;               /* keep instructions linebreaks */
     font-size: 12px;
   }
-  .table td.instructions-pre,
-  .plan-table td.instructions-pre { white-space: pre-line !important; }
+  .table thead tr:last-child th { font-weight: 600 !important; }
 
-  /* Keep whole step groups together (helps merged date cells) */
+  /* Keep each step (tbody) together */
   .plan-standard tbody,
   .plan-patch    tbody {
-    break-inside: avoid;
-    page-break-inside: avoid;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 
-  /* ZEBRA: full step (tablets & patches) */
-  table.plan-standard tbody.step-even td,
-  table.plan-patch    tbody.step-even td,
-  .table.plan-standard tbody.step-even td,
-  .table.plan-patch    tbody.step-even td {
-    background: #eeeeee !important;
+  /* ZEBRA: shade entire step group (both tablets & patches) */
+  .plan-standard tbody.step-group.step-even td,
+  .plan-patch    tbody.step-group.step-even td {
+    background: #f2f2f2 !important;     /* gentle grey */
   }
-  /* Fallback if .step-even missing */
-  table.plan-standard tbody:not(.step-even):nth-of-type(even) td,
-  table.plan-patch    tbody:not(.step-even):nth-of-type(even) td,
-  .table.plan-standard tbody:not(.step-even):nth-of-type(even) td,
-  .table.plan-patch    tbody:not(.step-even):nth-of-type(even) td {
-    background: #eeeeee !important;
+  /* Fallback if .step-even missing: alternate by position */
+  .plan-standard tbody:not(.step-even):nth-of-type(even) td,
+  .plan-patch    tbody:not(.step-even):nth-of-type(even) td {
+    background: #f2f2f2 !important;
   }
 
-  /* Rounded “bubble” corners per step group */
+  /* Rounded outer corners per step group (subtle) */
   .plan-standard tbody.step-group tr:first-child td:first-child,
   .plan-patch    tbody.step-group tr:first-child td:first-child {
-    border-top-left-radius: 10px !important;
-    background-clip: padding-box;
+    border-top-left-radius: 6pt !important; background-clip: padding-box;
   }
   .plan-standard tbody.step-group tr:first-child td:last-child,
   .plan-patch    tbody.step-group tr:first-child td:last-child {
-    border-top-right-radius: 10px !important;
-    background-clip: padding-box;
+    border-top-right-radius: 6pt !important; background-clip: padding-box;
   }
   .plan-standard tbody.step-group tr:last-child td:first-child,
   .plan-patch    tbody.step-group tr:last-child td:first-child {
-    border-bottom-left-radius: 10px !important;
-    background-clip: padding-box;
+    border-bottom-left-radius: 6pt !important; background-clip: padding-box;
   }
   .plan-standard tbody.step-group tr:last-child td:last-child,
   .plan-patch    tbody.step-group tr:last-child td:last-child {
-    border-bottom-right-radius: 10px !important;
+    border-bottom-right-radius: 6pt !important; background-clip: padding-box;
+  }
+/* Soft rounding for every printed row */
+  .table tbody tr td:first-child,
+  .plan-table tbody tr td:first-child {
+    border-top-left-radius: 4pt !important;
+    border-bottom-left-radius: 4pt !important;
     background-clip: padding-box;
   }
-
-  /* STOP/REVIEW merged cell */
-  .final-cell {
-    font-weight: 700;
-    background: #fff !important;
+  .table tbody tr td:last-child,
+  .plan-table tbody tr td:last-child {
+    border-top-right-radius: 4pt !important;
+    border-bottom-right-radius: 4pt !important;
+    background-clip: padding-box;
   }
+  /* STOP/REVIEW merged message cell */
+  .final-cell { font-weight: 700; background: #fff !important; }
 
-  /* Footer notes stay black */
-  .footer-notes, .footer-notes * { color: #000 !important; }
+  /* Page box */
+  @page { size: A4 portrait; margin: 16mm 12mm; }
+   /* Footer block under the table */
+  .footer-notes, .footer-notes * {
+    color: #000 !important;
+    background: #fff !important;
+    border: 0 !important;
+  }
 }
