@@ -342,10 +342,15 @@ function lowestCommercialMg(cls, med, form){
 
 function isLowestCommercialSelected(cls, med, form){
   const minMg = lowestCommercialMg(cls, med, form);
-  const sel = selectedProductMgs && selectedProductMgs(); // Set<number> of ticked strengths
-  if (!sel || sel.size === 0) return true;                // “none selected” = treat as all allowed
-  return sel.has(minMg);
+  const sel = (typeof selectedProductMgs === "function") ? selectedProductMgs() : [];
+
+  // None selected => treat as “all allowed”
+  if (!sel || sel.length === 0) return true;
+
+  // Some selected => only those are allowed
+  return sel.includes(minMg);
 }
+
 function enforceOpioidEndDoseDefault(stepRows){
   try{
     const cls  = document.getElementById("classSelect")?.value || "";
