@@ -322,47 +322,109 @@ function formatOxyOnlyHTML(label){
 }
 
 function enforceOpioidEndDoseDefault(stepRows){
-  try{
+  try {
+    // Guard: wrong shape → no-op
+    if (!Array.isArray(stepRows) || !stepRows.length) return stepRows;
+
+    // Read current selections (DOM-based, to match your existing pattern)
     const cls  = document.getElementById("classSelect")?.value || "";
     const med  = document.getElementById("medicineSelect")?.value || "";
     const form = document.getElementById("formSelect")?.value || "";
-    if (cls !== "Opioid" || !/SR/i.test(form) || !Array.isArray(stepRows)) return stepRows;
 
-    const lowestSelected = isLowestCommercialSelected(cls, med, form);
+    // Only apply to Opioid SR/CR
+    if (!/Opioid/i.test(cls) || !/(SR|CR)/i.test(form)) return stepRows;
 
-    // helper: per-slot totals (mg) for a row
-    const totalsOf = (row)=>{
-      const packs = row?.packs || {};
-      const tot = slot => (packs[slot] ? packsTotalMg({[slot]:packs[slot]}) : 0);
-      return { AM: tot("AM"), MID: tot("MID"), DIN: tot("DIN"), PM: tot("PM") };
+    // --- Tiny utils
+    const EPS = 1e-6;
+    const num = (v) => (Number.isFinite(+v) ? +v : 0);
+    const zeroish = (v) => Math.abs(num(v)) <= EPS;
+
+    // Read helpers if they exist (fallbacks keep things safe)
+    const lowestSelected = (typeof isLowestCommercialSelected === "function")
+      ? isLowestCommercialSelected(cls, med, form)
+      : false;
+
+    // Compute totals for a row (mg at each slot)
+    const totalsOf = (row) => ({
+      AM:  num(row?.AM),
+      MID: num(row?.MID),
+      DIN: num(row?.DIN),
+      PM:  num(row?.PM),
+    });
+
+    // Identify rows that are doses vs meta
+    const isMetaRow = (r) => (r?.kind === "STOP" || r?.stop === true || r?.kind === "REVIEW" || r?.review === true);
+    const isDoseRow = (r) => !isMetaRow(r) && (num(r?.AM)+num(r?.MID)+num(r?.DIN)+num(r?.PM) > EPS);
+
+    // PM-only detector for a DOSE row
+    const isPmOnlyDose = (r) => {
+      const t = totalsOf(r);
+      return (t.PM > EPS) && zeroish(t.AM + t.MID + t.DIN);
     };
 
-    const out = stepRows.slice();
-    // Trim any trailing STOP/REVIEW for inspection; we’ll re-append if needed
-    while (out.length && (out[out.length-1]?.kind === "STOP" || out[out.length-1]?.kind === "REVIEW")) {
-      out.pop();
-    }
-    if (!out.length) return stepRows;
+    // Strip any trailing meta rows first so we work on the true last dose
+    let out = stepRows.slice();
+    while (out.length && isMetaRow(out[out.length-1])) out.pop();
+    if (!out.length) return stepRows; // nothing to enforce
 
-    if (!lowestSelected){
-      // If lowest NOT selected → remove any trailing PM-only rows, then add REVIEW after final BID
-      while (out.length){
-        const t = totalsOf(out[out.length-1]);
-        const isPmOnly = t.PM > 0 && (t.AM + t.MID + t.DIN) <= EPS;
-        if (isPmOnly) out.pop();
-        else break;
-      }
-      if (!out.length) return stepRows; // nothing left (unlikely)
-      const last = out[out.length-1];
-      const dateStr = last.dateStr || last.date || last.when || last.applyOn || "";
-      out.push({ kind:"REVIEW", dateStr, message: "Review with your doctor the ongoing plan" });
-      return out;
-    }
-    
+    // Find the index of the last DOSE row
+    let lastDoseIdx = out.length - 1;
+    while (lastDoseIdx >= 0 && !isDoseRow(out[lastDoseIdx])) lastDoseIdx--;
+    if (lastDoseIdx < 0) return stepRows; // no dose rows at all
 
-    // If lowest IS selected, leave whatever PM-only/STOP your stepper produced.
-    return stepRows;
-  } catch(_){
+    const lastDose = out[lastDoseIdx];
+    const lastDate   = lastDose.date ?? lastDose.dateStr ?? lastDose.applyOn ?? lastDose.applyOnStr ?? "";
+    const applyOnStr = lastDose.applyOnStr ?? lastDose.applyOn ?? lastDose.dateStr ?? lastDose.date ?? "";
+
+    // Helper: STOP and REVIEW rows
+    const makeStop = () => ({
+      kind: "STOP",
+      stop: true,
+      dateStr: lastDate,
+      applyOnStr,
+      message: "Stop all doses",
+    });
+    const makeReview = () => ({
+      kind: "REVIEW",
+      review: true,
+      dateStr: lastDate,
+      applyOnStr,
+      message: "Review with your doctor the ongoing plan",
+    });
+
+    // Look at what currently sits after the last dose row (tail rows that we stripped above)
+    // Re-evaluate the true original tail to decide what to add back.
+    const originalTail = stepRows.slice(out.length);
+    const hadPmOnlyAfterLast =
+      originalTail.length && isDoseRow(originalTail[0]) && isPmOnlyDose(originalTail[0]);
+    const hadStop = originalTail.some(r => r?.kind === "STOP" || r?.stop === true);
+    const hadReview = originalTail.some(r => r?.kind === "REVIEW" || r?.review === true);
+
+    if (lowestSelected) {
+      // Lowest strength selected:
+      // - Keep the dose rows as-is
+      // - If there WAS a PM-only tail, allow it
+      // - Always ensure a STOP row exists at the very end
+      // Rebuild: [out] + [optional PM-only if it existed] + [STOP]
+
+      // Retain exactly one PM-only dose row if it existed right after the last dose
+      const rebuilt = out.slice();
+      if (hadPmOnlyAfterLast) rebuilt.push(originalTail[0]);
+
+      // Always ensure a STOP row at end
+      rebuilt.push(hadStop ? originalTail.find(r => r?.kind === "STOP" || r?.stop === true) : makeStop());
+      return rebuilt;
+    } else {
+      // Lowest strength NOT selected:
+      // - Remove any PM-only and STOP tail rows
+      // - Ensure a single REVIEW row exists after the last dose row
+      const rebuilt = out.slice();
+      if (!hadReview) rebuilt.push(makeReview());
+      else rebuilt.push(originalTail.find(r => r?.kind === "REVIEW" || r?.review === true));
+      return rebuilt;
+    }
+  } catch (_err) {
+    // Fail safe: never block generation
     return stepRows;
   }
 }
