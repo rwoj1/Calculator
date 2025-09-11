@@ -315,6 +315,8 @@ function formatOxyOnlyHTML(label){
       replaceOnce(oxyWordEsc, `<strong class="oxy-strong">${oxyWordEsc}</strong>`);
     }
   }
+  return html;
+}
 // --- Opioid end-dose enforcement (default rules) ---
 function lowestCommercialMg(cls, med, form){
   try{
@@ -378,8 +380,6 @@ function enforceOpioidEndDoseDefault(stepRows){
 
   // Soften the form suffix "SR tablet|SR capsule"
   html = html.replace(/\b(SR\s*(?:tablet|capsule))\b/ig, '<span class="form-dim">$1</span>');
-  return html;
-}
 
 function moveReductionRow(row, dir){
   const list = document.getElementById('step1List');
@@ -2778,6 +2778,44 @@ function buildPlanTablets(){
   let packs=buildPacksFromDoseLines();
   if (packsTotalMg(packs) === 0) return [];
 
+// If user left Phase 2 start blank but set Phase 2 %, simulate Phase 1 only,
+// then auto-fill p2StartDate to the next day after Phase 1’s last step.
+if (!p2Start && p2Pct > 0 && p2Int > 0 && $("p2StartDate")) {
+  (function simulatePhaseOneAndAutoSetP2(){
+    let simPacks = deepCopy(packs);
+    let simDate  = new Date(startDate);
+    let simWeek  = 1;
+
+    // advance one Phase-1 step using your existing per-class stepping
+    const stepPhase1 = () => {
+      if (cls === "Opioid") simPacks = stepOpioid_Shave(simPacks, p1Pct, cls, med, form);
+      else if (cls === "Proton Pump Inhibitor") simPacks = stepPPI(simPacks, p1Pct, cls, med, form);
+      else if (cls === "Benzodiazepines / Z-Drug (BZRA)") simPacks = stepBZRA(simPacks, p1Pct, med, form);
+      else if (cls === "Gabapentinoids") simPacks = stepGabapentinoid(simPacks, p1Pct, med, form);
+      else simPacks = stepAP(simPacks, p1Pct, med, form);
+    };
+
+    // First Phase-1 step occurs on startDate
+    stepPhase1();
+
+    // Then keep stepping at p1Interval until Phase-1 would finish
+    while (packsTotalMg(simPacks) > EPS && simWeek < MAX_WEEKS) {
+      simDate  = addDays(simDate, p1Int);
+      simWeek += 1;
+      stepPhase1();
+    }
+
+    // Phase-2 starts the calendar day AFTER the last Phase-1 dose step
+    const p2d = addDays(simDate, 1);
+    const y = p2d.getFullYear();
+    const m = String(p2d.getMonth() + 1).padStart(2, '0');
+    const d = String(p2d.getDate()).padStart(2, '0');
+    $("p2StartDate").value = `${y}-${m}-${d}`;
+    p2Start = p2d; // update local variable so the rest of this builder uses it
+  })();
+}
+
+  
   const rows=[]; let date=new Date(startDate); const capDate=new Date(+startDate + THREE_MONTHS_MS);
 
 const doStep = (phasePct) => {
