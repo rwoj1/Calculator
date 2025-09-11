@@ -274,7 +274,7 @@ function escapeHtml(s){
 }
 
 // Emphasise only Oxycodone (name + its mg). Naloxone stays normal.
-// Safe: we escape the original string first, then replace exact escaped substrings once.
+// Safe: escape first, then replace exact escaped substrings once.
 function formatOxyOnlyHTML(label){
   if (!label) return "";
   const raw  = String(label);
@@ -315,8 +315,12 @@ function formatOxyOnlyHTML(label){
       replaceOnce(oxyWordEsc, `<strong class="oxy-strong">${oxyWordEsc}</strong>`);
     }
   }
+
+  // Soften the form suffix "SR tablet|SR capsule" (do this INSIDE the function)
+  html = html.replace(/\b(SR\s*(?:tablet|capsule))\b/ig, '<span class="form-dim">$1</span>');
   return html;
 }
+
 // --- Opioid end-dose enforcement (default rules) ---
 function lowestCommercialMg(cls, med, form){
   try{
@@ -377,9 +381,6 @@ function enforceOpioidEndDoseDefault(stepRows){
     return stepRows;
   }
 }
-
-  // Soften the form suffix "SR tablet|SR capsule"
-  html = html.replace(/\b(SR\s*(?:tablet|capsule))\b/ig, '<span class="form-dim">$1</span>');
 
 function moveReductionRow(row, dir){
   const list = document.getElementById('step1List');
