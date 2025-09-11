@@ -1373,10 +1373,34 @@ function allCommercialProductsForSelected(){
 }
 
 // Read current selection (returns array of mg if any selected, else null -> use default)
+// Return allowed mg strengths for the CURRENT class/med/form.
+// None ticked => treat as "all products allowed".
 function selectedProductMgs(){
-  // We store selected base strengths (mg) in a Set. If empty → null (use all).
-  if (!window.SelectedFormulations || SelectedFormulations.size === 0) return null;
-  return Array.from(SelectedFormulations).filter(n => Number.isFinite(n) && n > 0);
+  const clsEl  = document.getElementById("classSelect");
+  const medEl  = document.getElementById("medicineSelect");
+  const formEl = document.getElementById("formSelect");
+  const cls  = (clsEl  && clsEl.value)  || "";
+  const med  = (medEl  && medEl.value)  || "";
+  const form = (formEl && formEl.value) || "";
+
+  const s = (window.SelectedFormulations instanceof Set) ? window.SelectedFormulations : new Set();
+
+  // None selected => ALL products for this med/form
+  if (!s || s.size === 0){
+    const list = (typeof strengthsForSelectedSafe === "function")
+      ? strengthsForSelectedSafe(cls, med, form)   // returns ["5 mg", "10 mg", ...] safely filtered
+      : (typeof strengthsForPicker === "function" ? strengthsForPicker() : []);
+    return (list || [])
+      .map(v => (typeof parseMgFromStrength === "function" ? parseMgFromStrength(v) : parseFloat(String(v))))
+      .filter(v => Number.isFinite(v) && v > 0)
+      .sort((a,b)=>a-b);
+  }
+
+  // Some selected => use only those ticks
+  return Array.from(s)
+    .map(v => +v)
+    .filter(v => Number.isFinite(v) && v > 0)
+    .sort((a,b)=>a-b);
 }
 function strengthsForSelectedSafe(cls, med, form){
   try {
@@ -2839,13 +2863,17 @@ const doStep = (phasePct) => {
     const nextByP2 = addDays(date, p2Int);
     let nextDate;
 
-    if (p2Start && +date < +p2Start) {
-      nextDate = (+nextByP1 > +p2Start) ? new Date(p2Start) : nextByP1;
-    } else if (p2Start && +date >= +p2Start) {
-      nextDate = nextByP2;
-    } else {
-      nextDate = nextByP1;
-    }
+if (p2Start && +date < +p2Start) {
+  // Stay on the Phase-1 cadence and switch phases at the NEXT boundary
+  nextDate = nextByP1;                        // (e.g., 15 Sep in your example)
+} else if (p2Start && +date >= +p2Start) {
+  // We are now in Phase-2 time — follow P2 cadence
+  nextDate = nextByP2;
+} else {
+  // No Phase-2 configured — keep Phase-1 cadence
+  nextDate = nextByP1;
+}
+
 
     if (reviewDate && +nextDate >= +reviewDate) { rows.push({ week: week+1, date: fmtDate(reviewDate), packs:{}, med, form, cls, review:true }); break; }
     if (+nextDate - +startDate >= THREE_MONTHS_MS) { rows.push({ week: week+1, date: fmtDate(nextDate), packs:{}, med, form, cls, review:true }); break; }
