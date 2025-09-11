@@ -321,141 +321,137 @@ function formatOxyOnlyHTML(label){
   return html;
 }
 
-function enforceOpioidEndDoseDefault(stepRows){
-  try {
+/* ======================================================================
+ * REPLACE the entire existing function in script.js with this version
+ * Name: enforceOpioidEndDoseTail(stepRows)
+ * (v2: uses fmtDate for dates)
+ * ====================================================================== */
+function enforceOpioidEndDoseTail(stepRows){
+  try{
     if (!Array.isArray(stepRows) || !stepRows.length) return stepRows;
 
-    // Scope: Opioid SR/CR only
-    const cls  = document.getElementById("classSelect")?.value || "";
-    const med  = document.getElementById("medicineSelect")?.value || "";
-    const form = document.getElementById("formSelect")?.value || "";
-    if (!/Opioid/i.test(cls) || !/(SR|CR)/i.test(form)) return stepRows;
+    const cls = document.getElementById("classSelect")?.value || stepRows[stepRows.length-1]?.cls || "";
+    const med = document.getElementById("medicineSelect")?.value || stepRows[stepRows.length-1]?.med || "";
+    const form= document.getElementById("formSelect")?.value || stepRows[stepRows.length-1]?.form|| "";
+    if (cls !== "Opioid" || !/SR|CR/i.test(form) || /Patch/i.test(form)) return stepRows;
 
-    // --- helpers
-    const EPS = 1e-6;
-    const num = (v) => (Number.isFinite(+v) ? +v : 0);
-    const isZeroish = (v) => Math.abs(num(v)) <= EPS;
-    const isMeta = (r) => (r?.kind === "STOP" || r?.stop === true || r?.kind === "REVIEW" || r?.review === true);
-    const isDose = (r) => !isMeta(r) && (num(r?.AM)+num(r?.MID)+num(r?.DIN)+num(r?.PM) > EPS);
-    const isPmOnly = (r) => num(r?.PM) > EPS && isZeroish(num(r?.AM)+num(r?.MID)+num(r?.DIN));
-    const isBid = (r) => num(r?.AM) > EPS && num(r?.PM) > EPS && isZeroish(num(r?.MID)+num(r?.DIN));
-
-    const parseDate = (s) => {
-      if (!s) return null;
-      const d = new Date(s);
-      return isNaN(+d) ? null : d;
-    };
-    const fmtDate = (d) => {
-      try {
-        const y = d.getFullYear();
-        const m = d.toLocaleString(undefined,{month:'short'}); // e.g., "Sep"
-        const day = String(d.getDate()).padStart(2,'0');
-        return `${day} ${m} ${y}`;
-      } catch(_){ return d?.toISOString?.().slice(0,10) || ""; }
-    };
-    const addDays = (d, n) => { const x = new Date(d.getTime()); x.setDate(x.getDate()+n); return x; };
-    const daysBetween = (a,b) => Math.round((b - a) / (24*3600*1000));
-
-    const lowestSelected = (typeof isLowestCommercialSelected === "function")
+    const minMg = (typeof lowestCommercialMg === "function") ? lowestCommercialMg(cls, med, form) : 0;
+    const lowestAllowed = (typeof isLowestCommercialSelected === "function")
       ? isLowestCommercialSelected(cls, med, form)
       : false;
 
-    // Work on a clone; strip meta rows from the end for clean surgery
-    let body = stepRows.slice();
+    // Helpers
+    const EPS = (typeof window.EPS === "number") ? window.EPS : 1e-6;
+    const fmt = (typeof fmtDate === "function")
+      ? fmtDate
+      : (d)=> new Date(d).toLocaleDateString("en-AU", { year: "numeric", month: "short", day: "numeric" });
+    const near0 = (v)=> Math.abs(+v||0) <= EPS;
+    const packsTotal = (row, slot) => {
+      const packs = row?.packs || {};
+      return (typeof packsTotalMg === "function" && packs[slot])
+        ? packsTotalMg({[slot]:packs[slot]})
+        : 0;
+    };
+    const isMeta = (r) => !!(r && (r.stop || r.review || r.kind === "STOP" || r.kind === "REVIEW"));
+    const isDose = (r) => !!(r && !isMeta(r));
+    const slotTotals = (r) => ({ AM: packsTotal(r,"AM"), MID: packsTotal(r,"MID"), DIN: packsTotal(r,"DIN"), PM: packsTotal(r,"PM") });
+    const isPmOnly = (r) => {
+      const t = slotTotals(r);
+      return (t.PM > EPS) && near0(t.AM + t.MID + t.DIN);
+    };
+    const isBidAtLowest = (r) => {
+      const t = slotTotals(r);
+      const near = (a,b)=> Math.abs((a||0)-(b||0)) <= EPS;
+      return near(t.AM, minMg) && near(t.PM, minMg) && near0(t.MID) && near0(t.DIN);
+    };
+    const parseDate = (v) => {
+      const s = v?.toString?.() ?? v;
+      const d = s ? new Date(s) : null;
+      return (d && !isNaN(+d)) ? d : null;
+    };
+    const addDays = (d, n) => { const x = new Date(d.getTime()); x.setDate(x.getDate()+n); return x; };
+    const daysBetween = (a,b) => Math.round((b - a)/(24*3600*1000));
+
+    // Work on a shallow copy; peel off trailing meta rows (STOP/REVIEW)
+    const out = stepRows.slice();
     const strippedTail = [];
-    while (body.length && isMeta(body[body.length-1])) strippedTail.unshift(body.pop());
+    while (out.length && isMeta(out[out.length-1])) strippedTail.unshift(out.pop());
+    if (!out.length) return stepRows;
 
-    // Find last two DOSE rows (indices after stripping metas)
-    let last = body.length - 1;
-    while (last >= 0 && !isDose(body[last])) last--;
-    if (last < 0) return stepRows; // no dose rows
+    // Identify trailing PM-only dose rows (there can be more than one from old logic)
+    let last = out.length - 1;
+    while (last >= 0 && !isDose(out[last])) last--;
+    if (last < 0) return stepRows;
 
+    // Compute interval from last two DOSE rows
     let prev = last - 1;
-    while (prev >= 0 && !isDose(body[prev])) prev--;
-
-    const lastDose = body[last];
-    const lastDateStr = lastDose.applyOnStr ?? lastDose.applyOn ?? lastDose.dateStr ?? lastDose.date ?? "";
-    const lastDate = parseDate(lastDateStr);
-
+    while (prev >= 0 && !isDose(out[prev])) prev--;
     let intervalDays = 7;
-    if (prev >= 0) {
-      const prevDateStr = body[prev].applyOnStr ?? body[prev].applyOn ?? body[prev].dateStr ?? body[prev].date ?? "";
-      const prevDate = parseDate(prevDateStr);
-      if (prevDate && lastDate) {
+    const lastDate = parseDate(out[last].date || out[last].dateStr || out[last].when || out[last].applyOn);
+    if (prev >= 0){
+      const prevDate = parseDate(out[prev].date || out[prev].dateStr || out[prev].when || out[prev].applyOn);
+      if (prevDate && lastDate){
         const d = daysBetween(prevDate, lastDate);
         if (d > 0 && d < 60) intervalDays = d;
       }
     }
 
-    // Row factories
-    const cloneForDate = (row, dateObj) => {
-      const x = JSON.parse(JSON.stringify(row));
-      const ds = fmtDate(dateObj);
-      x.dateStr = ds; x.applyOnStr = ds;
-      if ('date' in x) x.date = ds;
-      if ('applyOn' in x) x.applyOn = ds;
-      return x;
-    };
-    const pmOnlyFrom = (row, dateObj) => {
-      const x = cloneForDate(row, dateObj);
-      // keep PM the same, zero others
-      x.AM = 0; x.MID = 0; x.DIN = 0;
-      x.instructions = "Take at night";
-      return x;
-    };
-    const makeStopAt = (d) => ({ kind:"STOP", stop:true, dateStr:fmtDate(d), applyOnStr:fmtDate(d), message:"Stop all doses" });
-    const makeReviewAt = (d) => ({ kind:"REVIEW", review:true, dateStr:fmtDate(d), applyOnStr:fmtDate(d), message:"Review with your doctor the ongoing plan" });
+    // Find the most recent BID@lowest row index
+    let k = -1;
+    for (let i = out.length - 1; i >= 0; i--){
+      const r = out[i];
+      if (!isDose(r)) continue;
+      if (isBidAtLowest(r)) { k = i; break; }
+    }
 
-    // Helper: ensure final base dose row is BID before tailing
-    const ensureLastIsBID = () => {
-      if (isBid(body[last])) return; // already BID
-      // If last is not BID (e.g., PM-only), find the most recent BID dose and truncate after it.
-      let i = last;
-      while (i >= 0 && !isDose(body[i])) i--;
-      while (i >= 0 && !isBid(body[i])) i--;
-      if (i >= 0 && isBid(body[i])) {
-        body = body.slice(0, i + 1);
-        last = i;
-        // recompute prev after truncation and interval if possible
-        prev = last - 1;
-        while (prev >= 0 && !isDose(body[prev])) prev--;
-        if (prev >= 0) {
-          const pds = body[prev].applyOnStr ?? body[prev].applyOn ?? body[prev].dateStr ?? body[prev].date ?? "";
-          const pd = parseDate(pds);
-          const ld = parseDate(body[last].applyOnStr ?? body[last].applyOn ?? body[last].dateStr ?? body[last].date ?? "");
-          if (pd && ld) {
-            const d = daysBetween(pd, ld);
-            if (d > 0 && d < 60) intervalDays = d;
-          }
-        }
-      } else {
-        // No BID row exists; do nothing (avoid inventing doses)
-      }
-    };
+    if (!lowestAllowed){
+      // RULE: lowest NOT selected → final = BID of that dose → REVIEW (no PM-only, no STOP)
 
-    if (lowestSelected) {
-      // BID → PM-only → STOP
-      ensureLastIsBID();
-      const base = body[last];
-      const baseDate = parseDate(base.applyOnStr ?? base.dateStr ?? base.applyOn ?? base.date ?? "") || lastDate || new Date();
-      const pmDate = addDays(baseDate, intervalDays);
-      const pmRow = pmOnlyFrom(base, pmDate);
-      const stopRow = makeStopAt(addDays(pmDate, intervalDays));
-      const rebuilt = body.slice(0, last + 1);
-      rebuilt.push(pmRow, stopRow);
-      return rebuilt;
-    } else {
-      // BID → REVIEW
-      ensureLastIsBID();
-      const base = body[last];
-      const baseDate = parseDate(base.applyOnStr ?? base.dateStr ?? base.applyOn ?? base.date ?? "") || lastDate || new Date();
-      const reviewRow = makeReviewAt(addDays(baseDate, intervalDays));
-      const rebuilt = body.slice(0, last + 1);
-      rebuilt.push(reviewRow);
+      // Remove ANY trailing PM-only dose rows
+      while (out.length && isDose(out[out.length-1]) && isPmOnly(out[out.length-1])) out.pop();
+
+      // Recompute last index after popping
+      last = out.length - 1;
+      while (last >= 0 && !isDose(out[last])) last--;
+      if (last < 0) return stepRows;
+
+      // REVIEW date = one interval AFTER the last BID/DOSE date
+      const lastDate2 = parseDate(out[last].date || out[last].dateStr || out[last].when || out[last].applyOn) || lastDate || new Date();
+      const reviewDate = addDays(lastDate2, intervalDays);
+
+      const rebuilt = out.slice();
+      rebuilt.push({ kind:"REVIEW", review:true, date: fmt(reviewDate), dateStr: fmt(reviewDate), message:"Review with your doctor the ongoing plan" });
       return rebuilt;
     }
-  } catch(_err){
-    return stepRows; // fail-safe
+
+    // lowestAllowed == true
+    if (k === -1){
+      // We never reached true lowest BID → do NOT force PM-only/STOP. Keep original rows (with any existing tail).
+      return out.concat(strippedTail);
+    }
+
+    // Ensure PM-only right after BID@lowest, then STOP after that
+    const bidRow = out[k];
+    const baseDate = parseDate(bidRow.date || bidRow.dateStr || bidRow.when || bidRow.applyOn) || lastDate || new Date();
+    const pmDate = addDays(baseDate, intervalDays);
+    const pmPacks = (bidRow.packs && bidRow.packs.PM) ? (Array.isArray(bidRow.packs.PM) ? JSON.parse(JSON.stringify(bidRow.packs.PM)) : bidRow.packs.PM) : [];
+    const pmOnlyRow = { week: (typeof bidRow.week === "number") ? bidRow.week + 1 : undefined,
+                        date: fmt(pmDate),
+                        dateStr: fmt(pmDate),
+                        packs: { AM:[], MID:[], DIN:[], PM: pmPacks }, med: bidRow.med, form: bidRow.form, cls: bidRow.cls };
+    // Remove any existing PM-only right after k to avoid duplicates
+    if (out[k+1] && isDose(out[k+1]) && isPmOnly(out[k+1])) out.splice(k+1, 1);
+    out.splice(k+1, 0, pmOnlyRow);
+
+    // STOP one interval after PM-only
+    const stopDate = addDays(pmDate, intervalDays);
+    const rebuilt = out.slice();
+    rebuilt.push({ week: (typeof pmOnlyRow.week === "number") ? pmOnlyRow.week + 1 : undefined,
+                   date: fmt(stopDate), dateStr: fmt(stopDate),
+                   packs:{}, med: bidRow.med, form: bidRow.form, cls: bidRow.cls, stop:true, kind:"STOP" });
+    return rebuilt;
+  } catch (_err){
+    return stepRows;
   }
 }
 
