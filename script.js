@@ -274,39 +274,29 @@ function escapeHtml(s){
 }
 
 // Emphasise only Oxycodone (name + its mg). Naloxone stays normal.
-// Emphasise only Oxycodone (name + its mg). Naloxone stays normal.
-// Safe: we escape the original string, then replace exact escaped substrings once.
+// Safe: we escape the original string first, then replace exact escaped substrings once.
 function formatOxyOnlyHTML(label){
   if (!label) return "";
+  const raw  = String(label);
+  let html   = escapeHtml(raw);
 
-  const escapeHtml = s => String(s)
-    .replace(/&/g,"&amp;")
-    .replace(/</g,"&lt;")
-    .replace(/>/g,"&gt;")
-    .replace(/"/g,"&quot;");
-
-  // Work from the raw then map replacements onto the escaped string
-  const raw = String(label);
-  let html = escapeHtml(raw);
-
-  // Helper: replace exactly one occurrence of 'needle' (escaped) with HTML
-  const replaceOnce = (escapedNeedle, htmlFrag) => {
-    const idx = html.indexOf(escapedNeedle);
-    if (idx >= 0) {
-      html = html.slice(0, idx) + htmlFrag + html.slice(idx + escapedNeedle.length);
+  // Replace the first occurrence of an escaped substring, once
+  const replaceOnce = (needle, swap) => {
+    const idx = html.indexOf(needle);
+    if (idx !== -1) {
+      html = html.slice(0, idx) + swap + html.slice(idx + needle.length);
     }
   };
 
-  // Case 1: "Oxycodone 30 mg + Naloxone 15 mg ..."
+  // Case 1: "Oxycodone 30 mg + Naloxone 15 mg …"
   const mPlus = /Oxycodone[^0-9]*\b(\d+(?:\.\d+)?)\s*mg\b/i.exec(raw);
   if (mPlus) {
-    // Bold the *entire* "Oxycodone ... mg" phrase once
     const oxyPhrase = raw.match(/Oxycodone[^0-9]*\d+(?:\.\d+)?\s*mg/i)[0];
     const oxyEsc = escapeHtml(oxyPhrase);
     replaceOnce(oxyEsc, `<strong class="oxy-strong">${oxyEsc}</strong>`);
   }
 
-  // Case 2: "Oxycodone/Naloxone 10/5 mg ..." → bold the first (oxycodone) value
+  // Case 2: "Oxycodone/Naloxone 10/5 mg …" → bold the first (oxycodone) value
   if (/Oxycodone/i.test(raw)) {
     const slash1 = /(\d+(?:\.\d+)?)\s*mg\s*\/\s*(\d+(?:\.\d+)?)\s*mg/i.exec(raw);
     if (slash1) {
@@ -315,27 +305,82 @@ function formatOxyOnlyHTML(label){
     } else {
       const slash2 = /(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)\s*mg/i.exec(raw);
       if (slash2) {
-        const firstEsc = escapeHtml(`${slash2[1]}`);
+        const firstEsc = escapeHtml(`${slash2[1]} mg`);
         replaceOnce(firstEsc, `<strong class="oxy-strong">${firstEsc}</strong>`);
       }
     }
-  }
-
-  // Always ensure the word "Oxycodone" itself (first occurrence) is bold,
-  // but only if it isn't already inside a <strong>.
-  if (/Oxycodone/i.test(raw)) {
-    // Do a light check on the escaped HTML to avoid inserting inside existing <strong>
+    // Bold the word "Oxycodone" itself if not already inside <strong>
     const oxyWordEsc = escapeHtml("Oxycodone");
     if (!/<strong[^>]*>\s*Oxycodone\s*<\/strong>/i.test(html)) {
       replaceOnce(oxyWordEsc, `<strong class="oxy-strong">${oxyWordEsc}</strong>`);
     }
   }
+// --- Opioid end-dose enforcement (default rules) ---
+function lowestCommercialMg(cls, med, form){
+  try{
+    const arr = (typeof strengthsForSelectedSafe === "function")
+      ? strengthsForSelectedSafe(cls, med, form)
+      : (typeof strengthsForSelected === "function" ? strengthsForSelected() : []);
+    const mg = (arr||[]).map(parseMgFromStrength).filter(v=>v>0).sort((a,b)=>a-b);
+    return mg[0] || 0;
+  } catch(_) { return 0; }
+}
+function isLowestCommercialSelected(cls, med, form){
+  const minMg = lowestCommercialMg(cls, med, form);
+  const picked = (typeof selectedProductMgs === "function") ? selectedProductMgs() : [];
+  if (!picked || picked.length === 0) return true; // none selected → treat as “all allowed”
+  return picked.includes(minMg);
+}
+function enforceOpioidEndDoseDefault(stepRows){
+  try{
+    const cls  = document.getElementById("classSelect")?.value || "";
+    const med  = document.getElementById("medicineSelect")?.value || "";
+    const form = document.getElementById("formSelect")?.value || "";
+    if (cls !== "Opioid" || !/SR/i.test(form) || !Array.isArray(stepRows)) return stepRows;
+
+    const lowestSelected = isLowestCommercialSelected(cls, med, form);
+
+    // helper: per-slot totals (mg) for a row
+    const totalsOf = (row)=>{
+      const packs = row?.packs || {};
+      const tot = slot => (packs[slot] ? packsTotalMg({[slot]:packs[slot]}) : 0);
+      return { AM: tot("AM"), MID: tot("MID"), DIN: tot("DIN"), PM: tot("PM") };
+    };
+
+    const out = stepRows.slice();
+    // Trim any trailing STOP/REVIEW for inspection; we’ll re-append if needed
+    while (out.length && (out[out.length-1]?.kind === "STOP" || out[out.length-1]?.kind === "REVIEW")) {
+      out.pop();
+    }
+    if (!out.length) return stepRows;
+
+    if (!lowestSelected){
+      // If lowest NOT selected → remove any trailing PM-only rows, then add REVIEW after final BID
+      while (out.length){
+        const t = totalsOf(out[out.length-1]);
+        const isPmOnly = t.PM > 0 && (t.AM + t.MID + t.DIN) <= EPS;
+        if (isPmOnly) out.pop();
+        else break;
+      }
+      if (!out.length) return stepRows; // nothing left (unlikely)
+      const last = out[out.length-1];
+      const dateStr = last.dateStr || last.date || last.when || last.applyOn || "";
+      out.push({ kind:"REVIEW", dateStr, message: "Review with your doctor the ongoing plan" });
+      return out;
+    }
+
+    // If lowest IS selected, leave whatever PM-only/STOP your stepper produced.
+    return stepRows;
+  } catch(_){
+    return stepRows;
+  }
+}
 
   // Soften the form suffix "SR tablet|SR capsule"
   html = html.replace(/\b(SR\s*(?:tablet|capsule))\b/ig, '<span class="form-dim">$1</span>');
-
   return html;
 }
+
 function moveReductionRow(row, dir){
   const list = document.getElementById('step1List');
   if (!list) return;
@@ -1777,6 +1822,7 @@ function applySpreadSafetyInteractive(stepRows) {
 //#endregion
 //#region 5. Renderers (Standard & Patch)
 function renderStandardTable(stepRows){
+  stepRows = enforceOpioidEndDoseDefault(stepRows);  
   stepRows = applySpreadSafetyInteractive(stepRows);
   if (!stepRows) return;
   const scheduleHost = document.getElementById("scheduleBlock");
