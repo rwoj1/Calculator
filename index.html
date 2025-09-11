@@ -10,8 +10,9 @@
 </head>
 <body>
   <main class="container">
-    <h1>Medicine Chart Input</h1>
+    <h1>Medicine Tapering Calculator</h1>
 
+    <section class="card">
     <div class="grid">
       <label>Medicine Class
         <select id="classSelect"></select>
@@ -23,74 +24,167 @@
         <select id="formSelect"></select>
       </label>
     </div>
-
-    <div class="grid">
-      <label>Start date
-        <input id="startDate" class="datepick" placeholder="Select date" />
-      </label>
-      <label>Next review date (optional)
-        <input id="reviewDate" class="datepick" placeholder="Select date" />
-      </label>
-    </div>
-
-    <section class="card">
+    
       <div class="card-head">
-        <h2>Dose lines</h2>
+        <h2>Current Dosage</h2>
         <button id="addDoseLineBtn" type="button" class="secondary">Add Dose Line</button>
       </div>
       <div id="doseLinesContainer" class="dose-lines"></div>
-<p class="hint">Only <strong>Strength</strong>, <strong>Number of doses</strong> and <strong>Frequency</strong> can be changed.</p>
     </section>
 
     <section class="card">
       <div id="bestPracticeBox"></div>
     </section>
 
-<section class="card">
-<h2>Taper controls</h2>
+<section class="card" id="taperCard">
+  <h2>Taper controls</h2>
 
-<div class="taper-block">
-  <h3>Phase 1</h3>
-  <div class="taper-row">
-    <label class="inline-label">
-      <span>Reduce by (%):</span>
-      <input id="p1Percent" type="number" min="1" max="100" placeholder="%" />
+  <!-- Dates row -->
+  <div class="grid">
+    <label>Start date for tapering
+      <input id="startDate" class="datepick" placeholder="Select date" />
     </label>
-    <label class="inline-label">
-      <span>Every (days):</span>
-      <input id="p1Interval" type="number" min="1" placeholder="days" />
+    <label>Next review date (optional)
+      <input id="reviewDate" class="datepick" placeholder="Select date" />
     </label>
   </div>
 
-  <h3>Phase 2 <span class="muted">(optional)</span></h3>
-  <div class="taper-row">
-    <label class="inline-label">
-      <span>Start Phase 2 from:</span>
-      <input id="p2StartDate" class="datepick" placeholder="DD/MM/YYYY" />
+  <!-- Phase 1 stays visible -->
+  <div class="taper-block">
+    <h3>Phase 1</h3>
+    <div class="taper-row">
+      <label class="inline-label">
+        <span>Reduce by (%):</span>
+        <input id="p1Percent" type="number" min="1" max="100" placeholder="%" />
+      </label>
+      <label class="inline-label">
+        <span>Every (days):</span>
+        <input id="p1Interval" type="number" min="1" placeholder="days" />
+      </label>
+    </div>
+  </div>
+
+  <!-- NEW: Advanced Settings accordion (everything for Phase 2 lives here) -->
+  <details id="advancedSettings" class="accordion">
+    <summary>Advanced Settings (Optional)</summary>
+    <div class="accordion-body">
+
+      <!-- Phase 2 (entirely inside the accordion) -->
+      <div class="taper-block">
+        <h3>Phase 2</h3>
+        <p class="hint" style="margin-top:0">
+          Phase 2 will start at the closest date after the last step of Phase 1 is complete.
+          If Phase 2 is blank or only partly set up, a single-phase taper will be generated.
+        </p>
+        <div class="taper-row">
+          <label class="inline-label">
+            <span>Start Phase 2 from:</span>
+            <input id="p2StartDate" class="datepick" placeholder="DD/MM/YYYY" />
+          </label>
+          <label class="inline-label">
+            <span>Reduce by (%):</span>
+            <input id="p2Percent" type="number" min="1" max="100" placeholder="%" />
+          </label>
+          <label class="inline-label">
+            <span>Every (days):</span>
+            <input id="p2Interval" type="number" min="1" placeholder="days" />
+          </label>
+        </div>
+      </div>
+
+      <!-- Product/formulation picker: moved inside the accordion, above Mode -->
+      <div id="productPickerCard" class="card-subtle" style="display:none; margin-top:8px;">
+        <h3 style="margin:0 0 6px 0;">Select formulations to use in the taper (optional)</h3>
+        <p class="hint" style="margin-top:0">
+          Select the commercial products to generate a tapering plan.<br>
+          If none are selected, all products will be used.
+        </p>
+        <div id="productPicker" class="product-grid"></div>
+        <div class="taper-row" style="gap:8px; margin-top:8px;">
+          <button id="selectAllProductSelection" type="button" class="secondary">Select all</button>
+          <button id="clearProductSelection"  type="button" class="secondary">Clear selection</button>
+        </div>
+      </div>
+
+      <!-- Mode: defaults vs custom (layout only; logic unchanged) -->
+      <div class="taper-block" id="modeBlock" style="margin-top:10px;">
+        <h3>Mode</h3>
+        <div class="taper-row">
+          <label class="radio">
+            <input type="radio" name="taperMode" id="modeDefault" checked>
+            <span>Use recommended defaults</span>
+          </label>
+          <label class="radio">
+            <input type="radio" name="taperMode" id="modeCustom">
+            <span>Customise taper</span>
+          </label>
+        </div>
+
+<div id="customPanel" style="display:none">
+  <!-- STEP 1 -->
+  <h4 class="subhead">Step 1 — Reduction order (optional)</h4>
+
+  <!-- Single enable control for Step 1 -->
+  <div class="taper-row" role="radiogroup" aria-label="Enable Step 1">
+    <label class="radio">
+      <input type="radio" name="enableStep1" id="enableStep1No" checked>
+      <span>No</span>
     </label>
-    <label class="inline-label">
-      <span>Reduce by (%):</span>
-      <input id="p2Percent" type="number" min="1" max="100" placeholder="%" />
-    </label>
-    <label class="inline-label">
-      <span>Every (days):</span>
-      <input id="p2Interval" type="number" min="1" placeholder="days" />
+    <label class="radio">
+      <input type="radio" name="enableStep1" id="enableStep1Yes">
+      <span>Yes</span>
     </label>
   </div>
 
-  <p class="hint">
-    If Phase 2 is partially complete or empty, only a single-phase taper will generate.
-    Hard limit: 3 months (or review date, if earlier).
+  <p class="hint" id="step1Help" style="display:none">
+    Define up to four lines. Each line reads “Reduce [time of day] until [X] mg”, then flows to the next line.
+    <br><em>Note:</em> Values are <strong>slot</strong> dose targets, not daily totals.
   </p>
+
+  <!-- Shows 4 rows when enabled -->
+  <div id="step1List" class="reduction-list" style="display:none"></div>
+
+  <!-- STEP 2 -->
+  <h4 class="subhead">Step 2 — Equalise after Step 1</h4>
+  <p class="hint">After Step 1 is complete, reduce each dose time equally.</p>
+  <div class="taper-row" role="radiogroup" aria-label="Equalise after Step 1">
+    <!-- No first, Yes second (Yes still default) -->
+    <label class="radio">
+      <input type="radio" name="equaliseAfter" id="equaliseNo">
+      <span>No</span>
+    </label>
+    <label class="radio">
+      <input type="radio" name="equaliseAfter" id="equaliseYes" checked>
+      <span>Yes</span>
+    </label>
+  </div>
+
+  <!-- STEP 3 -->
+  <h4 class="subhead">Step 3 — Review trigger (optional)</h4>
+  <div class="inline-label">
+    <span>Set review when daily total ≤</span>
+    <div class="input-suffix">
+      <input id="customReviewMg" type="number" min="0" placeholder="e.g., 50">
+      <span class="suffix">mg/day</span>
+    </div>
+  </div>
+
+  <div class="hint" style="margin-top:8px">
+    Tips: “time of day” accepts phrases like <em>in the morning</em>, <em>at midday</em>, <em>at dinner</em>, <em>at night</em>.
+    These settings don’t change calculations yet—layout only.
+  </div>
 </div>
+
+    </div>
+  </details>
+</section>
 
   <div class="actions">
     <button id="generateBtn" type="button">Generate Chart</button>
     <button id="printBtn" type="button" class="secondary">Print</button>
-    <button id="savePdfBtn" type="button" class="secondary">Save as PDF…</button>
     <button id="resetBtn" type="button" class="ghost">Reset</button>
   </div>
-</section>
+
 
  <section id="outputCard" class="card output">
   <div class="output-head">
@@ -114,5 +208,3 @@
 <script src="script.js?v=print10"></script>
 </body>
 </html>
-
-
