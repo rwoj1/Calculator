@@ -1836,6 +1836,140 @@ function applySpreadSafetyInteractive(stepRows) {
 
   return stepRows;
 }
+// --- End-dose helpers for Opioid SR ---
+function lowestCommercialMg(cls, med, form){
+  try{
+    // Use your safe strength list (already filtered by med/form)
+    const list = (typeof strengthsForSelectedSafe === "function")
+      ? strengthsForSelectedSafe(cls, med, form)
+      : (typeof strengthsForPicker === "function" ? strengthsForPicker() : []);
+    const mg = (list||[])
+      .map(v => (typeof parseMgFromStrength === "function" ? parseMgFromStrength(v) : parseFloat(String(v))))
+      .filter(v => Number.isFinite(v) && v > 0)
+      .sort((a,b)=>a-b);
+    return mg[0] || 0;
+  } catch(_) { return 0; }
+}
+
+// None ticked => treat as ALL allowed; otherwise respect ticks.
+function isLowestCommercialSelected(cls, med, form){
+  const minMg = lowestCommercialMg(cls, med, form);
+  const s = (window.SelectedFormulations instanceof Set) ? window.SelectedFormulations : new Set();
+  if (!s || s.size === 0) return true;         // none ticked = all allowed
+  return s.has(minMg);
+}
+
+function slotTotalsOfRow(row){
+  const packs = row?.packs || {};
+  const tot = (slot) => (packs[slot] ? packsTotalMg({[slot]: packs[slot]}) : 0);
+  return { AM: tot("AM"), MID: tot("MID"), DIN: tot("DIN"), PM: tot("PM") };
+}
+
+function isBidAtLowest(row, minMg){
+  const t = slotTotalsOfRow(row);
+  const near = (a,b)=> Math.abs((a||0)-(b||0)) <= (typeof EPS==='number'?EPS:1e-6);
+  return near(t.AM, minMg) && near(t.PM, minMg) && (t.MID <= (EPS||1e-6)) && (t.DIN <= (EPS||1e-6));
+}
+
+function isPmOnly(row){
+  const t = slotTotalsOfRow(row);
+  return t.PM > (EPS||1e-6) && (t.AM + t.MID + t.DIN) <= (EPS||1e-6);
+}
+
+/**
+ * Enforce opioid SR end-dose rule:
+ * - lowest selected:   BID@lowest → PM-only → STOP
+ * - lowest not selected: BID@lowest → REVIEW   (no PM-only)
+ */
+function enforceOpioidEndDoseTail(stepRows){
+  try{
+    if (!Array.isArray(stepRows) || !stepRows.length) return stepRows;
+
+    // Determine cls/med/form from controls (prefer) or last row
+    const cls = document.getElementById("classSelect")?.value || stepRows[stepRows.length-1]?.cls || "";
+    const med = document.getElementById("medicineSelect")?.value || stepRows[stepRows.length-1]?.med || "";
+    const form= document.getElementById("formSelect")?.value || stepRows[stepRows.length-1]?.form|| "";
+
+    if (cls !== "Opioid" || !/SR/i.test(form)) return stepRows;
+
+    const minMg = lowestCommercialMg(cls, med, form);
+    if (!minMg) return stepRows;
+
+    const lowestAllowed = isLowestCommercialSelected(cls, med, form);
+
+    // Work on a shallow copy and peel off trailing STOP/REVIEW for inspection
+    const out = stepRows.slice();
+    const tail = [];
+    while (out.length && (out[out.length-1]?.stop || out[out.length-1]?.review || out[out.length-1]?.kind === "STOP" || out[out.length-1]?.kind === "REVIEW")){
+      tail.unshift(out.pop());
+    }
+
+    if (!out.length) return stepRows;
+
+    // Find the last DOSE row that is BID at lowest
+    let k = -1;
+    for (let i = out.length-1; i >= 0; i--){
+      const r = out[i];
+      if (r && !r.stop && !r.review && r.kind !== "STOP" && r.kind !== "REVIEW"){
+        if (isBidAtLowest(r, minMg)){ k = i; break; }
+      }
+    }
+    if (k === -1){
+      // No BID@lowest found; restore original tail and return
+      return out.concat(tail);
+    }
+
+    // Check if we already have a PM-only row right after that BID row
+    const hadPmOnly = (out[k+1] && !out[k+1].stop && !out[k+1].review && isPmOnly(out[k+1]));
+
+    // Decide target tail by rule
+    if (lowestAllowed){
+      // Ensure PM-only then STOP exists
+      if (!hadPmOnly){
+        // Build a PM-only packs by copying PM from the BID row
+        const bidRow = out[k];
+        const pmPacks = (bidRow.packs && bidRow.packs.PM) ? deepCopy(bidRow.packs.PM) : [];
+        const packsPmOnly = { AM:[], MID:[], DIN:[], PM: pmPacks };
+
+        // Choose a date: use the first tail date if present, else repeat BID date
+        const pmDate = (tail.length && tail[0]?.date) ? tail[0].date : bidRow.date;
+        const pmWeek = (typeof bidRow.week === "number") ? (bidRow.week + 1) : undefined;
+
+        out.splice(k+1, 0, {
+          week: pmWeek,
+          date: pmDate,
+          packs: packsPmOnly,
+          med: bidRow.med, form: bidRow.form, cls: bidRow.cls
+        });
+      }
+      // Ensure STOP after PM-only (keep existing STOP from tail if present, else add one)
+      let hasStop = tail.some(t => t.stop || t.kind === "STOP");
+      const stopDate = (tail.find(t => t.stop || t.kind === "STOP")?.date)
+                    || (out[k+1]?.date) || (out[k]?.date);
+      if (!hasStop){
+        out.push({ week: (out[k+1]?.week ? out[k+1].week+1 : undefined),
+                   date: stopDate, packs:{}, med: out[k].med, form: out[k].form, cls: out[k].cls, stop:true });
+      } else {
+        // put back the original STOP (and drop any REVIEW from the tail for this rule)
+        const keep = tail.filter(t => t.stop || t.kind === "STOP");
+        out.push(...keep);
+      }
+    } else {
+      // Lowest NOT allowed: ensure NO PM-only and end with REVIEW
+      // Drop any PM-only right after BID
+      if (hadPmOnly) out.splice(k+1, 1);
+
+      // End with REVIEW (use first tail date if present, else BID date)
+      const rvwDate = (tail.length && tail[0]?.date) ? tail[0].date : out[k].date;
+      out.push({ date: rvwDate, med: out[k].med, form: out[k].form, cls: out[k].cls,
+                 kind:"REVIEW", review:true, message:"Review with your doctor the ongoing plan" });
+    }
+
+    return out;
+  } catch(_){
+    return stepRows;
+  }
+}
 
 /* ==========================================
    RENDER STANDARD (tablets/caps/ODT) TABLE
@@ -1847,6 +1981,7 @@ function applySpreadSafetyInteractive(stepRows) {
 //#endregion
 //#region 5. Renderers (Standard & Patch)
 function renderStandardTable(stepRows){
+  stepRows = enforceOpioidEndDoseTail(stepRows);
   stepRows = enforceOpioidEndDoseDefault(stepRows);  
   stepRows = applySpreadSafetyInteractive(stepRows);
   if (!stepRows) return;
