@@ -323,19 +323,28 @@ function formatOxyOnlyHTML(label){
 
 // --- Opioid end-dose enforcement (default rules) ---
 function lowestCommercialMg(cls, med, form){
-  try{
-    const arr = (typeof strengthsForSelectedSafe === "function")
-      ? strengthsForSelectedSafe(cls, med, form)
-      : (typeof strengthsForSelected === "function" ? strengthsForSelected() : []);
-    const mg = (arr||[]).map(parseMgFromStrength).filter(v=>v>0).sort((a,b)=>a-b);
-    return mg[0] || 0;
-  } catch(_) { return 0; }
+  // Prefer the full catalogue list used by the picker (all marketed strengths)
+  const list = (typeof strengthsForPicker === "function")
+    ? strengthsForPicker()                                // e.g., ["5 mg SR tablet", "10 mg SR tablet", ...]
+    : (typeof strengthsForSelectedSafe === "function"
+        ? strengthsForSelectedSafe(cls, med, form)        // fallback
+        : []);
+
+  const mgs = list
+    .map(s => (typeof parseMgFromStrength==="function"
+                ? parseMgFromStrength(s)
+                : parseFloat(String(s).replace(/[^\d.]/g,""))))
+    .filter(n => Number.isFinite(n) && n > 0)
+    .map(n => Math.round(n));
+
+  return mgs.length ? Math.min(...mgs) : 0;
 }
+
 function isLowestCommercialSelected(cls, med, form){
   const minMg = lowestCommercialMg(cls, med, form);
-  const picked = (typeof selectedProductMgs === "function") ? selectedProductMgs() : [];
-  if (!picked || picked.length === 0) return true; // none selected → treat as “all allowed”
-  return picked.includes(minMg);
+  const sel = selectedProductMgs && selectedProductMgs(); // Set<number> of ticked strengths
+  if (!sel || sel.size === 0) return true;                // “none selected” = treat as all allowed
+  return sel.has(minMg);
 }
 function enforceOpioidEndDoseDefault(stepRows){
   try{
@@ -1982,7 +1991,7 @@ function enforceOpioidEndDoseTail(stepRows){
 //#region 5. Renderers (Standard & Patch)
 function renderStandardTable(stepRows){
   stepRows = enforceOpioidEndDoseTail(stepRows);
-  stepRows = enforceOpioidEndDoseDefault(stepRows);  
+  stepRows = enforceOpioidEndDoseDefault(stepRows); 
   stepRows = applySpreadSafetyInteractive(stepRows);
   if (!stepRows) return;
   const scheduleHost = document.getElementById("scheduleBlock");
