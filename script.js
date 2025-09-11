@@ -1726,22 +1726,32 @@ function showToast(msg) {
   t._h = setTimeout(() => { t.style.display = "none"; }, 2200);
 }
 
-function setGenerateEnabled(){
+function setGenerateEnabled() {
   const pct  = parseFloat(document.getElementById("p1Percent")?.value || "");
   const intv = parseInt(document.getElementById("p1Interval")?.value || "", 10);
 
-  // Enable Generate only when Phase 1 is complete
+  const cls  = document.getElementById("classSelect")?.value || "";
+  const med  = document.getElementById("medicineSelect")?.value || "";
+  const form = document.getElementById("formSelect")?.value || "";
+
+  const haveSelection = !!(cls && med && form);
+  const haveDoseLines = Array.isArray(window.doseLines) &&
+    window.doseLines.some(l => (l?.qty ?? 0) > 0 && String(l?.strengthStr || "").trim().length);
+
+  // Phase-1 must be set, plus a minimal viable input to build
+  let ready = Number.isFinite(pct) && pct > 0 &&
+              Number.isFinite(intv) && intv > 0 &&
+              haveSelection && haveDoseLines;
+
   const gen = document.getElementById("generateBtn");
-  const ready = Number.isFinite(pct) && pct > 0 && Number.isFinite(intv) && intv > 0;
   if (gen) gen.disabled = !ready;
 
-  // IMPORTANT: Do NOT touch Print/Save here.
-  // setDirty(...) already disables/enables them using _dirtySinceGenerate.
-  // (This removes the old window.dirty override.)
-  
-  // Keep the patch-interval extra rule if you had it:
-  if (typeof validatePatchIntervals === "function") {
-    validatePatchIntervals(false);
+  // Keep the patch interval rule for patches only (no effect for tablets)
+  if (typeof validatePatchIntervals === "function" && typeof patchIntervalRule === "function") {
+    if (patchIntervalRule()) {
+      ready = ready && validatePatchIntervals(false);
+      if (gen) gen.disabled = !ready;
+    }
   }
 }
 
