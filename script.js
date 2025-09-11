@@ -388,6 +388,7 @@ function enforceOpioidEndDoseDefault(stepRows){
       out.push({ kind:"REVIEW", dateStr, message: "Review with your doctor the ongoing plan" });
       return out;
     }
+    
 
     // If lowest IS selected, leave whatever PM-only/STOP your stepper produced.
     return stepRows;
@@ -3496,11 +3497,26 @@ function buildPlan(){
     // Patches
     rows = (typeof buildPlanPatch === "function") ? buildPlanPatch() : [];
     if (typeof renderPatchTable === "function") renderPatchTable(rows);
-  } else {
-    // Tablets/capsules/ODT etc.
-    rows = (typeof buildPlanTablets === "function") ? buildPlanTablets() : [];
-    if (typeof renderStandardTable === "function") renderStandardTable(rows);
+ } else {
+  // Tablets/capsules/ODT etc.
+  rows = (typeof buildPlanTablets === "function") ? buildPlanTablets() : [];
+
+  // ▼ Apply opioid SR end-dose tail *before* rendering
+  try {
+    const cls  = document.getElementById("classSelect")?.value || "";
+    const med  = document.getElementById("medicineSelect")?.value || "";
+    const form = document.getElementById("formSelect")?.value || "";
+
+    if (cls === "Opioid" && /SR/i.test(form) && typeof enforceOpioidEndDoseDefault === "function") {
+      rows = enforceOpioidEndDoseDefault(rows, cls, med, form);
+    }
+  } catch (e) {
+    console.warn("[end-dose enforcement skipped]", e);
   }
+
+  if (typeof renderStandardTable === "function") renderStandardTable(rows);
+}
+
   updateClassFooter(); // keep footer in sync with current class
   setGenerateEnabled(); // keep button/print gating in sync
   setDirty(false);
