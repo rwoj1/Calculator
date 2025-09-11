@@ -321,36 +321,6 @@ function formatOxyOnlyHTML(label){
   return html;
 }
 
-// --- Opioid end-dose enforcement (default rules) ---
-function lowestCommercialMg(cls, med, form){
-  // Prefer the full catalogue list used by the picker (all marketed strengths)
-  const list = (typeof strengthsForPicker === "function")
-    ? strengthsForPicker()                                // e.g., ["5 mg SR tablet", "10 mg SR tablet", ...]
-    : (typeof strengthsForSelectedSafe === "function"
-        ? strengthsForSelectedSafe(cls, med, form)        // fallback
-        : []);
-
-  const mgs = list
-    .map(s => (typeof parseMgFromStrength==="function"
-                ? parseMgFromStrength(s)
-                : parseFloat(String(s).replace(/[^\d.]/g,""))))
-    .filter(n => Number.isFinite(n) && n > 0)
-    .map(n => Math.round(n));
-
-  return mgs.length ? Math.min(...mgs) : 0;
-}
-
-function isLowestCommercialSelected(cls, med, form){
-  const minMg = lowestCommercialMg(cls, med, form);
-  const sel = (typeof selectedProductMgs === "function") ? selectedProductMgs() : [];
-
-  // None selected => treat as “all allowed”
-  if (!sel || sel.length === 0) return true;
-
-  // Some selected => only those are allowed
-  return sel.includes(minMg);
-}
-
 function enforceOpioidEndDoseDefault(stepRows){
   try{
     const cls  = document.getElementById("classSelect")?.value || "";
@@ -438,6 +408,115 @@ function disableUpDownButtons(){
     if (down) down.disabled = (idx === rows.length - 1);
   });
 }
+
+/* =========================================================
+   Opioid SR end-dose enforcement (single source of truth)
+   - If LOWEST commercial strength is selected:
+       allow final PM-only step after a BID step produced by the stepper.
+   - If LOWEST commercial strength is NOT selected:
+       strip any PM-only final step and insert a REVIEW row at that date.
+   ========================================================= */
+
+// Parse "strength" labels like "10 mg", "10/5 mg", etc. → take the first number (the opioid)
+function parseMgFromStrength(s){
+  if (s == null) return 0;
+  const m = String(s).match(/(\d+(?:\.\d+)?)\s*mg/i);
+  return m ? +m[1] : 0;
+}
+
+// Collect all commercial strengths (mg) for current class/med/form from your CATALOG
+function allCommercialMg(cls, med, form){
+  try{
+    const leaf = ((((window.CATALOG||{})[cls]||{})[med]||{})[form]||{});
+    return Object.keys(leaf)
+      .map(parseMgFromStrength)
+      .filter(n => Number.isFinite(n) && n > 0)
+      .sort((a,b)=>a-b);
+  } catch(_) { return []; }
+}
+
+// Lowest commercial strength (mg) available for this med/form
+function lowestCommercialMg(cls, med, form){
+  const arr = allCommercialMg(cls, med, form);
+  return arr.length ? arr[0] : Infinity;
+}
+
+// Current session selection → sorted mg array (empty = “no filters”, i.e. use all)
+function selectedProductMgs(){
+  if (!window.SelectedFormulations || !(SelectedFormulations instanceof Set) || SelectedFormulations.size === 0) return [];
+  return Array.from(SelectedFormulations)
+    .map(x => +x)
+    .filter(n => Number.isFinite(n) && n > 0)
+    .sort((a,b)=>a-b);
+}
+
+// Is the true commercial MIN selected? (empty selection counts as “yes, all allowed”)
+function isLowestCommercialSelected(cls, med, form){
+  const low = lowestCommercialMg(cls, med, form);
+  const sel = selectedProductMgs();
+  return sel.length === 0 || sel.includes(low);
+}
+
+// Accepts the flat stepRows array used by renderStandardTable
+function applyOpioidEndDoseRule(stepRows){
+  try{
+    const cls  = document.getElementById("classSelect")?.value || "";
+    const med  = document.getElementById("medicineSelect")?.value || "";
+    const form = document.getElementById("formSelect")?.value || "";
+
+    // Only for opioid SR tablets/capsules etc. (not patches)
+    if (cls !== "Opioid" || !/SR/i.test(form) || /Patch/i.test(form)) return stepRows;
+
+    const lowSelected = isLowestCommercialSelected(cls, med, form);
+
+    // Helper: treat <0.5 mg as zero for screen logic
+    const zeroish = v => Math.abs(+v || 0) < 0.5;
+    // Helper: pull numeric from possible mkCell objects / strings
+    const num = x => +String(x?.value ?? x ?? 0).toString().replace(/[^\d.]/g,"") || 0;
+
+    // Find the last dosing block (ignore trailing STOP/REVIEW rows)
+    let i = stepRows.length - 1;
+    while (i >= 0 && (stepRows[i].stop || stepRows[i].review)) i--;
+    if (i < 0) return stepRows;
+
+    // Group by date for the very last step
+    const lastDate = stepRows[i].date || stepRows[i].dateStr || stepRows[i].when || stepRows[i].applyOn || null;
+    let j = i;
+    const block = [];
+    while (j >= 0){
+      const d = stepRows[j].date || stepRows[j].dateStr || stepRows[j].when || stepRows[j].applyOn || null;
+      if (lastDate && d !== lastDate) break;
+      if (!stepRows[j].stop && !stepRows[j].review) block.unshift(stepRows[j]);
+      j--;
+    }
+
+    // Sum slot totals for that final block
+    let AM=0, MID=0, DIN=0, PM=0;
+    block.forEach(r=>{
+      AM  += num(r.am);
+      MID += num(r.mid);
+      DIN += num(r.din);
+      PM  += num(r.pm);
+    });
+
+    const pmOnly = !zeroish(PM) && zeroish(AM + MID + DIN);
+
+    // Case: lowest commercial is NOT selected → do not allow PM-only tail.
+    if (pmOnly && !lowSelected){
+      const keep = stepRows.slice(0, j+1); // everything before the last block
+      keep.push({ review:true, date:lastDate, dateStr:lastDate, message:"Review with your doctor the ongoing plan" });
+      return keep;
+    }
+
+    // Else (lowest selected) → allow whatever the stepper produced, including PM-only.
+    return stepRows;
+
+  } catch(err){
+    console.warn("[applyOpioidEndDoseRule] fell back (kept rows):", err);
+    return stepRows;
+  }
+}
+
 
 /* ===== Custom Mode: Step 1 UI (per-slot mg, 4 rows, reorder, unique slots) ===== */
 
@@ -1390,33 +1469,7 @@ function allCommercialProductsForSelected(){
 // Read current selection (returns array of mg if any selected, else null -> use default)
 // Return allowed mg strengths for the CURRENT class/med/form.
 // None ticked => treat as "all products allowed".
-function selectedProductMgs(){
-  const clsEl  = document.getElementById("classSelect");
-  const medEl  = document.getElementById("medicineSelect");
-  const formEl = document.getElementById("formSelect");
-  const cls  = (clsEl  && clsEl.value)  || "";
-  const med  = (medEl  && medEl.value)  || "";
-  const form = (formEl && formEl.value) || "";
 
-  const s = (window.SelectedFormulations instanceof Set) ? window.SelectedFormulations : new Set();
-
-  // None selected => ALL products for this med/form
-  if (!s || s.size === 0){
-    const list = (typeof strengthsForSelectedSafe === "function")
-      ? strengthsForSelectedSafe(cls, med, form)   // returns ["5 mg", "10 mg", ...] safely filtered
-      : (typeof strengthsForPicker === "function" ? strengthsForPicker() : []);
-    return (list || [])
-      .map(v => (typeof parseMgFromStrength === "function" ? parseMgFromStrength(v) : parseFloat(String(v))))
-      .filter(v => Number.isFinite(v) && v > 0)
-      .sort((a,b)=>a-b);
-  }
-
-  // Some selected => use only those ticks
-  return Array.from(s)
-    .map(v => +v)
-    .filter(v => Number.isFinite(v) && v > 0)
-    .sort((a,b)=>a-b);
-}
 function strengthsForSelectedSafe(cls, med, form){
   try {
     if (typeof strengthsForSelected === "function") {
@@ -1866,14 +1919,6 @@ function lowestCommercialMg(cls, med, form){
   } catch(_) { return 0; }
 }
 
-// None ticked => treat as ALL allowed; otherwise respect ticks.
-function isLowestCommercialSelected(cls, med, form){
-  const minMg = lowestCommercialMg(cls, med, form);
-  const s = (window.SelectedFormulations instanceof Set) ? window.SelectedFormulations : new Set();
-  if (!s || s.size === 0) return true;         // none ticked = all allowed
-  return s.has(minMg);
-}
-
 function slotTotalsOfRow(row){
   const packs = row?.packs || {};
   const tot = (slot) => (packs[slot] ? packsTotalMg({[slot]: packs[slot]}) : 0);
@@ -1996,6 +2041,7 @@ function enforceOpioidEndDoseTail(stepRows){
 //#endregion
 //#region 5. Renderers (Standard & Patch)
 function renderStandardTable(stepRows){
+  stepRows = applyOpioidEndDoseRule(stepRows);
   stepRows = enforceOpioidEndDoseTail(stepRows);
   stepRows = enforceOpioidEndDoseDefault(stepRows); 
   stepRows = applySpreadSafetyInteractive(stepRows);
