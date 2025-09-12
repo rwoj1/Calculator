@@ -138,6 +138,52 @@ function ensureIntervalHints(){
   return [mk("p1IntHint","p1Interval"), mk("p2IntHint","p2Interval")];
 }
 
+// --- End-sequence helpers for BID classes (SR opioids & pregabalin) ---
+// Lowest commercial strength AVAILABLE in the catalogue for the CURRENT med/form (ignores user selection)
+// --- Commercial vs Selected strength helpers (robust) ---
+
+function allCommercialStrengthsMg(cls, med, form){
+  try {
+    // Prefer a picker-aware source if available
+    if (typeof strengthsForPicker === "function") {
+      const arr = strengthsForPicker(cls, med, form);
+      const mg = (arr || []).map(Number).filter(n => Number.isFinite(n) && n > 0);
+      if (mg.length) return Array.from(new Set(mg)).sort((a,b)=>a-b);
+    }
+  } catch(_) {}
+  try {
+    // Fallback: catalogue scan
+    const cat = (window.CATALOG?.[cls]?.[med]) || {};
+    const pool = (form && cat[form]) ? cat[form] : Object.values(cat).flat();
+    const mg = (pool || [])
+      .map(v => (typeof v === 'number' ? v : parseMgFromStrength(v)))
+      .filter(n => Number.isFinite(n) && n > 0)
+      .sort((a,b)=>a-b);
+    if (mg.length) return Array.from(new Set(mg));
+  } catch(_) {}
+  return [];
+}
+
+// Keep labels aligned with the user's selected formulations.
+// If the displayed label's mg is not one of the selected strengths,
+// but is exactly 1/2 or 1/4 of a selected tablet (and splitting is allowed),
+// rewrite the label to the selected base strength so we don't "invent" a lower strength.
+function prettySelectedLabelOrSame(cls, med, form, rawStrengthLabel){
+  try {
+    const chosen = (typeof strengthsForSelected === "function") ? strengthsForSelected() : [];
+    const chosenMap = new Map((chosen||[]).map(s => [parseMgFromStrength(s), s])); // mg -> original label
+    const targetMg = parseMgFromStrength(rawStrengthLabel);
+    if (!Number.isFinite(targetMg) || targetMg <= 0) return rawStrengthLabel;
+    if (chosenMap.has(targetMg)) return chosenMap.get(targetMg);
+    const split = (typeof canSplitTablets === "function") ? canSplitTablets(cls, form, med) : {half:false, quarter:false};
+    if (split.half && chosenMap.has(targetMg * 2)) return chosenMap.get(targetMg * 2);
+    if (split.quarter && chosenMap.has(targetMg * 4)) return chosenMap.get(targetMg * 4);
+    return rawStrengthLabel;
+  } catch {
+    return rawStrengthLabel;
+  }
+}
+
 // Choose "Tablets" vs "Capsules" for Gabapentin based on strength.
 // - 600 & 800 mg → Tablets
 // - 100, 300, 400 mg → Capsules
@@ -176,15 +222,40 @@ function shouldShowProductPicker(cls, med, form){
   // Limit to the medicines you specified
   const isOpioidSR = cls === "Opioid" && /SR/i.test(form) && /Tablet/i.test(form);
   const allowList = [
-    // Opioids SR tablet
+    // ===== Opioids SR tablet (existing) =====
     ["Opioid","Morphine",/SR/i],
     ["Opioid","Oxycodone",/SR/i],
     ["Opioid","Oxycodone \/ Naloxone",/SR/i],
     ["Opioid","Tapentadol",/SR/i],
     ["Opioid","Tramadol",/SR/i],
-    // Gabapentinoids
+
+    // ===== Gabapentinoids (existing) =====
     ["Gabapentinoids","Gabapentin",/.*/],
-    ["Gabapentinoids","Pregabalin",/Capsule/i]
+    ["Gabapentinoids","Pregabalin",/Capsule/i],
+
+    // ===== Benzodiazepines / Z-drugs (under your BZRA umbrella) =====
+    ["Benzodiazepines / Z-Drug (BZRA)","Oxazepam",/(Tablet|Tab|Capsule|Cap)/i],
+    ["Benzodiazepines / Z-Drug (BZRA)","Diazepam",/(Tablet|Tab|Capsule|Cap)/i],
+    ["Benzodiazepines / Z-Drug (BZRA)","Alprazolam",/(Tablet|Tab|Capsule|Cap)/i],
+    ["Benzodiazepines / Z-Drug (BZRA)","Clonazepam",/(Tablet|Tab|Capsule|Cap|ODT|Wafer)/i],
+    ["Benzodiazepines / Z-Drug (BZRA)","Lorazepam",/(Tablet|Tab|Capsule|Cap|ODT|Wafer)/i],
+    ["Benzodiazepines / Z-Drug (BZRA)", "Zolpidem", /^Slow Release Tablet$/i],
+
+    // ===== Proton Pump Inhibitors (PPIs) =====
+    ["Proton Pump Inhibitor","Pantoprazole",/(Tablet|Tab|Capsule|Cap)/i],
+    ["Proton Pump Inhibitor","Omeprazole",/(Tablet|Tab|Capsule|Cap)/i],
+    ["Proton Pump Inhibitor","Esomeprazole",/(Tablet|Tab|Capsule|Cap)/i],
+    ["Proton Pump Inhibitor","Rabeprazole",/(Tablet|Tab|Capsule|Cap)/i],
+    ["Proton Pump Inhibitor", "Lansoprazole", /^Orally Dispersible Tablet$/i],
+    ["Proton Pump Inhibitor", "Lansoprazole", /^Tablet$/i],
+
+    // ===== Antipsychotics =====
+    // Some catalogues use "Antipsychotics", others "Antipsychotic".
+    ["Antipsychotics","Risperidone",/(Tablet|Tab|ODT|Wafer)/i],
+    ["Antipsychotic", "Quetiapine", /^Immediate Release Tablet$/i],
+    ["Antipsychotic", "Quetiapine", /^Slow Release Tablet$/i],
+    ["Antipsychotics","Olanzapine",/(Tablet|Tab|ODT|Wafer|Dispersible)/i],
+    ["Antipsychotics","Haloperidol",/(Tablet|Tab|Capsule|Cap)/i],
   ];
 
   return allowList.some(([c,m,formRe]) =>
@@ -267,632 +338,6 @@ function snapTargetToSelection(totalMg, percent, cls, med, form){
   if (target === totalMg && totalMg > 0) target = Math.max(0, totalMg - step);
 
   return { target, step };
-}
-// --- Emphasise Oxycodone vs Naloxone in strength labels (safe HTML) ---
-function escapeHtml(s){
-  return String(s).replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
-}
-
-// Emphasise only Oxycodone (name + its mg). Naloxone stays normal.
-// Safe: escape first, then replace exact escaped substrings once.
-function formatOxyOnlyHTML(label){
-  if (!label) return "";
-  const raw  = String(label);
-  let html   = escapeHtml(raw);
-
-  // Replace the first occurrence of an escaped substring, once
-  const replaceOnce = (needle, swap) => {
-    const idx = html.indexOf(needle);
-    if (idx !== -1) {
-      html = html.slice(0, idx) + swap + html.slice(idx + needle.length);
-    }
-  };
-
-  // Case 1: "Oxycodone 30 mg + Naloxone 15 mg …"
-  const mPlus = /Oxycodone[^0-9]*\b(\d+(?:\.\d+)?)\s*mg\b/i.exec(raw);
-  if (mPlus) {
-    const oxyPhrase = raw.match(/Oxycodone[^0-9]*\d+(?:\.\d+)?\s*mg/i)[0];
-    const oxyEsc = escapeHtml(oxyPhrase);
-    replaceOnce(oxyEsc, `<strong class="oxy-strong">${oxyEsc}</strong>`);
-  }
-
-  // Case 2: "Oxycodone/Naloxone 10/5 mg …" → bold the first (oxycodone) value
-  if (/Oxycodone/i.test(raw)) {
-    const slash1 = /(\d+(?:\.\d+)?)\s*mg\s*\/\s*(\d+(?:\.\d+)?)\s*mg/i.exec(raw);
-    if (slash1) {
-      const firstEsc = escapeHtml(`${slash1[1]} mg`);
-      replaceOnce(firstEsc, `<strong class="oxy-strong">${firstEsc}</strong>`);
-    } else {
-      const slash2 = /(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)\s*mg/i.exec(raw);
-      if (slash2) {
-        const firstEsc = escapeHtml(`${slash2[1]} mg`);
-        replaceOnce(firstEsc, `<strong class="oxy-strong">${firstEsc}</strong>`);
-      }
-    }
-    // Bold the word "Oxycodone" itself if not already inside <strong>
-    const oxyWordEsc = escapeHtml("Oxycodone");
-    if (!/<strong[^>]*>\s*Oxycodone\s*<\/strong>/i.test(html)) {
-      replaceOnce(oxyWordEsc, `<strong class="oxy-strong">${oxyWordEsc}</strong>`);
-    }
-  }
-
-  // Soften the form suffix "SR tablet|SR capsule" (do this INSIDE the function)
-  html = html.replace(/\b(SR\s*(?:tablet|capsule))\b/ig, '<span class="form-dim">$1</span>');
-  return html;
-}
-
-/* ======================================================================
- * REPLACE the entire existing function in script.js with this version
- * Name: enforceOpioidEndDoseTail(stepRows)
- * (v2: uses fmtDate for dates)
- * ====================================================================== */
-function enforceOpioidEndDoseTail(stepRows){
-  try{
-    if (!Array.isArray(stepRows) || !stepRows.length) return stepRows;
-
-    const cls = document.getElementById("classSelect")?.value || stepRows[stepRows.length-1]?.cls || "";
-    const med = document.getElementById("medicineSelect")?.value || stepRows[stepRows.length-1]?.med || "";
-    const form= document.getElementById("formSelect")?.value || stepRows[stepRows.length-1]?.form|| "";
-    if (cls !== "Opioid" || !/SR|CR/i.test(form) || /Patch/i.test(form)) return stepRows;
-
-    const minMg = (typeof lowestCommercialMg === "function") ? lowestCommercialMg(cls, med, form) : 0;
-    const lowestAllowed = (typeof isLowestCommercialSelected === "function")
-      ? isLowestCommercialSelected(cls, med, form)
-      : false;
-
-    // Helpers
-    const EPS = (typeof window.EPS === "number") ? window.EPS : 1e-6;
-    const fmt = (typeof fmtDate === "function")
-      ? fmtDate
-      : (d)=> new Date(d).toLocaleDateString("en-AU", { year: "numeric", month: "short", day: "numeric" });
-    const near0 = (v)=> Math.abs(+v||0) <= EPS;
-    const packsTotal = (row, slot) => {
-      const packs = row?.packs || {};
-      return (typeof packsTotalMg === "function" && packs[slot])
-        ? packsTotalMg({[slot]:packs[slot]})
-        : 0;
-    };
-    const isMeta = (r) => !!(r && (r.stop || r.review || r.kind === "STOP" || r.kind === "REVIEW"));
-    const isDose = (r) => !!(r && !isMeta(r));
-    const slotTotals = (r) => ({ AM: packsTotal(r,"AM"), MID: packsTotal(r,"MID"), DIN: packsTotal(r,"DIN"), PM: packsTotal(r,"PM") });
-    const isPmOnly = (r) => {
-      const t = slotTotals(r);
-      return (t.PM > EPS) && near0(t.AM + t.MID + t.DIN);
-    };
-    const isBidAtLowest = (r) => {
-      const t = slotTotals(r);
-      const near = (a,b)=> Math.abs((a||0)-(b||0)) <= EPS;
-      return near(t.AM, minMg) && near(t.PM, minMg) && near0(t.MID) && near0(t.DIN);
-    };
-    const parseDate = (v) => {
-      const s = v?.toString?.() ?? v;
-      const d = s ? new Date(s) : null;
-      return (d && !isNaN(+d)) ? d : null;
-    };
-    const addDays = (d, n) => { const x = new Date(d.getTime()); x.setDate(x.getDate()+n); return x; };
-    const daysBetween = (a,b) => Math.round((b - a)/(24*3600*1000));
-
-    // Work on a shallow copy; peel off trailing meta rows (STOP/REVIEW)
-    const out = stepRows.slice();
-    const strippedTail = [];
-    while (out.length && isMeta(out[out.length-1])) strippedTail.unshift(out.pop());
-    if (!out.length) return stepRows;
-
-    // Identify trailing PM-only dose rows (there can be more than one from old logic)
-    let last = out.length - 1;
-    while (last >= 0 && !isDose(out[last])) last--;
-    if (last < 0) return stepRows;
-
-    // Compute interval from last two DOSE rows
-    let prev = last - 1;
-    while (prev >= 0 && !isDose(out[prev])) prev--;
-    let intervalDays = 7;
-    const lastDate = parseDate(out[last].date || out[last].dateStr || out[last].when || out[last].applyOn);
-    if (prev >= 0){
-      const prevDate = parseDate(out[prev].date || out[prev].dateStr || out[prev].when || out[prev].applyOn);
-      if (prevDate && lastDate){
-        const d = daysBetween(prevDate, lastDate);
-        if (d > 0 && d < 60) intervalDays = d;
-      }
-    }
-
-    // Find the most recent BID@lowest row index
-    let k = -1;
-    for (let i = out.length - 1; i >= 0; i--){
-      const r = out[i];
-      if (!isDose(r)) continue;
-      if (isBidAtLowest(r)) { k = i; break; }
-    }
-
-    if (!lowestAllowed){
-      // RULE: lowest NOT selected → final = BID of that dose → REVIEW (no PM-only, no STOP)
-
-      // Remove ANY trailing PM-only dose rows
-      while (out.length && isDose(out[out.length-1]) && isPmOnly(out[out.length-1])) out.pop();
-
-      // Recompute last index after popping
-      last = out.length - 1;
-      while (last >= 0 && !isDose(out[last])) last--;
-      if (last < 0) return stepRows;
-
-      // REVIEW date = one interval AFTER the last BID/DOSE date
-      const lastDate2 = parseDate(out[last].date || out[last].dateStr || out[last].when || out[last].applyOn) || lastDate || new Date();
-      const reviewDate = addDays(lastDate2, intervalDays);
-
-      const rebuilt = out.slice();
-      rebuilt.push({ kind:"REVIEW", review:true, date: fmt(reviewDate), dateStr: fmt(reviewDate), message:"Review with your doctor the ongoing plan" });
-      return rebuilt;
-    }
-
-    // lowestAllowed == true
-    if (k === -1){
-      // We never reached true lowest BID → do NOT force PM-only/STOP. Keep original rows (with any existing tail).
-      return out.concat(strippedTail);
-    }
-
-    // Ensure PM-only right after BID@lowest, then STOP after that
-    const bidRow = out[k];
-    const baseDate = parseDate(bidRow.date || bidRow.dateStr || bidRow.when || bidRow.applyOn) || lastDate || new Date();
-    const pmDate = addDays(baseDate, intervalDays);
-    const pmPacks = (bidRow.packs && bidRow.packs.PM) ? (Array.isArray(bidRow.packs.PM) ? JSON.parse(JSON.stringify(bidRow.packs.PM)) : bidRow.packs.PM) : [];
-    const pmOnlyRow = { week: (typeof bidRow.week === "number") ? bidRow.week + 1 : undefined,
-                        date: fmt(pmDate),
-                        dateStr: fmt(pmDate),
-                        packs: { AM:[], MID:[], DIN:[], PM: pmPacks }, med: bidRow.med, form: bidRow.form, cls: bidRow.cls };
-    // Remove any existing PM-only right after k to avoid duplicates
-    if (out[k+1] && isDose(out[k+1]) && isPmOnly(out[k+1])) out.splice(k+1, 1);
-    out.splice(k+1, 0, pmOnlyRow);
-
-    // STOP one interval after PM-only
-    const stopDate = addDays(pmDate, intervalDays);
-    const rebuilt = out.slice();
-    rebuilt.push({ week: (typeof pmOnlyRow.week === "number") ? pmOnlyRow.week + 1 : undefined,
-                   date: fmt(stopDate), dateStr: fmt(stopDate),
-                   packs:{}, med: bidRow.med, form: bidRow.form, cls: bidRow.cls, stop:true, kind:"STOP" });
-    return rebuilt;
-  } catch (_err){
-    return stepRows;
-  }
-}
-
-function moveReductionRow(row, dir){
-  const list = document.getElementById('step1List');
-  if (!list) return;
-  const rows = Array.from(list.querySelectorAll('.reduction-row'));
-  const i = rows.indexOf(row);
-  if (i < 0) return;
-
-  const j = i + dir;
-  if (j < 0 || j >= rows.length) return; // already at edge
-
-  // Reinsert DOM node in new position
-  if (dir < 0) list.insertBefore(row, rows[j]);            // move up before the row above
-  else          list.insertBefore(row, rows[j].nextSibling); // move down after the row below
-
-  refreshThenTags();
-  updateRowIndices();
-  enforceUniqueTimeSelections();
-  disableUpDownButtons();
-}
-
-function updateRowIndices(){
-  const rows = Array.from(document.querySelectorAll('#step1List .reduction-row'));
-  rows.forEach((r, idx) => {
-    r.dataset.index = String(idx);
-    // keep IDs tidy (not strictly required, but nice)
-    const sel = r.querySelector('select[id^="redSlot"]');
-    const mg  = r.querySelector('input[id^="redMg"]');
-    if (sel) sel.id = `redSlot${idx}`;
-    if (mg)  mg.id  = `redMg${idx}`;
-  });
-}
-
-function disableUpDownButtons(){
-  const rows = Array.from(document.querySelectorAll('#step1List .reduction-row'));
-  rows.forEach((r, idx) => {
-    const up   = r.querySelector('.btn-up');
-    const down = r.querySelector('.btn-down');
-    if (up)   up.disabled   = (idx === 0);
-    if (down) down.disabled = (idx === rows.length - 1);
-  });
-}
-
-/* =========================================================
-   Opioid SR end-dose enforcement (single source of truth)
-   - If LOWEST commercial strength is selected:
-       allow final PM-only step after a BID step produced by the stepper.
-   - If LOWEST commercial strength is NOT selected:
-       strip any PM-only final step and insert a REVIEW row at that date.
-   ========================================================= */
-
-// Parse "strength" labels like "10 mg", "10/5 mg", etc. → take the first number (the opioid)
-function parseMgFromStrength(s){
-  if (s == null) return 0;
-  const m = String(s).match(/(\d+(?:\.\d+)?)\s*mg/i);
-  return m ? +m[1] : 0;
-}
-
-// Collect all commercial strengths (mg) for current class/med/form from your CATALOG
-function allCommercialMg(cls, med, form){
-  try{
-    const leaf = ((((window.CATALOG||{})[cls]||{})[med]||{})[form]||{});
-    return Object.keys(leaf)
-      .map(parseMgFromStrength)
-      .filter(n => Number.isFinite(n) && n > 0)
-      .sort((a,b)=>a-b);
-  } catch(_) { return []; }
-}
-
-// Lowest commercial strength (mg) available for this med/form
-function lowestCommercialMg(cls, med, form){
-  const arr = allCommercialMg(cls, med, form);
-  return arr.length ? arr[0] : Infinity;
-}
-
-// Current session selection → sorted mg array (empty = “no filters”, i.e. use all)
-function selectedProductMgs(){
-  if (!window.SelectedFormulations || !(SelectedFormulations instanceof Set) || SelectedFormulations.size === 0) return [];
-  return Array.from(SelectedFormulations)
-    .map(x => +x)
-    .filter(n => Number.isFinite(n) && n > 0)
-    .sort((a,b)=>a-b);
-}
-
-// Is the true commercial MIN selected? (empty selection counts as “yes, all allowed”)
-function isLowestCommercialSelected(cls, med, form){
-  const low = lowestCommercialMg(cls, med, form);
-  const sel = selectedProductMgs();
-  return sel.length === 0 || sel.includes(low);
-}
-
-// Accepts the flat stepRows array used by renderStandardTable
-function applyOpioidEndDoseRule(stepRows){
-  try{
-    const cls  = document.getElementById("classSelect")?.value || "";
-    const med  = document.getElementById("medicineSelect")?.value || "";
-    const form = document.getElementById("formSelect")?.value || "";
-
-    // Only for opioid SR tablets/capsules etc. (not patches)
-    if (cls !== "Opioid" || !/SR/i.test(form) || /Patch/i.test(form)) return stepRows;
-
-    const lowSelected = isLowestCommercialSelected(cls, med, form);
-
-    // Helper: treat <0.5 mg as zero for screen logic
-    const zeroish = v => Math.abs(+v || 0) < 0.5;
-    // Helper: pull numeric from possible mkCell objects / strings
-    const num = x => +String(x?.value ?? x ?? 0).toString().replace(/[^\d.]/g,"") || 0;
-
-    // Find the last dosing block (ignore trailing STOP/REVIEW rows)
-    let i = stepRows.length - 1;
-    while (i >= 0 && (stepRows[i].stop || stepRows[i].review)) i--;
-    if (i < 0) return stepRows;
-
-    // Group by date for the very last step
-    const lastDate = stepRows[i].date || stepRows[i].dateStr || stepRows[i].when || stepRows[i].applyOn || null;
-    let j = i;
-    const block = [];
-    while (j >= 0){
-      const d = stepRows[j].date || stepRows[j].dateStr || stepRows[j].when || stepRows[j].applyOn || null;
-      if (lastDate && d !== lastDate) break;
-      if (!stepRows[j].stop && !stepRows[j].review) block.unshift(stepRows[j]);
-      j--;
-    }
-
-    // Sum slot totals for that final block
-    let AM=0, MID=0, DIN=0, PM=0;
-    block.forEach(r=>{
-      AM  += num(r.am);
-      MID += num(r.mid);
-      DIN += num(r.din);
-      PM  += num(r.pm);
-    });
-
-    const pmOnly = !zeroish(PM) && zeroish(AM + MID + DIN);
-
-    // Case: lowest commercial is NOT selected → do not allow PM-only tail.
-    if (pmOnly && !lowSelected){
-      const keep = stepRows.slice(0, j+1); // everything before the last block
-      keep.push({ review:true, date:lastDate, dateStr:lastDate, message:"Review with your doctor the ongoing plan" });
-      return keep;
-    }
-
-    // Else (lowest selected) → allow whatever the stepper produced, including PM-only.
-    return stepRows;
-
-  } catch(err){
-    console.warn("[applyOpioidEndDoseRule] fell back (kept rows):", err);
-    return stepRows;
-  }
-}
-
-
-/* ===== Custom Mode: Step 1 UI (per-slot mg, 4 rows, reorder, unique slots) ===== */
-
-const MAX_REDUCTION_LINES = 4;
-
-// Class defaults for Step 1 ordering (UI only)
-const CLASS_DEFAULT_PRIORITY = {
-  opioids:        ['DIN','MID','AM','PM'],
-  ppi:            ['MID','PM','AM','DIN'],
-  bzd:            null, // hide Mode entirely for BZD
-  antipsychotic:  ['MID','DIN','AM','PM'],
-  gabapentinoid:  ['DIN','MID','AM','PM'],
-};
-
-// Map class from selects
-function currentClassKey(){
-  const clsSel = document.getElementById('classSelect');
-  const medSel = document.getElementById('medicineSelect');
-  const clsVal = (clsSel?.value || '').toLowerCase();
-  const medVal = (medSel?.value || '').toLowerCase();
-
-  if (clsVal.includes('benz') || clsVal.includes('bzd')) return 'bzd';
-  if (clsVal.includes('ppi'))    return 'ppi';
-  if (clsVal.includes('antipsych')) return 'antipsychotic';
-  if (clsVal.includes('gabapentin') || clsVal.includes('pregabalin')
-      || medVal.includes('gabapentin') || medVal.includes('pregabalin')
-      || clsVal.includes('gabapentinoid')) return 'gabapentinoid';
-  if (clsVal.includes('opioid')) return 'opioids';
-  return 'opioids';
-}
-
-// Build one reduction row: THEN Reduce [slot] until [mg] mg
-function buildReductionRow(idx){
-  const row = document.createElement('div');
-  row.className = 'reduction-row';
-  row.dataset.index = String(idx);
-
-  // left: THEN (only after the first row)
-  const left = document.createElement('div');
-  left.className = 'row-left';
-  if (idx > 0){
-    const thenTag = document.createElement('span');
-    thenTag.className = 'then-tag';
-    thenTag.textContent = 'THEN';
-    left.appendChild(thenTag);
-  }
-
-  // main: "Reduce [slot] until [mg] mg"
-  const main = document.createElement('div');
-  main.className = 'row-main';
-
-  const w1 = document.createElement('span'); w1.className='inline-word'; w1.textContent = 'Reduce';
-
-  const slot = document.createElement('select');
-  slot.id = `redSlot${idx}`;
-  [
-    {v:'AM',   label:'in the morning'},
-    {v:'MID',  label:'at midday'},
-    {v:'DIN',  label:'at dinner'},
-    {v:'PM',   label:'at night'},
-  ].forEach(opt => {
-    const o = document.createElement('option');
-    o.value = opt.v; o.textContent = opt.label;
-    slot.appendChild(o);
-  });
-
-  const w2 = document.createElement('span'); w2.className='inline-word'; w2.textContent = 'until';
-
-  const mgWrap = document.createElement('div'); mgWrap.className = 'input-suffix';
-  const mg = document.createElement('input');
-  mg.type = 'number'; mg.min = '0'; mg.placeholder = 'e.g., 50';
-  mg.id = `redMg${idx}`;
-  const suf = document.createElement('span'); suf.className='suffix'; suf.textContent = 'mg';
-  mgWrap.appendChild(mg); mgWrap.appendChild(suf);
-
-  main.appendChild(w1);
-  main.appendChild(slot);
-  main.appendChild(w2);
-  main.appendChild(mgWrap);
-
-  // actions: Up / Down (no Remove)
-  const actions = document.createElement('div');
-  actions.className = 'row-actions';
-
-  const up = document.createElement('button');
-  up.type = 'button'; up.className = 'secondary small btn-up';
-  up.textContent = '↑ Up';
-  up.addEventListener('click', ()=> moveReductionRow(row, -1));
-
-  const down = document.createElement('button');
-  down.type = 'button'; down.className = 'secondary small btn-down';
-  down.textContent = '↓ Down';
-  down.addEventListener('click', ()=> moveReductionRow(row, +1));
-
-  actions.appendChild(up);
-  actions.appendChild(down);
-
-  row.appendChild(left);
-  row.appendChild(main);
-  row.appendChild(actions);
-
-  // keep uniqueness across rows
-  slot.addEventListener('change', enforceUniqueTimeSelections);
-
-  return row;
-}
-
-function currentReductionCount(){
-  return document.querySelectorAll('#step1List .reduction-row').length;
-}
-
-function refreshThenTags(){
-  const rows = Array.from(document.querySelectorAll('#step1List .reduction-row'));
-  rows.forEach((row, i) => {
-    const left = row.querySelector('.row-left');
-    if (!left) return;
-    left.innerHTML = '';
-    if (i > 0){
-      const thenTag = document.createElement('span');
-      thenTag.className = 'then-tag';
-      thenTag.textContent = 'THEN';
-      left.appendChild(thenTag);
-    }
-  });
-}
-
-function updateRowIndices(){
-  const rows = Array.from(document.querySelectorAll('#step1List .reduction-row'));
-  rows.forEach((r, idx) => {
-    r.dataset.index = String(idx);
-    const sel = r.querySelector('select[id^="redSlot"]');
-    const mg  = r.querySelector('input[id^="redMg"]');
-    if (sel) sel.id = `redSlot${idx}`;
-    if (mg)  mg.id  = `redMg${idx}`;
-  });
-}
-
-function disableUpDownButtons(){
-  const rows = Array.from(document.querySelectorAll('#step1List .reduction-row'));
-  rows.forEach((r, idx) => {
-    const up   = r.querySelector('.btn-up');
-    const down = r.querySelector('.btn-down');
-    if (up)   up.disabled   = (idx === 0);
-    if (down) down.disabled = (idx === rows.length - 1);
-  });
-}
-
-function pickFirstAvailableSlot(row){
-  const selects = Array.from(document.querySelectorAll('#step1List select[id^="redSlot"]'));
-  const used = new Set(selects.filter(s => s !== row.querySelector('select')).map(s => s.value));
-  const mySel = row.querySelector('select');
-  if (!mySel) return;
-
-  const options = Array.from(mySel.options);
-  const preferred = options.find(o => !used.has(o.value));
-  if (preferred) mySel.value = preferred.value;
-}
-
-function enforceUniqueTimeSelections(){
-  const selects = Array.from(document.querySelectorAll('#step1List select[id^="redSlot"]'));
-  const used = new Map(); // value -> count
-  selects.forEach(sel => used.set(sel.value, (used.get(sel.value)||0)+1));
-
-  selects.forEach(owner => {
-    const ownerVal = owner.value;
-    Array.from(owner.options).forEach(opt => {
-      const val = opt.value;
-      const count = used.get(val)||0;
-      const chosenElsewhere = (val !== ownerVal && count > 0);
-      opt.disabled = chosenElsewhere;
-    });
-  });
-}
-
-function moveReductionRow(row, dir){
-  const list = document.getElementById('step1List');
-  if (!list) return;
-  const rows = Array.from(list.querySelectorAll('.reduction-row'));
-  const i = rows.indexOf(row);
-  if (i < 0) return;
-
-  const j = i + dir;
-  if (j < 0 || j >= rows.length) return;
-
-  if (dir < 0) list.insertBefore(row, rows[j]);
-  else         list.insertBefore(row, rows[j].nextSibling);
-
-  refreshThenTags();
-  updateRowIndices();
-  enforceUniqueTimeSelections();
-  disableUpDownButtons();
-}
-
-// Build 4 rows and set class default order
-function ensureFourRows(){
-  const list = document.getElementById('step1List');
-  if (!list) return;
-  list.innerHTML = '';
-  for (let i=0;i<4;i++){
-    const row = buildReductionRow(i);
-    list.appendChild(row);
-  }
-  applyClassDefaultToRows();
-  enforceUniqueTimeSelections();
-  refreshThenTags();
-  disableUpDownButtons();
-}
-
-function applyClassDefaultToRows(){
-  const key = currentClassKey();
-  const def = CLASS_DEFAULT_PRIORITY[key] || ['DIN','MID','AM','PM'];
-  const selects = Array.from(document.querySelectorAll('#step1List select[id^="redSlot"]'));
-  // Assign in order; any extras keep first available slot
-  selects.forEach((sel, idx) => {
-    const target = def[idx] || null;
-    if (target){
-      sel.value = target;
-    } else {
-      // fall back to first available
-      const used = new Set(selects.filter(s => s !== sel).map(s => s.value));
-      const opt = Array.from(sel.options).find(o => !used.has(o.value));
-      if (opt) sel.value = opt.value;
-    }
-    enforceUniqueTimeSelections();
-  });
-}
-
-// Show/hide Step 1 container and build rows when enabled
-function syncStep1Enable(){
-  const yes = document.getElementById('enableStep1Yes')?.checked;
-  const help = document.getElementById('step1Help');
-  const list = document.getElementById('step1List');
-
-  const on = !!yes;
-  if (help) help.style.display = on ? '' : 'none';
-  if (list) list.style.display = on ? '' : 'none';
-
-  if (on && currentReductionCount() === 0){
-    ensureFourRows();
-  } else if (on){
-    // if class changed while on, re-apply class default order
-    applyClassDefaultToRows();
-    enforceUniqueTimeSelections();
-    refreshThenTags();
-    disableUpDownButtons();
-  }
-}
-
-// Wire Step 1 layout
-function wireCustomStepsLayout(){
-  // Enable Step 1 toggle
-  const enNo  = document.getElementById('enableStep1No');
-  const enYes = document.getElementById('enableStep1Yes');
-  if (enNo)  enNo.addEventListener('change', syncStep1Enable);
-  if (enYes) enYes.addEventListener('change', syncStep1Enable);
-
-  // React to class/medicine changes: keep 4 rows & class defaults in sync
-  const clsSel = document.getElementById('classSelect');
-  const medSel = document.getElementById('medicineSelect');
-  const reapply = () => {
-    if (document.getElementById('enableStep1Yes')?.checked){
-      ensureFourRows();
-    }
-  };
-  if (clsSel) clsSel.addEventListener('change', reapply);
-  if (medSel) medSel.addEventListener('change', reapply);
-
-  // Initial state (No)
-  syncStep1Enable();
-}
-
-function syncModeVisibility(){
-  const key = currentClassKey();
-  const mode = document.getElementById('modeBlock');
-  if (!mode) return;
-  mode.style.display = (key === 'bzd') ? 'none' : '';
-}
-function wireCustomPanel(){
-  const clsSel = document.getElementById('classSelect');
-  const medSel = document.getElementById('medicineSelect');
-  const resetBtn = document.getElementById('resetPriority'); // if you still have it; otherwise ignore
-
-  const onChange = ()=>{ syncModeVisibility(); };
-  if (clsSel) clsSel.addEventListener('change', onChange);
-  if (medSel) medSel.addEventListener('change', onChange);
-
-  // Initial fill (if you still show Step-1 pills elsewhere, keep your old calls)
-  syncModeVisibility();
 }
 
 // --- PRINT DECORATIONS (header, colgroup, zebra fallback, nowrap units) ---
@@ -1055,7 +500,6 @@ function injectPrintDisclaimer() {
     // d.remove();
   };
 }
-
 
 // validate intervals, show hints, toggle input error class, and optionally toast
 function validatePatchIntervals(showToastToo=false){
@@ -1521,7 +965,6 @@ function gabapentinFormForMg(mg){
   return "Capsule";
 }
 
-
 // Build the list of commercial products (form + strength) for the selected medicine
 function allCommercialProductsForSelected(){
   const cls = document.getElementById("classSelect")?.value || "";
@@ -1555,9 +998,11 @@ function allCommercialProductsForSelected(){
 }
 
 // Read current selection (returns array of mg if any selected, else null -> use default)
-// Return allowed mg strengths for the CURRENT class/med/form.
-// None ticked => treat as "all products allowed".
-
+function selectedProductMgs(){
+  // We store selected base strengths (mg) in a Set. If empty → null (use all).
+  if (!window.SelectedFormulations || SelectedFormulations.size === 0) return null;
+  return Array.from(SelectedFormulations).filter(n => Number.isFinite(n) && n > 0);
+}
 function strengthsForSelectedSafe(cls, med, form){
   try {
     if (typeof strengthsForSelected === "function") {
@@ -1569,6 +1014,76 @@ function strengthsForSelectedSafe(cls, med, form){
     return arr.map(parseMgFromStrength).filter(v => v > 0);
   } catch (_) {
     return [];
+  }
+}
+function renderProductPicker(){
+  const clsEl  = document.getElementById("classSelect");
+  const medEl  = document.getElementById("medicineSelect");
+  const formEl = document.getElementById("formSelect");
+  const cls  = (clsEl && clsEl.value)  || "";
+  const med  = (medEl && medEl.value)  || "";
+  const form = (formEl && formEl.value) || "";
+
+  const card = document.getElementById("productPickerCard");
+  const host = document.getElementById("productPicker");
+  if (!card || !host) return;
+
+  // Show/hide picker based on allowed medicines/forms
+  if (typeof shouldShowProductPicker === "function" && !shouldShowProductPicker(cls, med, form)) {
+    card.style.display = "none";
+    if (window.SelectedFormulations && typeof SelectedFormulations.clear === "function") SelectedFormulations.clear();
+    host.innerHTML = "";
+    return;
+  }
+  card.style.display = "";
+
+  // Build checkbox list
+  host.innerHTML = "";
+  const strengths = (typeof strengthsForPicker === "function" ? strengthsForPicker() : []);
+  strengths.forEach(s => {
+    const mg = (typeof parseMgFromStrength === "function") ? parseMgFromStrength(s) : parseFloat(String(s).replace(/[^\d.]/g,"")) || 0;
+    if (!Number.isFinite(mg) || mg <= 0) return;
+
+    const id = `prod_${String(med).replace(/\W+/g,'_')}_${mg}`;
+    const wrap = document.createElement("label");
+    wrap.className = "checkbox";
+    wrap.setAttribute("for", id);
+
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.id = id;
+
+    // If user has made any selection, reflect it; otherwise show unchecked (using all products by default)
+    const isChecked = (window.SelectedFormulations && SelectedFormulations.size > 0) ? SelectedFormulations.has(mg) : false;
+    cb.checked = isChecked;
+
+    cb.addEventListener("change", () => {
+      if (!window.SelectedFormulations) window.SelectedFormulations = new Set();
+      if (cb.checked) SelectedFormulations.add(mg);
+      else SelectedFormulations.delete(mg);
+      if (typeof setDirty === "function") setDirty(true);
+    });
+
+    const span = document.createElement("span");
+    const title = (typeof strengthToProductLabel === "function")
+      ? strengthToProductLabel(cls, med, form, s)
+      : `${mg} mg`;
+    span.textContent = title; // e.g., "600 mg tablet" / "25 mg capsule"
+
+    wrap.appendChild(cb);
+    wrap.appendChild(span);
+    host.appendChild(wrap);
+  });
+
+  // Wire "Clear selection" button
+  const clearBtn = document.getElementById("clearProductSelection");
+  if (clearBtn && !clearBtn._wired) {
+    clearBtn._wired = true;
+    clearBtn.addEventListener("click", () => {
+      if (window.SelectedFormulations && typeof SelectedFormulations.clear === "function") SelectedFormulations.clear();
+      host.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+      if (typeof setDirty === "function") setDirty(true);
+    });
   }
 }
 
@@ -1676,7 +1191,6 @@ function updateClassFooter() {
   if (target) target.textContent = text;
 }
 
-
 let _lastPracticeKey = null;
 
 function updateBestPracticeBox() {
@@ -1726,32 +1240,22 @@ function showToast(msg) {
   t._h = setTimeout(() => { t.style.display = "none"; }, 2200);
 }
 
-function setGenerateEnabled() {
+function setGenerateEnabled(){
   const pct  = parseFloat(document.getElementById("p1Percent")?.value || "");
   const intv = parseInt(document.getElementById("p1Interval")?.value || "", 10);
 
-  const cls  = document.getElementById("classSelect")?.value || "";
-  const med  = document.getElementById("medicineSelect")?.value || "";
-  const form = document.getElementById("formSelect")?.value || "";
-
-  const haveSelection = !!(cls && med && form);
-  const haveDoseLines = Array.isArray(window.doseLines) &&
-    window.doseLines.some(l => (l?.qty ?? 0) > 0 && String(l?.strengthStr || "").trim().length);
-
-  // Phase-1 must be set, plus a minimal viable input to build
-  let ready = Number.isFinite(pct) && pct > 0 &&
-              Number.isFinite(intv) && intv > 0 &&
-              haveSelection && haveDoseLines;
-
+  // Enable Generate only when Phase 1 is complete
   const gen = document.getElementById("generateBtn");
+  const ready = Number.isFinite(pct) && pct > 0 && Number.isFinite(intv) && intv > 0;
   if (gen) gen.disabled = !ready;
 
-  // Keep the patch interval rule for patches only (no effect for tablets)
-  if (typeof validatePatchIntervals === "function" && typeof patchIntervalRule === "function") {
-    if (patchIntervalRule()) {
-      ready = ready && validatePatchIntervals(false);
-      if (gen) gen.disabled = !ready;
-    }
+  // IMPORTANT: Do NOT touch Print/Save here.
+  // setDirty(...) already disables/enables them using _dirtySinceGenerate.
+  // (This removes the old window.dirty override.)
+  
+  // Keep the patch-interval extra rule if you had it:
+  if (typeof validatePatchIntervals === "function") {
+    validatePatchIntervals(false);
   }
 }
 
@@ -1857,278 +1361,6 @@ function renderPrintHeader(container){
   // insert header at the very top of container
   container.prepend(hdr);
 }
-/* ------------------------------------------------------------------
-   Safety rules: spread check + friendly confirm
-   - Computes per-step slot totals (AM/MID/DIN/PM) in mg
-   - Warns if spread > medicine-specific limit
-   - One-time grace when a slot first retires to 0
------------------------------------------------------------------- */
-
-// 1) Medicine-specific spread limits (mg)
-const SPREAD_LIMITS = {
-  morphine: 30,
-  oxycodone: 20,
-  "oxycodone-naloxone": 20,
-  tapentadol: 100,
-  tramadol: 100,
-  gabapentin: 300,
-  pregabalin: 75,    // per your update
-};
-
-// 2) Recognise medicine from the strength label text
-function spreadKeyFromLabel(label) {
-  const s = String(label || "").toLowerCase();
-  if (s.includes("oxycodone") && s.includes("naloxone")) return "oxycodone-naloxone";
-  if (s.includes("oxycodone")) return "oxycodone";
-  if (s.includes("morphine")) return "morphine";
-  if (s.includes("tapentadol")) return "tapentadol";
-  if (s.includes("tramadol")) return "tramadol";
-  if (s.includes("gabapentin")) return "gabapentin";
-  if (s.includes("pregabalin")) return "pregabalin";
-  return null;
-}
-
-// 3) Extract the primary mg value for a line's strength label
-//    - For oxy/nal combos, returns the OXYCODONE mg (first number)
-function extractPrimaryMg(label) {
-  const raw = String(label || "");
-  // "Oxycodone ... 10 mg + Naloxone 5 mg ..."
-  let m = /Oxycodone[^0-9]*([\d.]+)\s*mg/i.exec(raw);
-  if (m) return parseFloat(m[1]);
-
-  // "Oxycodone/Naloxone 10/5 mg ..."
-  m = /Oxycodone\/Naloxone\s+([\d.]+)\s*\/\s*([\d.]+)\s*mg/i.exec(raw);
-  if (m) return parseFloat(m[1]);
-
-  // Generic "123 mg" (first number before mg)
-  m = /([\d.]+)\s*mg/i.exec(raw);
-  return m ? parseFloat(m[1]) : 0;
-}
-
-// 4) Compute per-slot totals (mg) for a single step
-function slotTotalsMg(step) {
-  const totals = { AM: 0, MID: 0, DIN: 0, PM: 0 };
-  const lines = step?.lines || step?.rows || []; // be tolerant to naming
-  for (const line of lines) {
-    const mg = extractPrimaryMg(line.strength || line.strengthLabel || "");
-    const am  = (line.morning ?? line.am  ?? 0) * mg;
-    const mid = (line.midday  ?? line.mid ?? 0) * mg;
-    const din = (line.dinner  ?? line.din ?? 0) * mg;
-    const pm  = (line.night   ?? line.pm  ?? line.nocte ?? 0) * mg;
-    totals.AM  += am; totals.MID += mid; totals.DIN += din; totals.PM  += pm;
-  }
-  return totals;
-}
-
-// 5) First non-null medicine key seen in a step (from its lines)
-function discoverSpreadKey(step) {
-  const lines = step?.lines || step?.rows || [];
-  for (const line of lines) {
-    const key = spreadKeyFromLabel(line.strength || line.strengthLabel || "");
-    if (key) return key;
-  }
-  return null;
-}
-
-// 6) Spread (max - min) among ACTIVE slots (dose > 0)
-function computeSpread(totals) {
-  const vals = [totals.AM, totals.MID, totals.DIN, totals.PM].filter(v => v > 0.0001);
-  if (vals.length <= 1) return 0; // one or zero active slots → spread is 0
-  const maxv = Math.max(...vals), minv = Math.min(...vals);
-  return maxv - minv;
-}
-
-// 7) Friendly summary for the confirm message
-function formatSlotSummary(t) {
-  const fmt = v => (Math.round(v*10)/10).toLocaleString();
-  return `AM ${fmt(t.AM)} mg • MID ${fmt(t.MID)} mg • DIN ${fmt(t.DIN)} mg • PM ${fmt(t.PM)} mg`;
-}
-
-// 8) The interactive pre-scan (returns pruned plan or null to abort)
-function applySpreadSafetyInteractive(stepRows) {
-  if (!Array.isArray(stepRows) || !stepRows.length) return stepRows;
-
-  let prevActiveCount = null;
-  let usedGraceOnRetire = false;  // allow grace once (when a slot first retires)
-  // Work out medicine key & limit from the first step that has a label
-  let spreadKey = null, limit = null;
-
-  for (let i = 0; i < stepRows.length; i++) {
-    const step = stepRows[i];
-    // Skip non-dose steps (STOP/REVIEW rows)
-    if (step?.kind && step.kind !== "DOSE") continue;
-
-    if (!spreadKey) {
-      spreadKey = discoverSpreadKey(step);
-      limit = spreadKey ? SPREAD_LIMITS[spreadKey] : null;
-    }
-    if (!limit) continue; // unknown class → no spread check
-
-    const totals = slotTotalsMg(step);
-    const activeCount = ["AM","MID","DIN","PM"].reduce((n,k)=> n + (totals[k] > 0.0001 ? 1 : 0), 0);
-
-    // Retirement grace: if a slot has just dropped to 0 for the first time, allow this step once
-    const justRetired = (prevActiveCount !== null && activeCount < prevActiveCount && !usedGraceOnRetire);
-    if (justRetired) {
-      usedGraceOnRetire = true;
-      prevActiveCount = activeCount;
-      continue; // allow without warning
-    }
-
-    const spread = computeSpread(totals);
-    if (spread > limit) {
-      const msg = [
-        `Heads-up: this step would produce an uneven split for ${spreadKey.replace("-"," / ")}.`,
-        `Allowed difference: ≤ ${limit} mg.`,
-        `This step: ${formatSlotSummary(totals)} (spread ${Math.round(spread)} mg).`,
-        ``,
-        `For safety and due to calculator limits, do you want to continue?`,
-      ].join("\n");
-
-      if (!window.confirm(msg)) {
-        // User chose "Stop for review": trim plan to previous steps and add a REVIEW row
-        const dateStr = step.dateStr || step.date || step.when || step.applyOn || "";
-        const reviewRow = { kind: "REVIEW", dateStr, message: "Review with your doctor the ongoing plan" };
-        // Keep steps BEFORE this one, then insert review
-        const pruned = stepRows.slice(0, i);
-        pruned.push(reviewRow);
-        return pruned;
-      }
-      // else: user chose Continue → permit this step and keep scanning
-    }
-
-    prevActiveCount = activeCount;
-  }
-
-  return stepRows;
-}
-// --- End-dose helpers for Opioid SR ---
-function lowestCommercialMg(cls, med, form){
-  try{
-    // Use your safe strength list (already filtered by med/form)
-    const list = (typeof strengthsForSelectedSafe === "function")
-      ? strengthsForSelectedSafe(cls, med, form)
-      : (typeof strengthsForPicker === "function" ? strengthsForPicker() : []);
-    const mg = (list||[])
-      .map(v => (typeof parseMgFromStrength === "function" ? parseMgFromStrength(v) : parseFloat(String(v))))
-      .filter(v => Number.isFinite(v) && v > 0)
-      .sort((a,b)=>a-b);
-    return mg[0] || 0;
-  } catch(_) { return 0; }
-}
-
-function slotTotalsOfRow(row){
-  const packs = row?.packs || {};
-  const tot = (slot) => (packs[slot] ? packsTotalMg({[slot]: packs[slot]}) : 0);
-  return { AM: tot("AM"), MID: tot("MID"), DIN: tot("DIN"), PM: tot("PM") };
-}
-
-function isBidAtLowest(row, minMg){
-  const t = slotTotalsOfRow(row);
-  const near = (a,b)=> Math.abs((a||0)-(b||0)) <= (typeof EPS==='number'?EPS:1e-6);
-  return near(t.AM, minMg) && near(t.PM, minMg) && (t.MID <= (EPS||1e-6)) && (t.DIN <= (EPS||1e-6));
-}
-
-function isPmOnly(row){
-  const t = slotTotalsOfRow(row);
-  return t.PM > (EPS||1e-6) && (t.AM + t.MID + t.DIN) <= (EPS||1e-6);
-}
-
-/**
- * Enforce opioid SR end-dose rule:
- * - lowest selected:   BID@lowest → PM-only → STOP
- * - lowest not selected: BID@lowest → REVIEW   (no PM-only)
- */
-function enforceOpioidEndDoseTail(stepRows){
-  try{
-    if (!Array.isArray(stepRows) || !stepRows.length) return stepRows;
-
-    // Determine cls/med/form from controls (prefer) or last row
-    const cls = document.getElementById("classSelect")?.value || stepRows[stepRows.length-1]?.cls || "";
-    const med = document.getElementById("medicineSelect")?.value || stepRows[stepRows.length-1]?.med || "";
-    const form= document.getElementById("formSelect")?.value || stepRows[stepRows.length-1]?.form|| "";
-
-    if (cls !== "Opioid" || !/SR/i.test(form)) return stepRows;
-
-    const minMg = lowestCommercialMg(cls, med, form);
-    if (!minMg) return stepRows;
-
-    const lowestAllowed = isLowestCommercialSelected(cls, med, form);
-
-    // Work on a shallow copy and peel off trailing STOP/REVIEW for inspection
-    const out = stepRows.slice();
-    const tail = [];
-    while (out.length && (out[out.length-1]?.stop || out[out.length-1]?.review || out[out.length-1]?.kind === "STOP" || out[out.length-1]?.kind === "REVIEW")){
-      tail.unshift(out.pop());
-    }
-
-    if (!out.length) return stepRows;
-
-    // Find the last DOSE row that is BID at lowest
-    let k = -1;
-    for (let i = out.length-1; i >= 0; i--){
-      const r = out[i];
-      if (r && !r.stop && !r.review && r.kind !== "STOP" && r.kind !== "REVIEW"){
-        if (isBidAtLowest(r, minMg)){ k = i; break; }
-      }
-    }
-    if (k === -1){
-      // No BID@lowest found; restore original tail and return
-      return out.concat(tail);
-    }
-
-    // Check if we already have a PM-only row right after that BID row
-    const hadPmOnly = (out[k+1] && !out[k+1].stop && !out[k+1].review && isPmOnly(out[k+1]));
-
-    // Decide target tail by rule
-    if (lowestAllowed){
-      // Ensure PM-only then STOP exists
-      if (!hadPmOnly){
-        // Build a PM-only packs by copying PM from the BID row
-        const bidRow = out[k];
-        const pmPacks = (bidRow.packs && bidRow.packs.PM) ? deepCopy(bidRow.packs.PM) : [];
-        const packsPmOnly = { AM:[], MID:[], DIN:[], PM: pmPacks };
-
-        // Choose a date: use the first tail date if present, else repeat BID date
-        const pmDate = (tail.length && tail[0]?.date) ? tail[0].date : bidRow.date;
-        const pmWeek = (typeof bidRow.week === "number") ? (bidRow.week + 1) : undefined;
-
-        out.splice(k+1, 0, {
-          week: pmWeek,
-          date: pmDate,
-          packs: packsPmOnly,
-          med: bidRow.med, form: bidRow.form, cls: bidRow.cls
-        });
-      }
-      // Ensure STOP after PM-only (keep existing STOP from tail if present, else add one)
-      let hasStop = tail.some(t => t.stop || t.kind === "STOP");
-      const stopDate = (tail.find(t => t.stop || t.kind === "STOP")?.date)
-                    || (out[k+1]?.date) || (out[k]?.date);
-      if (!hasStop){
-        out.push({ week: (out[k+1]?.week ? out[k+1].week+1 : undefined),
-                   date: stopDate, packs:{}, med: out[k].med, form: out[k].form, cls: out[k].cls, stop:true });
-      } else {
-        // put back the original STOP (and drop any REVIEW from the tail for this rule)
-        const keep = tail.filter(t => t.stop || t.kind === "STOP");
-        out.push(...keep);
-      }
-    } else {
-      // Lowest NOT allowed: ensure NO PM-only and end with REVIEW
-      // Drop any PM-only right after BID
-      if (hadPmOnly) out.splice(k+1, 1);
-
-      // End with REVIEW (use first tail date if present, else BID date)
-      const rvwDate = (tail.length && tail[0]?.date) ? tail[0].date : out[k].date;
-      out.push({ date: rvwDate, med: out[k].med, form: out[k].form, cls: out[k].cls,
-                 kind:"REVIEW", review:true, message:"Review with your doctor the ongoing plan" });
-    }
-
-    return out;
-  } catch(_){
-    return stepRows;
-  }
-}
-
 /* ==========================================
    RENDER STANDARD (tablets/caps/ODT) TABLE
    - Merges date per step (rowspan)
@@ -2139,11 +1371,6 @@ function enforceOpioidEndDoseTail(stepRows){
 //#endregion
 //#region 5. Renderers (Standard & Patch)
 function renderStandardTable(stepRows){
-  stepRows = applyOpioidEndDoseRule(stepRows);
-  stepRows = enforceOpioidEndDoseTail(stepRows);
-  stepRows = enforceOpioidEndDoseDefault(stepRows); 
-  stepRows = applySpreadSafetyInteractive(stepRows);
-  if (!stepRows) return;
   const scheduleHost = document.getElementById("scheduleBlock");
   const patchHost    = document.getElementById("patchBlock");
   if (!scheduleHost) return;
@@ -2258,17 +1485,24 @@ function renderStandardTable(stepRows){
       }
       tr.appendChild(tdDate);
 
-// [2] Strength — emphasise oxycodone over naloxone on ALL rows
-const tdStrength = document.createElement("td");
-tdStrength.className = "col-strength";
-tdStrength.innerHTML = formatOxyOnlyHTML(line.strength || "");
-tr.appendChild(tdStrength);
+      // [2] Strength  — keep label tied to selected formulations (no phantom lower strengths)
+      const tdStrength = document.createElement("td");
+      tdStrength.className = "col-strength";
+      const cls  = $("classSelect")?.value || "";
+      const med  = $("medicineSelect")?.value || "";
+      const form = $("formSelect")?.value || "";
+      const rawLabel = line.strengthLabel || line.strength || "";
+      tdStrength.textContent = prettySelectedLabelOrSame(cls, med, form, rawLabel);
+      tr.appendChild(tdStrength);
 
-      // [3] Instructions — keep \n, print via textContent
+
+       // [3] Instructions — put each "Take ..." on its own line
       const tdInstr = document.createElement("td");
       tdInstr.className = "col-instr instructions-pre";
-      tdInstr.textContent = (line.instr || "");
+      const instrText = String(line.instr || "").replace(/\s+(?=Take\b)/g, '\n');
+      tdInstr.textContent = instrText;
       tr.appendChild(tdInstr);
+
 
       // helper for dose cells
       const doseCell = (val, cls) => {
@@ -2468,7 +1702,6 @@ function renderPatchTable(stepRows) {
   if (typeof normalizeFooterSpans === "function") normalizeFooterSpans();
 }
 
-
 /* =================== Catalogue (commercial only) =================== */
 
 //#endregion
@@ -2542,7 +1775,7 @@ function oxyNxPairLabel(oxyMg){
   return `Oxycodone ${stripZeros(oxy)} mg + naloxone ${stripZeros(nx)} mg SR tablet`;
 }
 /* =================== Dropdowns & dose lines =================== */
-const ANTIPSYCHOTIC_MODE = "Show";
+const ANTIPSYCHOTIC_MODE = "show";
 
 function populateClasses() {
   const el = $("classSelect");
@@ -2770,7 +2003,6 @@ function allowedPiecesMg(cls, med, form){
   return [...new Set(pieces)].sort((a,b)=>a-b);
 }
 
-
 function lowestStepMg(cls, med, form){
   if(cls==="Benzodiazepines / Z-Drug (BZRA)" && /Zolpidem/i.test(med) && isMR(form)) return 6.25;
   if(cls==="Benzodiazepines / Z-Drug (BZRA)" && BZRA_MIN_STEP[med]) return BZRA_MIN_STEP[med];
@@ -2840,6 +2072,50 @@ function recomposeSlots(targets, cls, med, form){
   for(const slot of ["AM","MID","DIN","PM"]) out[slot] = composeForSlot(targets[slot]||0, cls, med, form);
   return out;
 }
+/* === BZRA selection-only composer (PM-only). Keeps halves on their source product. === */
+function composeForSlot_BZRA_Selected(targetMg, cls, med, form, selectedMg){
+  // Use this ONLY when there really is a selection
+  if (!Array.isArray(selectedMg) || selectedMg.length === 0) return null;
+  if (!(targetMg > 0)) return {};
+
+  // Build allowed units from the selected list:
+  // - full tablet: unit = mg,   piece = 1.0, source = mg
+  // - half tablet: unit = mg/2, piece = 0.5, source = mg (only if halving allowed)
+  const name = String(med||"").toLowerCase();
+  const fr   = String(form||"").toLowerCase();
+
+  const isMR = /slow\s*release|sr|cr|er|mr/.test(fr);
+  const isNoSplitForm = isMR || /odt|wafer|dispers/i.test(fr);
+  const noSplitAlp025 = (mg) => (name.includes("alprazolam") && Math.abs(mg - 0.25) < 1e-6);
+
+  const units = [];
+  for (const mg of selectedMg){
+    const m = Number(mg);
+    if (!Number.isFinite(m) || m <= 0) continue;
+    // full
+    units.push({ unit:m, source:m, piece:1.0 });
+    // half (only when allowed)
+    if (!isNoSplitForm && !noSplitAlp025(m)) {
+      units.push({ unit:m/2, source:m, piece:0.5 });
+    }
+  }
+  if (!units.length) return null;
+
+  // Greedy largest-first exact pack into PM, crediting pieces to the SOURCE mg
+  units.sort((a,b)=> b.unit - a.unit);
+  let r = +targetMg.toFixed(6);
+  const PM = {};
+  for (const u of units){
+    if (r <= 1e-6) break;
+    const q = Math.floor(r / u.unit + 1e-9);
+    if (q > 0){
+      PM[u.source] = (PM[u.source] || 0) + q * u.piece; // halves stay on the same product row
+      r -= q * u.unit;
+    }
+  }
+  if (r > 1e-6) return null; // cannot represent exactly with the selected set → caller will fallback
+  return PM;
+}
 
 /* ===== Preferred BID split ===== */
 function preferredBidTargets(total, cls, med, form){
@@ -2864,6 +2140,100 @@ function stepOpioid_Shave(packs, percent, cls, med, form){
   // Respect selected products for rounding granularity
   const step = lowestStepMg(cls, med, form) || 1;
 
+  // ---------- local helpers (self-contained) ----------
+  function allCommercialStrengthsMg(cls, med, form){
+    try {
+      if (typeof strengthsForPicker === "function") {
+        const arr = strengthsForPicker(cls, med, form);
+        const mg = (arr || []).map(Number).filter(n => Number.isFinite(n) && n > 0);
+        if (mg.length) return Array.from(new Set(mg)).sort((a,b)=>a-b);
+      }
+    } catch(_) {}
+    try {
+      const cat = (window.CATALOG?.[cls]?.[med]) || {};
+      const pool = (form && cat[form]) ? cat[form] : Object.values(cat).flat();
+      const mg = (pool || [])
+        .map(v => (typeof v === 'number' ? v : parseMgFromStrength(v)))
+        .filter(n => Number.isFinite(n) && n > 0)
+        .sort((a,b)=>a-b);
+      if (mg.length) return Array.from(new Set(mg));
+    } catch(_) {}
+    return [];
+  }
+  function lowestCommercialStrengthMgLocal(cls, med, form){
+    const all = allCommercialStrengthsMg(cls, med, form);
+    return all.length ? all[0] : null;
+  }
+  function lowestSelectedStrengthMgLocal(){
+    try {
+      if (typeof selectedProductMgs === "function") {
+        const picked = selectedProductMgs() || [];
+        const mg = picked.map(Number).filter(n => Number.isFinite(n) && n > 0);
+        if (mg.length) return Math.min(...mg);
+      }
+      // fallback to live SelectedFormulations set (if present)
+      if (window.SelectedFormulations && SelectedFormulations.size > 0) {
+        const mg = Array.from(SelectedFormulations).map(Number).filter(n => Number.isFinite(n) && n > 0);
+        if (mg.length) return Math.min(...mg);
+      }
+    } catch(_) {}
+    return null;
+  }
+  function lcsIsSelectedLocal(lcs){
+    try{
+      if (!Number.isFinite(lcs)) return false;
+      const n = Number(lcs);
+      if (window.SelectedFormulations && SelectedFormulations.size > 0){
+        for (const v of SelectedFormulations) if (Number(v) === n) return true;
+      }
+      if (typeof selectedProductMgs === "function"){
+        const arr = selectedProductMgs() || [];
+        for (const v of arr) if (Number(v) === n) return true;
+      }
+      return false;
+    }catch(_){ return false; }
+  }
+  function isExactBIDAtLocal(p, mg){
+    const AM = slotTotalMg(p,"AM"), MID = slotTotalMg(p,"MID"),
+          DIN = slotTotalMg(p,"DIN"), PM = slotTotalMg(p,"PM");
+    return Math.abs(AM - mg) < EPS && Math.abs(PM - mg) < EPS && MID < EPS && DIN < EPS;
+  }
+  function isExactPMOnlyAtLocal(p, mg){
+    const AM = slotTotalMg(p,"AM"), MID = slotTotalMg(p,"MID"),
+          DIN = slotTotalMg(p,"DIN"), PM = slotTotalMg(p,"PM");
+    return AM < EPS && MID < EPS && DIN < EPS && Math.abs(PM - mg) < EPS;
+  }
+  // ----------------------------------------------------
+
+  // --- BID end-sequence gate (applies to SR opioids and pregabalin via this stepper) ---
+  const lcs = lowestCommercialStrengthMgLocal(cls, med, form);   // lowest commercial strength available
+  const lss = lowestSelectedStrengthMgLocal();                   // lowest strength selected by user
+  const lcsSelected = lcsIsSelectedLocal(lcs);
+  const threshold = (lcsSelected ? lcs : lss);
+
+  if (threshold != null && Number.isFinite(threshold)) {
+    // Already PM-only at threshold → next is STOP
+    if (isExactPMOnlyAtLocal(packs, threshold)) {
+      if (window._forceReviewNext) window._forceReviewNext = false;
+      return {}; // empty packs => STOP row
+    }
+    // First hit of BID(threshold)
+    if (isExactBIDAtLocal(packs, threshold)) {
+      if (lcsSelected) {
+        // Case A: LCS selected → PM-only at threshold (explicit, no rebalancing)
+        if (window._forceReviewNext) window._forceReviewNext = false;
+        const out = { AM:{}, MID:{}, DIN:{}, PM:{} };
+        out.PM[Number(threshold)] = 1;
+        return out;
+      } else {
+        // Case B: LCS NOT selected → Review on next boundary
+        window._forceReviewNext = true;
+        return packs; // return unchanged; plan loop will emit Review next
+      }
+    }
+  }
+
+  // --- continue with normal BID stepping (original V2 logic) ---
   let target = roundTo(tot * (1 - percent/100), step);
   if (target === tot && tot > 0) {
     target = Math.max(0, tot - step);
@@ -2887,7 +2257,7 @@ function stepOpioid_Shave(packs, percent, cls, med, form){
     reduce    = +(reduce    - dec).toFixed(3);
   };
 
-  // Same path you already use elsewhere for SR-style classes:
+  // SR-style: reduce DIN first; then MID
   if (cur.DIN > EPS) { shave("DIN"); shave("MID"); }
   else               { shave("MID"); }
 
@@ -2952,114 +2322,266 @@ function stepAP(packs, percent, med, form){
   return recomposeSlots(cur, "Antipsychotic", med, form);
 }
 
-/* ===== Gabapentinoids — Gabapentin: DIN→(MID)→rebalance TID | Pregabalin: DIN→MID→rebalance BID ===== */
+/* ===== Gabapentinoids
+   Gabapentin:
+     • Modes:
+       (a) TID: AM+MID+PM
+       (b) TID (AM+DIN+PM when no MID input): treat DIN as the middle dose
+       (c) QID: AM+MID+DIN+PM → shave DIN first each step, then pivot to TID when DIN=0
+     • Distribution goal (TID-modes): keep doses as close as possible
+       Primary: minimise range (max−min), then minimise total deviation from mean (|slot−S/3| sum),
+       then enforce PM ≥ AM ≥ MID, prefer AM=PM, then fewest units, then round up, then lower S.
+     • End-sequence (TID only):
+       - If 100 mg is selected: 300→200→100→Stop as (100/100/100) → (100 AM + 100 PM) → (100 PM only) → Stop
+       - If 100 mg is NOT selected: at first TID of lowest selected strength → Review next boundary
+   Pregabalin:
+     • Mirror SR-opioid BID stepper untouched
+   ===== */
+
 function stepGabapentinoid(packs, percent, med, form){
-  const cls = "Gabapentinoids";
   const tot = packsTotalMg(packs);
   if (tot <= EPS) return packs;
 
-  // Round targets to the lowest step permitted by the user's selected products
-  const step = lowestStepMg(cls, med, form) || 1;
-
-  let target = roundTo(tot * (1 - percent/100), step);
-  if (target === tot && tot > 0) {               // ensure forward progress
-    target = Math.max(0, tot - step);
-    target = roundTo(target, step);
+  // ---- Pregabalin: reuse your proven BID stepper ----
+  if (/pregabalin/i.test(med)) {
+    if (typeof stepOpioid_Shave === 'function') return stepOpioid_Shave(packs, percent, "Opioids", med, form);
+    if (typeof stepOpioidOral  === 'function')   return stepOpioidOral (packs, percent, "Opioids", med, form);
+    if (typeof stepOpioid      === 'function')   return stepOpioid     (packs, percent, "Opioids", med, form);
+    return packs;
   }
 
-  // Current slot totals
-  let cur = {
-    AM:  slotTotalMg(packs, "AM"),
-    MID: slotTotalMg(packs, "MID"),
-    DIN: slotTotalMg(packs, "DIN"),
-    PM:  slotTotalMg(packs, "PM")
-  };
+  // ---- Gabapentin ----
+  const strengths = getSelectedStrengths();                 // strictly from selection (fallback to picker if none)
+  if (!strengths.length) return packs;
+  const stepMg = strengths[0];                              // quantisation step = smallest selected
+  const has100 = (stepMg === 100);
+  const lss    = strengths[0];                              // lowest selected strength
+  const cap    = 4;                                         // per-slot unit cap
 
-  let reduce = +(tot - target).toFixed(3);
+  // Detect mode based on achieved packs
+  const AMmg = slotTotalMg(packs, "AM")  | 0;
+  const MIDmg= slotTotalMg(packs, "MID") | 0;
+  const DINmg= slotTotalMg(packs, "DIN") | 0;
+  const PMmg = slotTotalMg(packs, "PM")  | 0;
 
-  // Shave helper (quantised to 'step')
-  const shave = (slot) => {
-    if (reduce <= EPS || cur[slot] <= EPS) return;
-    const can = cur[slot];
-    const dec = Math.min(can, roundTo(reduce, step));
-    cur[slot] = +(cur[slot] - dec).toFixed(3);
-    reduce    = +(reduce    - dec).toFixed(3);
-  };
+  const isQID          = (MIDmg > EPS && DINmg > EPS);
+  const isTID_mid      = (MIDmg > EPS && DINmg <= EPS);
+  const isTID_dinAsMid = (DINmg > EPS && MIDmg <= EPS);
+  const middleSlot     = isTID_dinAsMid ? "DIN" : "MID";   // used only in TID modes
 
-  // ---------- Branch by medicine ----------
-  const isGaba = /gabapentin/i.test(med);
-  const isPreg = /pregabalin/i.test(med);
+  // ---- End-sequence (TID only; not applied during QID) ----
+  if (!isQID) {
+    if (has100) {
+      if (Math.abs(tot - 300) < EPS) return makePacks({ AM:{100:1}, MID:{}, DIN:{}, PM:{100:1} });
+      if (Math.abs(tot - 200) < EPS) return makePacks({ AM:{}, MID:{}, DIN:{}, PM:{100:1} });
+      if (Math.abs(tot - 100) < EPS) return makePacks({ AM:{}, MID:{}, DIN:{}, PM:{} });
+    } else {
+      // If 100 not selected: first TID (using whichever middle slot is active) at the LSS → Review next
+      if (isExactTIDAt(packs, lss, middleSlot)) { window._forceReviewNext = true; return packs; }
+    }
+  }
 
-  if (isGaba) {
-    // Rule: reduce DIN first; if needed reduce MID; then rebalance across TID (AM/MID/PM) with PM taking the remainder.
-    if (cur.DIN > EPS) shave("DIN");
-    if (reduce > EPS && cur.MID > EPS) shave("MID");
+  // ---- Compute this step's target from PREVIOUS ACHIEVED total, then quantise ----
+  const rawTarget     = tot * (1 - percent/100);
+  const targetRounded = nearestStep(rawTarget, stepMg);   // ties → round up
+  let reductionNeeded = Math.max(0, +(tot - targetRounded).toFixed(3));
+  if (reductionNeeded <= EPS) reductionNeeded = stepMg;   // ensure progress on first call
 
-    if (reduce > EPS || true) {
-      // Compute TID target and split with PM taking the remainder.
-      const tidTotal = Math.max(0, +(cur.AM + cur.MID + cur.PM - reduce).toFixed(3));
+  // ---- QID: rebuild DIN to the reduced target, leave AM/MID/PM untouched this step ----
+  if (isQID) {
+    const dec = Math.min(DINmg, roundTo(reductionNeeded, stepMg));
+    const newDIN = Math.max(0, DINmg - dec);
+    const targetDIN = floorTo(newDIN, stepMg);            // never increase
+    const rebuilt = packSlotToMg(targetDIN, strengths, cap);
+    if (rebuilt) {
+      const out = clonePacks(packs);
+      out.DIN = rebuilt;
+      // if DIN hits 0, we pivot to TID at the next step automatically
+      return out;
+    }
+    // If DIN couldn't be represented exactly (very rare), zero DIN and fall through
+    if (targetDIN <= EPS) {
+      const out = clonePacks(packs); out.DIN = {}; return out;
+    }
+  }
 
-      // Preferred TID split using 'step', PM carries the remainder.
-      const base = Math.max(0, tidTotal - 2*step); // start safe, adjust below
-      let am  = Math.floor((tidTotal / 3) / step) * step;
-      let mid = am;
-      let pm  = tidTotal - am - mid;
+  // ---- TID planning (covers normal TID and AM–DIN–PM variant) ----
+  const candidateSums = (() => {
+    const down = floorTo(targetRounded, stepMg), up = ceilTo(targetRounded, stepMg);
+    return (down === up) ? [down] : [down, up];
+  })();
 
-      // Quantise and nudge so AM/MID are <= PM, and all are multiples of step
-      am  = roundTo(am,  step);
-      mid = roundTo(mid, step);
-      pm  = roundTo(pm,  step);
+  let best = null;
+  for (const S of candidateSums) {
+    const cand = splitTID_ClosenessFirst(S, strengths, cap);
+    if (!cand) continue;
+    // Evaluate across S: nearest to raw target, then rounded up wins on tie
+    const diff = Math.abs(S - rawTarget), roundedUp = (S >= rawTarget);
+    const decorated = { ...cand, S, diff, roundedUp };
+    if (!best || Sbetter(decorated, best)) best = decorated;
+  }
+  if (!best) return packs;
 
-      // Fix any rounding drift by pushing difference to PM
-      let sum = am + mid + pm;
-      if (Math.abs(sum - tidTotal) > EPS) {
-        const diff = tidTotal - sum;
-        pm = roundTo(pm + diff, step);
+  // Map into the correct middle slot (MID in normal TID, DIN in AM–DIN–PM)
+  const out = { AM: best.AM, MID:{}, DIN:{}, PM: best.PM };
+  if (isTID_dinAsMid) out.DIN = best.MID; else out.MID = best.MID;
+  return out;
+
+  /* ===== helpers (scoped) ===== */
+
+  function getSelectedStrengths(){
+    // Prefer explicit mg list
+    try {
+      if (typeof selectedProductMgs === "function") {
+        const picked = selectedProductMgs();
+        if (Array.isArray(picked) && picked.length) {
+          return picked.map(toMgLoose).filter(n=>n>0).sort((a,b)=>a-b);
+        }
       }
-
-      // Guard against tiny negatives
-      if (am  < EPS) am  = 0;
-      if (mid < EPS) mid = 0;
-      if (pm  < EPS) pm  = 0;
-
-      cur.AM  = am;
-      cur.MID = mid;
-      cur.PM  = pm;
-      cur.DIN = 0;
-      reduce  = 0;
+    } catch(_){}
+    // Fallbacks (older pickers / full catalogue for Gabapentin)
+    let arr = [];
+    try { if (typeof strengthsForSelected === 'function') arr = strengthsForSelected() || []; } catch(_){}
+    try { if (!arr.length && typeof allowedStrengthsFilteredBySelection === 'function') arr = allowedStrengthsFilteredBySelection() || []; } catch(_){}
+    if (!arr.length) {
+      try { if (typeof strengthsForPicker === "function") arr = strengthsForPicker("Gabapentinoids", med, form) || []; } catch(_){}
     }
-  } else if (isPreg) {
-    // Rule: reduce DIN first, then MID; then rebalance BID across AM/PM (PM takes the remainder).
-    if (cur.DIN > EPS) shave("DIN");
-    if (reduce > EPS && cur.MID > EPS) shave("MID");
-
-    if (reduce > EPS) {
-      const bidTarget = Math.max(0, +(cur.AM + cur.PM - reduce).toFixed(3));
-      const bid = preferredBidTargets(bidTarget, cls, med, form); // uses lowestStepMg internally
-      cur.AM = bid.AM;
-      cur.PM = bid.PM;
-      cur.MID = 0; // after shaving MID we end in BID shape
-      reduce = 0;
-    }
-  } else {
-    // Fallback (shouldn't hit, but keep safe): behave like opioids SR
-    if (cur.DIN > EPS) shave("DIN");
-    if (reduce > EPS) shave("MID");
-    if (reduce > EPS) {
-      const bidTarget = Math.max(0, +(cur.AM + cur.PM - reduce).toFixed(3));
-      const bid = preferredBidTargets(bidTarget, cls, med, form);
-      cur.AM = bid.AM; cur.PM = bid.PM; reduce = 0;
-    }
+    return arr.map(toMgLoose).filter(n=>n>0).sort((a,b)=>a-b);
   }
 
-  // Clean up float dust
-  for (const k of ["AM","MID","DIN","PM"]) if (cur[k] < EPS) cur[k] = 0;
+  function toMgLoose(v){
+    if (typeof v === "number") return v;
+    if (typeof parseMgFromStrength === "function") {
+      const x = parseMgFromStrength(v);
+      if (Number.isFinite(x) && x > 0) return x;
+    }
+    const m = String(v).match(/(\d+(\.\d+)?)/);
+    return m ? Number(m[1]) : NaN;
+  }
 
-  // Compose into actual products permitted by the current selection
-  return recomposeSlots(cur, cls, med, form);
+  function nearestStep(x, step){
+    if (!Number.isFinite(x) || !step) return 0;
+    const r = x / step, flo = Math.floor(r), cei = Math.ceil(r);
+    const dFlo = Math.abs(r - flo), dCei = Math.abs(cei - r);
+    if (dFlo < dCei) return flo * step;
+    if (dCei < dFlo) return cei * step;
+    return cei * step; // exact tie -> round up
+  }
+  function roundTo(x, step){ return step ? Math.round(x/step)*step : x; }
+  function floorTo(x, step){ return step ? Math.floor(x/step)*step : x; }
+
+  function clonePacks(p){
+    const out = { AM:{}, MID:{}, DIN:{}, PM:{} };
+    for (const slot of Object.keys(out)){
+      const src = p[slot] || {};
+      for (const k of Object.keys(src)) out[slot][k] = src[k];
+    }
+    return out;
+  }
+
+  function isExactTIDAt(p, mg, middle="MID"){
+    const AM = slotTotalMg(p,"AM"), MIDv = slotTotalMg(p,middle), PM = slotTotalMg(p,"PM");
+    const other = (middle==="MID") ? "DIN" : "MID";
+    const otherMg = slotTotalMg(p, other);
+    return otherMg < EPS && Math.abs(AM-mg)<EPS && Math.abs(MIDv-mg)<EPS && Math.abs(PM-mg)<EPS;
+  }
+
+  // Pack a single slot to exactly 'amt' mg with selected strengths and unit cap; prefer largest-first then fill with smallest.
+  function packSlotToMg(amt, strengths, capPerSlot){
+    if (amt <= 0) return {};
+    let r = amt;
+    const out = {};
+    // largest-first
+    for (let i = strengths.length-1; i >= 0 && r > 0; i--){
+      const mg = strengths[i];
+      const q = Math.floor(r / mg);
+      if (q > 0) {
+        out[mg] = (out[mg] || 0) + q;
+        r -= q * mg;
+        if (countUnits(out) > capPerSlot) return null;
+      }
+    }
+    // fill remainder (if any) with smallest step
+    while (r > 0){
+      const mg = strengths[0];
+      out[mg] = (out[mg] || 0) + 1;
+      r -= mg;
+      if (countUnits(out) > capPerSlot) return null;
+      if (r < 0) return null; // overshoot means unrepresentable exactly with given strengths/step
+    }
+    return out;
+  }
+
+  function countUnits(map){ return Object.values(map||{}).reduce((s,v)=>s+(v|0),0); }
+
+  // Build a TID split for daily total S (multiple of step) that is as close as possible across slots
+  function splitTID_ClosenessFirst(S, strengths, capPerSlot){
+    if (S <= 0) return null;
+    const step = strengths[0];
+    const mean = S / 3;
+
+    let best = null;
+
+    // Enumerate a>=m, p>=a, a+m+p = S with step multiples
+    for (let a = 0; a <= S; a += step){
+      for (let m = 0; m <= a; m += step){
+        const p = S - a - m;
+        if (p < a) continue;                   // enforce p ≥ a ≥ m
+        if (p < 0) break;
+        // Try to pack each slot under cap
+        const AMp = packSlotToMg(a, strengths, capPerSlot); if (AMp === null) continue;
+        const MIDp= packSlotToMg(m, strengths, capPerSlot); if (MIDp=== null) continue;
+        const PMp = packSlotToMg(p, strengths, capPerSlot); if (PMp === null) continue;
+
+        const range = Math.max(a,m,p) - Math.min(a,m,p);
+        const dev   = Math.abs(a-mean) + Math.abs(m-mean) + Math.abs(p-mean);
+        const amEqPm = (a === p);
+        const dayLoad= a + m;
+        const units  = countUnits(AMp) + countUnits(MIDp) + countUnits(PMp);
+
+        const cand = { AM:AMp, MID:MIDp, PM:PMp, a,m,p, range, dev, amEqPm, dayLoad, units };
+        if (!best || splitBetter(cand, best)) best = cand;
+      }
+    }
+    return best;
+  }
+
+  function splitBetter(a, b){
+    // Primary closeness: range, then deviation from mean
+    if (a.range !== b.range) return a.range < b.range;
+    if (a.dev   !== b.dev)   return a.dev   < b.dev;
+    // Then enforce our symmetry/day preferences
+    if (a.amEqPm !== b.amEqPm) return a.amEqPm;       // prefer AM = PM
+    if (a.dayLoad!== b.dayLoad) return a.dayLoad < b.dayLoad; // lighter daytime if tie so far
+    // Then fewer units
+    if (a.units !== b.units) return a.units < b.units;
+    // Stable: smaller a (brings AM down if still tied), then smaller p
+    if (a.a !== b.a) return a.a < b.a;
+    if (a.p !== b.p) return a.p < b.p;
+    return false;
+  }
+
+  function Sbetter(a, b){
+    // Compare across candidate sums S (600 vs 700, etc.)
+    if (a.diff !== b.diff) return a.diff < b.diff;
+    if (a.roundedUp !== b.roundedUp) return a.roundedUp; // prefer rounding up on exact tie
+    return a.S < b.S;
+  }
+
+  function makePacks(obj){
+    const out = { AM:{}, MID:{}, DIN:{}, PM:{} };
+    for (const slot of Object.keys(out)) {
+      if (!obj[slot]) continue;
+      for (const k of Object.keys(obj[slot])) {
+        const v = obj[slot][k] | 0;
+        if (v > 0) out[slot][k] = v;
+      }
+    }
+    return out;
+  }
 }
 
-/* ===== BZRA ===== */
+/* ===== Benzodiazepines / Z-Drug (BZRA) — PM-only daily taper with selection-only & halving rules ===== */
 function stepBZRA(packs, percent, med, form){
   const tot=packsTotalMg(packs); if(tot<=EPS) return packs;
   const step = (!isMR(form) || !/Zolpidem/i.test(med)) ? (BZRA_MIN_STEP[med] || 0.5) : 6.25;
@@ -3067,7 +2589,21 @@ function stepBZRA(packs, percent, med, form){
   const down = floorTo(target, step), up = ceilTo(target, step);
   target = (Math.abs(up-target) < Math.abs(target-down)) ? up : down; // ties up
   if(target===tot && tot>0){ target=Math.max(0, tot-step); target=roundTo(target,step); }
-  const pm = composeForSlot(target, "Benzodiazepines / Z-Drug (BZRA)", med, form);
+  // Try selection-only composition first (keeps halves on the same product).
+let pm = null;
+let selectedMg = [];
+if (typeof selectedProductMgs === "function") {
+  selectedMg = (selectedProductMgs() || [])
+    .map(v => (typeof v === "number" ? v : (String(v).match(/(\d+(\.\d+)?)/)||[])[1]))
+    .map(Number).filter(n=>Number.isFinite(n) && n>0).sort((a,b)=>a-b);
+}
+pm = composeForSlot_BZRA_Selected(target, "Benzodiazepines / Z-Drug (BZRA)", med, form, selectedMg);
+
+// Fallback to your original composer if no selection or exact pack not possible
+if (!pm) {
+  pm = composeForSlot(target, "Benzodiazepines / Z-Drug (BZRA)", med, form);
+}
+
   return { AM:{}, MID:{}, DIN:{}, PM:pm };
 }
 
@@ -3097,44 +2633,6 @@ function buildPlanTablets(){
   let packs=buildPacksFromDoseLines();
   if (packsTotalMg(packs) === 0) return [];
 
-// If user left Phase 2 start blank but set Phase 2 %, simulate Phase 1 only,
-// then auto-fill p2StartDate to the next day after Phase 1’s last step.
-if (!p2Start && p2Pct > 0 && p2Int > 0 && $("p2StartDate")) {
-  (function simulatePhaseOneAndAutoSetP2(){
-    let simPacks = deepCopy(packs);
-    let simDate  = new Date(startDate);
-    let simWeek  = 1;
-
-    // advance one Phase-1 step using your existing per-class stepping
-    const stepPhase1 = () => {
-      if (cls === "Opioid") simPacks = stepOpioid_Shave(simPacks, p1Pct, cls, med, form);
-      else if (cls === "Proton Pump Inhibitor") simPacks = stepPPI(simPacks, p1Pct, cls, med, form);
-      else if (cls === "Benzodiazepines / Z-Drug (BZRA)") simPacks = stepBZRA(simPacks, p1Pct, med, form);
-      else if (cls === "Gabapentinoids") simPacks = stepGabapentinoid(simPacks, p1Pct, med, form);
-      else simPacks = stepAP(simPacks, p1Pct, med, form);
-    };
-
-    // First Phase-1 step occurs on startDate
-    stepPhase1();
-
-    // Then keep stepping at p1Interval until Phase-1 would finish
-    while (packsTotalMg(simPacks) > EPS && simWeek < MAX_WEEKS) {
-      simDate  = addDays(simDate, p1Int);
-      simWeek += 1;
-      stepPhase1();
-    }
-
-    // Phase-2 starts the calendar day AFTER the last Phase-1 dose step
-    const p2d = addDays(simDate, 1);
-    const y = p2d.getFullYear();
-    const m = String(p2d.getMonth() + 1).padStart(2, '0');
-    const d = String(p2d.getDate()).padStart(2, '0');
-    $("p2StartDate").value = `${y}-${m}-${d}`;
-    p2Start = p2d; // update local variable so the rest of this builder uses it
-  })();
-}
-
-  
   const rows=[]; let date=new Date(startDate); const capDate=new Date(+startDate + THREE_MONTHS_MS);
 
 const doStep = (phasePct) => {
@@ -3157,25 +2655,38 @@ const doStep = (phasePct) => {
     const nextByP2 = addDays(date, p2Int);
     let nextDate;
 
+   // Phase rule: Phase 2 begins only AFTER the current Phase 1 step completes
 if (p2Start && +date < +p2Start) {
-  // Stay on the Phase-1 cadence and switch phases at the NEXT boundary
-  nextDate = nextByP1;                        // (e.g., 15 Sep in your example)
+  nextDate = nextByP1;
 } else if (p2Start && +date >= +p2Start) {
-  // We are now in Phase-2 time — follow P2 cadence
   nextDate = nextByP2;
 } else {
-  // No Phase-2 configured — keep Phase-1 cadence
   nextDate = nextByP1;
 }
-
 
     if (reviewDate && +nextDate >= +reviewDate) { rows.push({ week: week+1, date: fmtDate(reviewDate), packs:{}, med, form, cls, review:true }); break; }
     if (+nextDate - +startDate >= THREE_MONTHS_MS) { rows.push({ week: week+1, date: fmtDate(nextDate), packs:{}, med, form, cls, review:true }); break; }
 
+// NEW: end-sequence Case B (LCS not selected) → force Review on the next boundary
+if (window._forceReviewNext) {
+  rows.push({ week: week+1, date: fmtDate(nextDate), packs:{}, med, form, cls, review:true });
+  window._forceReviewNext = false;
+  break;
+}
+    
     date = nextDate; week++;
     const nowInP2 = p2Start && (+date >= +p2Start);
     doStep(nowInP2 ? p2Pct : p1Pct);
 
+    // Suppress duplicate row if a step forced review and did not change packs
+if (typeof window !== "undefined" && window._forceReviewNext){
+  // If step returned the same dose, show review now at this boundary and stop
+  // (prevents printing the same BID dose twice)
+  window._forceReviewNext = false;
+  rows.push({ week: week, date: fmtDate(date), packs:{}, med, form, cls, review:true });
+  break;
+}
+    
     if (packsTotalMg(packs) > EPS) rows.push({ week, date: fmtDate(date), packs: deepCopy(packs), med, form, cls });
     if (week > MAX_WEEKS) break;
   }
@@ -3251,7 +2762,7 @@ function renderProductPicker(){
     const title = (typeof strengthToProductLabel === "function")
       ? strengthToProductLabel(cls, med, form, s)   // e.g., "600 mg tablet"
       : `${mg} mg`;
-    span.innerHTML = formatOxyOnlyHTML(title);
+    span.textContent = title;
 
     label.appendChild(cb);
     label.appendChild(span);
@@ -3296,21 +2807,6 @@ function renderProductPicker(){
   if (med  && !med._ppReset)  { med._ppReset  = true; med.addEventListener("change", reset); }
   if (form && !form._ppReset) { form._ppReset = true; form.addEventListener("change", reset); }
 })();
-
-function wireModeToggle(){
-  const modeDefault = document.getElementById("modeDefault");
-  const modeCustom  = document.getElementById("modeCustom");
-  const customPanel = document.getElementById("customPanel");
-  if (!modeDefault || !modeCustom || !customPanel) return; // elements not in DOM yet
-
-  const sync = () => { customPanel.style.display = modeCustom.checked ? "block" : "none"; };
-
-  modeDefault.addEventListener("change", sync);
-  modeCustom .addEventListener("change", sync);
-  // Initial state:
-  sync();
-}
-
 
 /* =================== Patches builder — date-based Phase-2; start at step 2 =================== */
 
@@ -3641,26 +3137,11 @@ function buildPlan(){
     // Patches
     rows = (typeof buildPlanPatch === "function") ? buildPlanPatch() : [];
     if (typeof renderPatchTable === "function") renderPatchTable(rows);
- } else {
-  // Tablets/capsules/ODT etc.
-  rows = (typeof buildPlanTablets === "function") ? buildPlanTablets() : [];
-
-  // ▼ Apply opioid SR end-dose tail *before* rendering
-  try {
-    const cls  = document.getElementById("classSelect")?.value || "";
-    const med  = document.getElementById("medicineSelect")?.value || "";
-    const form = document.getElementById("formSelect")?.value || "";
-
-    if (cls === "Opioid" && /SR/i.test(form) && typeof enforceOpioidEndDoseDefault === "function") {
-      rows = enforceOpioidEndDoseDefault(rows, cls, med, form);
-    }
-  } catch (e) {
-    console.warn("[end-dose enforcement skipped]", e);
+  } else {
+    // Tablets/capsules/ODT etc.
+    rows = (typeof buildPlanTablets === "function") ? buildPlanTablets() : [];
+    if (typeof renderStandardTable === "function") renderStandardTable(rows);
   }
-
-  if (typeof renderStandardTable === "function") renderStandardTable(rows);
-}
-
   updateClassFooter(); // keep footer in sync with current class
   setGenerateEnabled(); // keep button/print gating in sync
   setDirty(false);
@@ -3680,7 +3161,6 @@ function updateRecommendedAndLines(){
   setFooterText($("classSelect")?.value);
   setDirty(true);
 }
-
 
 //#endregion
 //#region 11. Boot / Init
@@ -3774,10 +3254,6 @@ document.getElementById("classSelect")?.addEventListener("change", () => {
 updateBestPracticeBox();
 updateClassFooter();
   renderProductPicker();
-  wireModeToggle();
-  wireCustomPanel();
-  wireCustomStepsLayout();
-   syncModeVisibility();
 
   
   // 7) Live gating + interval hints for patches
