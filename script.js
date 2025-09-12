@@ -1838,7 +1838,13 @@ let doseLines=[]; let nextLineId=1;
 function canSplitTablets(cls, form, med){
   if(/Patch|Capsule|Orally\s*Dispersible\s*Tablet/i.test(form) || isMR(form)) return {half:false, quarter:false};
   if(cls==="Opioid" || cls==="Proton Pump Inhibitor") return {half:false, quarter:false};
-  if(cls==="Benzodiazepines / Z-Drug (BZRA)") return {half:true, quarter:false};
+  if (cls === "Benzodiazepines / Z-Drug (BZRA)") {
+  const f = String(form || "").toLowerCase();
+  const nonSplittable =
+    /slow\s*release|(?:^|\W)(sr|cr|er|mr)(?:\W|$)|odt|wafer|dispers/i.test(f);
+  return nonSplittable ? { half: false, quarter: false }
+                       : { half: true,  quarter: false };
+}
   if(cls==="Antipsychotic") return {half:true, quarter:false};
   if (cls === "Gabapentinoids") return { half:false, quarter:false };
   return {half:true, quarter:true};
@@ -2583,28 +2589,129 @@ function stepGabapentinoid(packs, percent, med, form){
 
 /* ===== Benzodiazepines / Z-Drug (BZRA) — PM-only daily taper with selection-only & halving rules ===== */
 function stepBZRA(packs, percent, med, form){
-  const tot=packsTotalMg(packs); if(tot<=EPS) return packs;
-  const step = (!isMR(form) || !/Zolpidem/i.test(med)) ? (BZRA_MIN_STEP[med] || 0.5) : 6.25;
-  let target = tot*(1-percent/100);
-  const down = floorTo(target, step), up = ceilTo(target, step);
-  target = (Math.abs(up-target) < Math.abs(target-down)) ? up : down; // ties up
-  if(target===tot && tot>0){ target=Math.max(0, tot-step); target=roundTo(target,step); }
-  // Try selection-only composition first (keeps halves on the same product).
-let pm = null;
-let selectedMg = [];
-if (typeof selectedProductMgs === "function") {
-  selectedMg = (selectedProductMgs() || [])
-    .map(v => (typeof v === "number" ? v : (String(v).match(/(\d+(\.\d+)?)/)||[])[1]))
-    .map(Number).filter(n=>Number.isFinite(n) && n>0).sort((a,b)=>a-b);
-}
-pm = composeForSlot_BZRA_Selected(target, "Benzodiazepines / Z-Drug (BZRA)", med, form, selectedMg);
+  const tot = packsTotalMg(packs);
+  if (tot <= EPS) return packs;
 
-// Fallback to your original composer if no selection or exact pack not possible
-if (!pm) {
-  pm = composeForSlot(target, "Benzodiazepines / Z-Drug (BZRA)", med, form);
-}
+  // Base step (your original): 6.25 for Zolpidem SR, else per map (default 0.5)
+  const baseStep = (!isMR(form) || !/Zolpidem/i.test(med))
+    ? ((BZRA_MIN_STEP && BZRA_MIN_STEP[med]) || 0.5)
+    : 6.25;
 
-  return { AM:{}, MID:{}, DIN:{}, PM:pm };
+  // Read currently selected strengths (numbers, ascending)
+  let selectedMg = [];
+  if (typeof selectedProductMgs === "function") {
+    selectedMg = (selectedProductMgs() || [])
+      .map(v => (typeof v === "number" ? v : (String(v).match(/(\d+(\.\d+)?)/)||[])[1]))
+      .map(Number)
+      .filter(n => Number.isFinite(n) && n > 0)
+      .sort((a,b)=>a-b);
+  }
+
+  // Prefer a selection-driven grid (GCD of selected units incl. halves); else fall back to baseStep
+  const gridStep = (typeof selectionGridStepBZRA === "function")
+    ? (selectionGridStepBZRA(med, form, selectedMg) || 0)
+    : 0;
+  const step = gridStep || baseStep;
+
+  // Quantise to nearest step
+  const raw = tot * (1 - percent/100);
+  const down = floorTo(raw, step), up = ceilTo(raw, step);
+  const dUp = Math.abs(up - raw), dDown = Math.abs(raw - down);
+
+  let target;
+  if (dUp < dDown) {
+    target = up;
+  } else if (dDown < dUp) {
+    target = down;
+  } else {
+    // --- TIE ---
+    if (selectedMg.length > 0) {
+      // With a selection: choose FEWEST pieces; if still tie, round up
+      const piecesDown = piecesNeededBZRA(down, med, form, selectedMg);
+      const piecesUp   = piecesNeededBZRA(up,   med, form, selectedMg);
+      if (piecesDown != null && piecesUp != null) {
+        if (piecesDown < piecesUp)      target = down;
+        else if (piecesUp < piecesDown) target = up;
+        else                            target = up;   // tie → up
+      } else {
+        target = down; // conservative fallback
+      }
+    } else {
+      // No selection: prefer round DOWN on tie (fewest units before rounding up)
+      target = down;
+    }
+  }
+
+  // Ensure progress (never repeat same total)
+  if (Math.abs(target - tot) < EPS && tot > 0) {
+    target = roundTo(Math.max(0, tot - step), step);
+  }
+
+  // Compose: try selection-aware first, then fallback to original composer
+  let pm = null;
+  if (typeof composeForSlot_BZRA_Selected === "function") {
+    pm = composeForSlot_BZRA_Selected(target, "Benzodiazepines / Z-Drug (BZRA)", med, form, selectedMg);
+  }
+  if (!pm) {
+    pm = composeForSlot(target, "Benzodiazepines / Z-Drug (BZRA)", med, form);
+  }
+
+  return { AM:{}, MID:{}, DIN:{}, PM: pm };
+
+  // ----- local helpers (scoped) -----
+  function buildUnitsBZRA(med, form, selected){
+    const name = String(med||"").toLowerCase();
+    const fr   = String(form||"").toLowerCase();
+    const nonSplit = /slow\s*release|(?:^|\W)(sr|cr|er|mr)(?:\W|$)|odt|wafer|dispers/i.test(fr);
+
+    const units = [];
+    for (const mgRaw of (selected || [])) {
+      const mg = Number(mgRaw);
+      if (!Number.isFinite(mg) || mg <= 0) continue;
+      units.push({ unit: mg, piece: 1.0 }); // whole tablet
+      const forbidHalf = nonSplit || (name.includes("alprazolam") && Math.abs(mg - 0.25) < 1e-6);
+      if (!forbidHalf) units.push({ unit: mg/2, piece: 0.5 }); // half tablet
+    }
+    units.sort((a,b)=> b.unit - a.unit);
+    return units;
+  }
+
+  function piecesNeededBZRA(amount, med, form, selected){
+    const units = buildUnitsBZRA(med, form, selected);
+    if (!units.length) return null;
+    let r = +amount.toFixed(6), pieces = 0;
+    for (const u of units){
+      if (r <= EPS) break;
+      const q = Math.floor(r / u.unit + 1e-9);
+      if (q > 0) { r -= q * u.unit; pieces += q * u.piece; }
+    }
+    return (r > EPS) ? null : pieces;
+  }
+}
+// Compute the rounding grid from the current selection (GCD of selected tablets and allowed halves).
+function selectionGridStepBZRA(med, form, selectedMg){
+  if (!Array.isArray(selectedMg) || !selectedMg.length) return 0;
+
+  const name = String(med||"").toLowerCase();
+  const fr   = String(form||"").toLowerCase();
+  const isMR = /slow\s*release|sr|cr|er|mr/.test(fr);
+  const noSplitForm = isMR || /odt|wafer|dispers/i.test(fr);
+  const forbidAlp025 = (mg) => (name.includes("alprazolam") && Math.abs(mg - 0.25) < 1e-6);
+
+  const units = [];
+  for (const mgRaw of selectedMg){
+    const m = Number(mgRaw);
+    if (!Number.isFinite(m) || m <= 0) continue;
+    units.push(+m.toFixed(3));
+    if (!noSplitForm && !forbidAlp025(m)) units.push(+(m/2).toFixed(3));
+  }
+  if (!units.length) return 0;
+
+  // Use hundredths to handle 0.25, 1.25, 6.25 cleanly
+  const ints = units.map(u => Math.round(u * 100));
+  const gcd = (a,b)=>{ a=Math.abs(a); b=Math.abs(b); while(b){ const t=a%b; a=b; b=t; } return a; };
+  const g = ints.reduce((a,b)=>gcd(a,b));
+  return g > 0 ? g / 100 : 0;
 }
 
 /* =================== Plan builders (tablets) — date-based Phase-2 =================== */
