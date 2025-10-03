@@ -68,16 +68,16 @@ function formSuffixWithSR(formLabel) {
 
 // Apply step/min and static hint text for patch intervals
 function applyPatchIntervalAttributes(){
-  const rule = patchIntervalRule();          // 3 (Fentanyl) / 7 (Buprenorphine) / null
+  const rule = patchIntervalRule();                // 3 (Fentanyl) / 7 (Buprenorphine) / null
   const p1 = document.getElementById("p1Interval");
   const p2 = document.getElementById("p2Interval");
-  const [h1, h2] = ensureIntervalHints();    // creates hint <div>s if missing
+  const [h1, h2] = ensureIntervalHints();          // creates hint <div>s if missing
 
-  // If not a patch, clear constraints + hints
+  // Not a patch → clear constraints + hints and return
   if (!rule){
     if (h1) h1.textContent = "";
     if (h2) h2.textContent = "";
-    [p1,p2].forEach(inp=>{
+    [p1, p2].forEach(inp => {
       if (!inp) return;
       inp.removeAttribute("min");
       inp.removeAttribute("step");
@@ -85,30 +85,34 @@ function applyPatchIntervalAttributes(){
     });
     return;
   }
-  
 
-  // Static text (always the same)
+  // Static hint text
   const msg = (rule === 3)
     ? "For Fentanyl patches, the interval must be a multiple of 3 days."
     : "For Buprenorphine patches, the interval must be a multiple of 7 days.";
   if (h1) h1.textContent = msg;
   if (h2) h2.textContent = msg;
 
-  // Enforce via attributes + snap UP now
-  [p1,p2].forEach(inp=>{
+  // Enforce via attributes + snap current values UP to rule
+  [p1, p2].forEach(inp => {
     if (!inp) return;
     inp.min = rule;
     inp.step = rule;
     if (inp.value) snapIntervalToRule(inp, rule);
 
-  if (isDirty){
-    disable("#printBtn, #btnPrint, .btn-print, #downloadBtn, .btn-download");
-  } else {
-    enable("#printBtn, #btnPrint, .btn-print, #downloadBtn, .btn-download");
-  }
+    // Snap on user change (so multi-digit typing works before snapping)
+    if (!inp._patchSnapAttached){
+      inp.addEventListener("change", () => {
+        const r = patchIntervalRule();
+        if (r) snapIntervalToRule(inp, r);    // snap UP on blur/enter
+        validatePatchIntervals(false);        // keep red/ok state in sync
+        setGenerateEnabled();                 // re-gate the Generate button
+      });
+      inp._patchSnapAttached = true;
+    }
+  });
 }
 
-}
 
 // ensure the hint <div>s exist under the inputs; returns [h1, h2]
 function ensureIntervalHints(){
