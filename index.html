@@ -30,6 +30,35 @@
         <button id="addDoseLineBtn" type="button" class="secondary">Add Dose Line</button>
       </div>
       <div id="doseLinesContainer" class="dose-lines"></div>
+      
+      <!-- Antipsychotic dose panel (shown only when Class = Antipsychotic) -->
+<div id="apControls" style="display:none; margin-top: 1rem;">
+  <div class="ap-dose-grid">
+    <label class="ap-row">
+      <span>In the morning</span>
+      <input id="apDoseAM" type="number" min="0" step="0.01" value="0" /> <span>mg</span>
+    </label>
+    <label class="ap-row">
+      <span>At midday</span>
+      <input id="apDoseMID" type="number" min="0" step="0.01" value="0" /> <span>mg</span>
+    </label>
+    <label class="ap-row">
+      <span>At dinner</span>
+      <input id="apDoseDIN" type="number" min="0" step="0.01" value="0" /> <span>mg</span>
+    </label>
+    <label class="ap-row">
+      <span>At night</span>
+      <input id="apDosePM" type="number" min="0" step="0.01" value="0" /> <span>mg</span>
+    </label>
+  </div>
+  <div class="ap-total-line">
+    <span>Total daily dose:</span>
+    <span id="apTotalBox" class="ap-total-box">0 mg / 0 mg max</span>
+  </div>
+  <label>
+    Note: The total daily dose must be less than the listed maximum to be able to generate a chart
+  </label>
+</div>
     </section>
 
     <section class="card">
@@ -64,6 +93,17 @@
     </div>
   </div>
 
+      <!-- Reduction order (Antipsychotic) -->
+<div id="apOrderRow" style="display:none; margin-bottom: .5rem;">
+  <div class="ap-order-label">Select which dose time to reduce first (drag and drop to reorder):</div>
+  <div id="apOrder" class="ap-order-chips" aria-label="Reduction order">
+    <button class="ap-chip" data-slot="AM"><span class="ap-badge">1</span><span class="ap-chip-label">Morning</span></button>
+    <button class="ap-chip" data-slot="MID"><span class="ap-badge">2</span><span class="ap-chip-label">Midday</span></button>
+    <button class="ap-chip" data-slot="DIN"><span class="ap-badge">3</span><span class="ap-chip-label">Dinner</span></button>
+    <button class="ap-chip" data-slot="PM"><span class="ap-badge">4</span><span class="ap-chip-label">Night</span></button>
+  </div>
+</div>
+  
   <!-- NEW: Advanced Settings accordion (everything for Phase 2 lives here) -->
   <details id="advancedSettings" class="accordion">
     <summary>Advanced Settings (Optional)</summary>
@@ -106,75 +146,6 @@
         </div>
       </div>
 
-      <!-- Mode: defaults vs custom (layout only; logic unchanged) -->
-      <div class="taper-block" id="modeBlock" style="margin-top:10px;">
-        <h3>Mode</h3>
-        <div class="taper-row">
-          <label class="radio">
-            <input type="radio" name="taperMode" id="modeDefault" checked>
-            <span>Use recommended defaults</span>
-          </label>
-          <label class="radio">
-            <input type="radio" name="taperMode" id="modeCustom">
-            <span>Customise taper</span>
-          </label>
-        </div>
-
-<div id="customPanel" style="display:none">
-  <!-- STEP 1 -->
-  <h4 class="subhead">Step 1 — Reduction order (optional)</h4>
-
-  <!-- Single enable control for Step 1 -->
-  <div class="taper-row" role="radiogroup" aria-label="Enable Step 1">
-    <label class="radio">
-      <input type="radio" name="enableStep1" id="enableStep1No" checked>
-      <span>No</span>
-    </label>
-    <label class="radio">
-      <input type="radio" name="enableStep1" id="enableStep1Yes">
-      <span>Yes</span>
-    </label>
-  </div>
-
-  <p class="hint" id="step1Help" style="display:none">
-    Define up to four lines. Each line reads “Reduce [time of day] until [X] mg”, then flows to the next line.
-    <br><em>Note:</em> Values are <strong>slot</strong> dose targets, not daily totals.
-  </p>
-
-  <!-- Shows 4 rows when enabled -->
-  <div id="step1List" class="reduction-list" style="display:none"></div>
-
-  <!-- STEP 2 -->
-  <h4 class="subhead">Step 2 — Equalise after Step 1</h4>
-  <p class="hint">After Step 1 is complete, reduce each dose time equally.</p>
-  <div class="taper-row" role="radiogroup" aria-label="Equalise after Step 1">
-    <!-- No first, Yes second (Yes still default) -->
-    <label class="radio">
-      <input type="radio" name="equaliseAfter" id="equaliseNo">
-      <span>No</span>
-    </label>
-    <label class="radio">
-      <input type="radio" name="equaliseAfter" id="equaliseYes" checked>
-      <span>Yes</span>
-    </label>
-  </div>
-
-  <!-- STEP 3 -->
-  <h4 class="subhead">Step 3 — Review trigger (optional)</h4>
-  <div class="inline-label">
-    <span>Set review when daily total ≤</span>
-    <div class="input-suffix">
-      <input id="customReviewMg" type="number" min="0" placeholder="e.g., 50">
-      <span class="suffix">mg/day</span>
-    </div>
-  </div>
-
-  <div class="hint" style="margin-top:8px">
-    Tips: “time of day” accepts phrases like <em>in the morning</em>, <em>at midday</em>, <em>at dinner</em>, <em>at night</em>.
-    These settings don’t change calculations yet—layout only.
-  </div>
-</div>
-
     </div>
   </details>
 </section>
@@ -185,7 +156,14 @@
     <button id="resetBtn" type="button" class="ghost">Reset</button>
   </div>
 
-
+  <label class="inline-label calc-toggle">
+<input id="showCalc" type="checkbox" />
+<span>Show calculation</span>
+</label>
+<div id="calcBlock" class="card" style="display:none">
+<h3>Calculations</h3>
+<div id="calcTableHost"></div>
+</div>    
  <section id="outputCard" class="card output">
   <div class="output-head">
     <h2 id="hdrMedicine">Medicine:</h2>
