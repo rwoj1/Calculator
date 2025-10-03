@@ -2611,12 +2611,12 @@ function preferredBidTargets(total, cls, med, form){
 }
 
 
-/* ===== Opioids (tablets/capsules) — shave DIN→MID, then rebalance BID ===== */
+/* ===== Opioids (tablets/capsules) — shave DIN→MID, then rebalance BID (PURE) ===== */
 function stepOpioid_Shave(packs, percent, cls, med, form){
   const tot = packsTotalMg(packs);
   if (tot <= EPS) return packs;
 
-  // Respect selected products for rounding granularity
+  // Respect selected products for rounding granularity (SR = whole tabs only)
   const step = lowestStepMg(cls, med, form) || 1;
 
   // ----- tiny utilities (local, de-duplicated) -----
@@ -2634,16 +2634,14 @@ function stepOpioid_Shave(packs, percent, cls, med, form){
     try {
       if (typeof strengthsForPicker === "function") {
         const arr = strengthsForPicker(cls, med, form) || [];
-        const mg = arr.map(toMg).filter(n => Number.isFinite(n) && n > 0)
-                     .sort((a,b)=>a-b);
+        const mg = arr.map(toMg).filter(n => Number.isFinite(n) && n > 0).sort((a,b)=>a-b);
         return Array.from(new Set(mg));
       }
     } catch(_) {}
     try {
       const cat  = (window.CATALOG?.[cls]?.[med]) || {};
       const pool = (form && cat[form]) ? cat[form] : Object.values(cat).flat();
-      const mg   = (pool || []).map(toMg).filter(n => Number.isFinite(n) && n > 0)
-                         .sort((a,b)=>a-b);
+      const mg   = (pool || []).map(toMg).filter(n => Number.isFinite(n) && n > 0).sort((a,b)=>a-b);
       return Array.from(new Set(mg));
     } catch(_) {}
     return [];
@@ -2651,120 +2649,82 @@ function stepOpioid_Shave(packs, percent, cls, med, form){
 
   function selectedStrengthsMg(){
     try {
-      // Prefer live UI selection set
       if (window.SelectedFormulations && SelectedFormulations.size > 0) {
-        return Array.from(SelectedFormulations)
-          .map(toMg).filter(n => Number.isFinite(n) && n > 0)
-          .sort((a,b)=>a-b);
+        return Array.from(SelectedFormulations).map(toMg).filter(n => Number.isFinite(n) && n > 0).sort((a,b)=>a-b);
       }
-      // Fallback to picker helper
       if (typeof selectedProductMgs === "function") {
         const arr = selectedProductMgs() || [];
-        return arr.map(toMg).filter(n => Number.isFinite(n) && n > 0)
-                  .sort((a,b)=>a-b);
+        return arr.map(toMg).filter(n => Number.isFinite(n) && n > 0).sort((a,b)=>a-b);
       }
     } catch(_) {}
     return [];
   }
 
   const catalog = commercialStrengthsMg();
-  const lcs     = catalog.length ? catalog[0] : NaN;            // lowest commercial strength
+  const lcs     = catalog.length ? catalog[0] : NaN;     // lowest commercial strength
   const selList = selectedStrengthsMg();
   const pickedAny      = selList.length > 0;
-  const lcsSelected    = pickedAny ? selList.some(mg => Math.abs(mg - lcs) < 1e-9) : true; // none selected ⇒ treat as all
-  const selectedMinMg  = pickedAny ? selList[0] : lcs;          // selected minimum (or lcs if none selected)
-  const thresholdMg    = lcsSelected ? lcs : selectedMinMg;     // endpoint threshold we test against
+  const lcsSelected    = pickedAny ? selList.some(mg => Math.abs(mg - lcs) < 1e-9) : true;  // none selected → treat as all
+  const selectedMinMg  = pickedAny ? selList[0] : lcs;  // selected minimum (or lcs if none selected)
+  const thresholdMg    = lcsSelected ? lcs : selectedMinMg; // end-sequence threshold
 
-  const AM  = slotTotalMg(packs,"AM");
-  const MID = slotTotalMg(packs,"MID");
-  const DIN = slotTotalMg(packs,"DIN");
-  const PM  = slotTotalMg(packs,"PM");
+  const AM0  = slotTotalMg(packs,"AM");
+  const MID0 = slotTotalMg(packs,"MID");
+  const DIN0 = slotTotalMg(packs,"DIN");
+  const PM0  = slotTotalMg(packs,"PM");
 
   const isExactBIDAt = (mg) =>
     Number.isFinite(mg) &&
-    Math.abs(AM - mg) < EPS && Math.abs(PM - mg) < EPS && MID < EPS && DIN < EPS;
+    Math.abs(AM0 - mg) < EPS && Math.abs(PM0 - mg) < EPS && MID0 < EPS && DIN0 < EPS;
 
   const isExactPMOnlyAt = (mg) =>
     Number.isFinite(mg) &&
-    AM < EPS && MID < EPS && DIN < EPS && Math.abs(PM - mg) < EPS;
-if (isSROpioid && CALC_CFG.features.BID_V2) {
-  const selectedUnitsMg = getSelectedUnitsMgForThisMed(); // e.g., [60, 30, 20, 10] (5 omitted)
-  const lcsMg = CALC_CFG.opioids.sr.lowestCommercialStrengthsMg[currentOpioidKey];
-  const rawTarget = prevTDD * (1 - percent);
-  const rounded = packToAtLeast(rawTarget, selectedUnitsMg, { allowSplits:false });
-  const totalMg = rounded.totalMg;
+    AM0 < EPS && MID0 < EPS && DIN0 < EPS && Math.abs(PM0 - mg) < EPS;
 
-  // Respect mandatory 1-month review cap in the scheduler (don’t change totals)
-  if (daysSinceStart + stepIntervalDays > CALC_CFG.reviewCapDays) {
-    scheduleReviewRow(currentDatePlus(stepIntervalDays));
-    return schedule; 
-  }
-
-  // Distribute to AM/PM
-  const pref = getAmPmPreference();
-  const { AM, PM } = distributeBID(totalMg, selectedUnitsMg, pref);
-
-  // Render this step using existing table renderer
-  renderStepRow({ totalMg, AM, PM, /* other fields … */ });
-
-  // Decide end sequence at/near LCS boundary
-  const endMode = decideEndSequence_SROpioid(selectedUnitsMg, lcsMg);
-  if (endMode === 'PM_ONLY_THEN_STOP' && totalMg === 2*lcsMg) {
-    schedulePmOnly(lcsMg);
-    scheduleStopNext();
-    break;
-  }
-  if (endMode === 'BID_THEN_REVIEW' && totalMg === 2*Math.min(...selectedUnitsMg)) {
-    scheduleReviewNext();
-    break;
-  }
-
-  prevTDD = totalMg;
-} else {
-  // === Existing legacy path unchanged (V1) ===
-  // ... your current logic ...
-}
-
-  // ----- BID end-sequence gate -----
+  // ----- BID end-sequence gate (pure signalling via return packs/flags) -----
   if (Number.isFinite(thresholdMg)) {
-    // Already PM-only at threshold => signal STOP
+    // Already PM-only at threshold → tell caller to emit STOP next (empty packs convention)
     if (isExactPMOnlyAt(thresholdMg)) {
       if (window._forceReviewNext) window._forceReviewNext = false;
-      return {}; // empty packs ⇒ buildPlanTablets() prints STOP row
+      return {}; // empty packs ⇒ outer builder prints STOP row
     }
 
     // First time we hit exact BID at threshold:
     if (isExactBIDAt(thresholdMg)) {
       if (lcsSelected) {
-        // LCS is among selected ⇒ emit PM-only at threshold (no rebalancing)
+        // LCS among selected ⇒ move to PM-only at same dose (no rebalancing)
         if (window._forceReviewNext) window._forceReviewNext = false;
         const cur = { AM:0, MID:0, DIN:0, PM:thresholdMg };
         return recomposeSlots(cur, cls, med, form);
       } else {
-        // LCS not selected ⇒ Review next boundary
+        // LCS not selected ⇒ set flag so caller prints REVIEW on next boundary
         window._forceReviewNext = true;
-        return packs; // unchanged; loop will schedule Review
+        return packs; // unchanged; caller loop will insert REVIEW row
       }
     }
   }
 
-  // ----- Normal SR-style reduction (as in your original logic) -----
-  let target = roundTo(tot * (1 - percent/100), step);
+  // ===== Normal SR-style reduction path (pure) =====
+  // Always-round-up policy
+  const rawTarget = tot * (1 - percent/100);
+  let target = Math.ceil(rawTarget / step) * step;
+
+  // Ensure progress if rounding would stall
   if (target === tot && tot > 0) {
-    // force progress if rounding would stall
     target = Math.max(0, tot - step);
-    target = roundTo(target, step);
+    // No further rounding needed; it's already a step multiple
   }
 
-  let cur = { AM, MID, DIN, PM };
+  let cur = { AM: AM0, MID: MID0, DIN: DIN0, PM: PM0 };
   let reduce = +(tot - target).toFixed(3);
 
   const shave = (slot) => {
     if (reduce <= EPS || cur[slot] <= EPS) return;
     const can = cur[slot];
-    const dec = Math.min(can, roundTo(reduce, step));
+    const dec = Math.min(can, Math.ceil(reduce / step) * step); // shave in step-sized chunks
     cur[slot] = +(cur[slot] - dec).toFixed(3);
     reduce    = +(reduce    - dec).toFixed(3);
+    if (reduce < EPS) reduce = 0;
   };
 
   // SR-style: reduce DIN first; then MID
@@ -2773,19 +2733,46 @@ if (isSROpioid && CALC_CFG.features.BID_V2) {
 
   // Rebalance across AM/PM if reduction remains
   if (reduce > EPS) {
-    const bidTarget = Math.max(0, +(cur.AM + cur.PM - reduce).toFixed(3));
-    const bid = preferredBidTargets(bidTarget, cls, med, form);
-    cur.AM = bid.AM; cur.PM = bid.PM;
+    const desiredBidTotal = Math.max(0, +(cur.AM + cur.PM - reduce).toFixed(3));
+
+    // Try your existing helper first if it exists and supports selection
+    let bid = null;
+    if (typeof preferredBidTargets === "function") {
+      try {
+        // If your helper accepts preference, pass it; else fall back.
+        const pref = (typeof getAmPmPreference === "function") ? getAmPmPreference() : "PM>AM";
+        bid = preferredBidTargets(desiredBidTotal, cls, med, form, pref);
+      } catch(_) { bid = null; }
+    }
+
+    if (!bid) {
+      // Fallback: split ~half/half, then bias by preference by ≥ selected minimum
+      const pref = (typeof getAmPmPreference === "function") ? getAmPmPreference() : "PM>AM";
+      const half = desiredBidTotal / 2;
+      const unit = selectedMinMg || step;
+
+      let AM = Math.floor(half / unit) * unit;
+      let PM = desiredBidTotal - AM;
+
+      // If unequal and preference requires inversion, adjust by one unit if possible
+      if (AM !== PM) {
+        if (pref === "PM>AM" && AM > PM && AM - unit >= 0) { AM -= unit; PM += unit; }
+        if (pref === "AM>PM" && PM > AM && PM - unit >= 0) { PM -= unit; AM += unit; }
+      }
+      bid = { AM, PM };
+    }
+
+    cur.AM = bid.AM; 
+    cur.PM = bid.PM;
     reduce = 0;
   }
 
   // tidy negatives to zero
   for (const k of ["AM","MID","DIN","PM"]) if (cur[k] < EPS) cur[k] = 0;
 
-  // Compose using selected products (keeps “fewest units” rules etc.)
+  // Compose using selected products (keeps “fewest units” semantics inside composer)
   return recomposeSlots(cur, cls, med, form);
 }
-
 
 /* ===== Proton Pump Inhibitor — reduce MID → PM → AM → DIN ===== */
 function stepPPI(packs, percent, cls, med, form){
