@@ -3454,7 +3454,7 @@ if (cls === "Antipsychotic") {
   }
   apMarkDirty?.(false); // clean state before rendering
 }
-  const rows=[]; let date=new Date(startDate); const capDate=new Date(+startDate + THREE_MONTHS_MS);
+  const rows=[]; let date=new Date(startDate); const capDate = addDays(startDate, CALC_CFG.reviewCapDays);
 
 const doStep = (phasePct) => {
   if (cls === "Opioid") packs = stepOpioid_Shave(packs, phasePct, cls, med, form);
@@ -3512,7 +3512,8 @@ if (p2Start && +date < +p2Start) {
 }
 
     if (reviewDate && +nextDate >= +reviewDate) { rows.push({ week: week+1, date: fmtDate(reviewDate), packs:{}, med, form, cls, review:true }); break; }
-    if (+nextDate - +startDate >= THREE_MONTHS_MS) { rows.push({ week: week+1, date: fmtDate(nextDate), packs:{}, med, form, cls, review:true }); break; }
+    if (+nextDate >= +capDate) {  rows.push({ week: week+1, date: fmtDate(nextDate), packs:{}, med, form, cls, review:true });  break;}
+
 
 // NEW: end-sequence Case B (LCS not selected) → force Review on the next boundary
 if (window._forceReviewNext) {
@@ -3832,7 +3833,7 @@ if (startTotal <= 0) {
   let currentPct = p1Pct, currentReduceEvery = p1Int;
   let nextReductionCutoff = new Date(startDate); // first reduction on start date
 
-  const capDate = new Date(+startDate + THREE_MONTHS_MS);
+  const capDate = addDays(startDate, CALC_CFG.reviewCapDays);
   let smallestAppliedOn = null;
   let stopThresholdDate = null;
 
