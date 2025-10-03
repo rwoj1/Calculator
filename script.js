@@ -1534,36 +1534,24 @@ function renderProductPicker(){
     cb.dataset.mg = String(mg);
 
     // if user has any selection, reflect it; otherwise leave unchecked (meaning "use all")
-    const anySelected = (SelectedFormulations && SelectedFormulations.size > 0);
-    cb.checked = anySelected ? SelectedFormulations.has(mg) : false;
+    cb.checked = (SelectedFormulations.size > 0) ? SelectedFormulations.has(mg) : false;
 
     cb.addEventListener("change", () => {
-      if (!window.SelectedFormulations) window.SelectedFormulations = new Set();
-      const base = parseFloat(cb.dataset.mg);
-      if (cb.checked) SelectedFormulations.add(base);
-      else            SelectedFormulations.delete(base);
-
-      // If the set becomes empty, treat as “use all”
-      if (SelectedFormulations.size === 0) {
-        // no-op; empty set means all allowed
-      }
+      if (cb.checked) SelectedFormulations.add(mg);
+      else            SelectedFormulations.delete(mg);
       if (typeof setDirty === "function") setDirty(true);
     });
 
-    const txt = document.createElement("span");
-    // Use a nice per-product label if available, else simple “X mg”
-    if (typeof strengthToProductLabel === "function") {
-      txt.textContent = strengthToProductLabel(cls, med, form, s);
-    } else {
-      txt.textContent = `${mg} mg`;
-    }
+    const span = document.createElement("span");
+    const title = (typeof strengthToProductLabel === "function")
+      ? strengthToProductLabel(cls, med, form, s)   // e.g., "600 mg tablet"
+      : `${mg} mg`;
+    span.textContent = title;
 
     label.appendChild(cb);
-    label.appendChild(txt);
+    label.appendChild(span);
     host.appendChild(label);
   });
-}
-
 
   // wire buttons (rebind on every render so they're always current)
   const btnSelectAll = document.getElementById("selectAllProductSelection");
@@ -1589,7 +1577,21 @@ function renderProductPicker(){
       if (typeof setDirty === "function") setDirty(true);
     };
   }
+}
 
+// Auto-clear the selection whenever medicine or form changes, then re-render
+(function wireProductPickerResets(){
+  const med  = document.getElementById("medicineSelect");
+  const form = document.getElementById("formSelect");
+  const reset = () => {
+    if (!window.SelectedFormulations) window.SelectedFormulations = new Set();
+    SelectedFormulations.clear();
+    renderProductPicker();
+    if (typeof setDirty === "function") setDirty(true);
+  };
+  if (med  && !med._ppReset)  { med._ppReset  = true; med.addEventListener("change", reset); }
+  if (form && !form._ppReset) { form._ppReset = true; form.addEventListener("change", reset); }
+})();
 
 
 /* ===== Minimal print / save helpers (do NOT duplicate elsewhere) ===== */
