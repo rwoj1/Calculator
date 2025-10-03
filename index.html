@@ -104,13 +104,13 @@
   </div>
 </div>
 
-  <!-- SR Opioids: AM/PM preference when equal split is impossible -->
-<div id="am-pm-pref" class="hidden">
-  <label class="block mb-1">If AM ≠ PM, prefer:</label>
-  <label><input type="radio" name="amPmPref" value="PM>AM" checked> PM > AM</label>
-  <label class="ml-4"><input type="radio" name="amPmPref" value="AM>PM"> AM > PM</label>
+<!-- AM/PM preference — shown only for Opioid SR Tablets -->
+<div id="amPmPrefGroup" class="am-pm-pref" style="display:none; margin-top:.5rem;">
+  <label class="block mb-1">If AM can’t equal PM, prefer:</label>
+  <label><input type="radio" name="amPmPref" value="PM>AM" checked> PM &gt; AM</label>
+  <label style="margin-left:1rem"><input type="radio" name="amPmPref" value="AM>PM"> AM &gt; PM</label>
 </div>
-  
+
   <!-- NEW: Advanced Settings accordion (everything for Phase 2 lives here) -->
   <details id="advancedSettings" class="accordion">
     <summary>Advanced Settings (Optional)</summary>
