@@ -101,19 +101,13 @@ function applyPatchIntervalAttributes(){
     inp.step = rule;
     if (inp.value) snapIntervalToRule(inp, rule);
 
- // NEW: snap only on "change" so multi-digit typing works
-if (!inp._patchSnapAttached){
-  inp.addEventListener("change", () => {
-    const r = patchIntervalRule();
-    if (r) snapIntervalToRule(inp, r);       // snap UP on blur/enter
-    validatePatchIntervals(false);           // keep red/ok state in sync
-//#endregion
-//#region 9. Validation & Gating
-    setGenerateEnabled();
-  });
-  inp._patchSnapAttached = true;
+  if (isDirty){
+    disable("#printBtn, #btnPrint, .btn-print, #downloadBtn, .btn-download");
+  } else {
+    enable("#printBtn, #btnPrint, .btn-print, #downloadBtn, .btn-download");
+  }
 }
-  });
+
 }
 
 // ensure the hint <div>s exist under the inputs; returns [h1, h2]
