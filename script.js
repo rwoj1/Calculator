@@ -134,12 +134,30 @@ function ensureIntervalHints(){
   };
   return [mk("p1IntHint","p1Interval"), mk("p2IntHint","p2Interval")];
 }
+function toggleAmPmPrefVisibility() {
+  const cls  = document.getElementById("classSelect")?.value || "";
+  const form = document.getElementById("formSelect")?.value || "";
+  const group = document.getElementById("amPmPrefGroup");
+  if (!group) return;
+
+  const isSROpioidTablet = (cls === "Opioid") && /SR/i.test(form) && /Tablet/i.test(form);
+  group.style.display = isSROpioidTablet ? "" : "none";
+
+  // Reset to default when hiding
+  if (!isSROpioidTablet) {
+    const def = CALC_CFG.opioids.sr.amPmPreference || "PM>AM";
+    const el = group.querySelector(`input[name="amPmPref"][value="${def}"]`);
+    if (el) el.checked = true;
+  }
+}
+
+
 // === Calculator configuration (central switches) ===
 const CALC_CFG = {
   roundingMode: 'UP',           // 'UP' means always round up to next achievable pack
   reviewCapDays: 30,            // mandatory review at 1 month
   features: {
-    BID_V2: false,              // new BID logic for SR opioids (start false; flip to true after we verify)
+    BID_V2: true,              
   },
   opioids: {
     sr: {
@@ -197,28 +215,46 @@ function decideEndSequence_SROpioid(selectedUnitsMg, lcsMg) {
   return hasLCS ? 'PM_ONLY_THEN_STOP' : 'BID_THEN_REVIEW';
 }
 
-// Given a per-step totalMg (already rounded-up), split across AM and PM
-function distributeBID(totalMg, selectedUnitsMg, preference /* 'PM>AM' or 'AM>PM' */) {
-  // Aim for equal; if not exact, bias according to preference by at least one lowest selected unit
-  const lsu = Math.min(...selectedUnitsMg);
-  const half = totalMg / 2;
-  // try to hit AM ≈ PM first
-  const amPack = packToAtLeast(Math.floor(half), selectedUnitsMg, { allowSplits:false });
-  const pmPack = packToAtLeast(totalMg - amPack.totalMg, selectedUnitsMg, { allowSplits:false });
+// Given a per-step totalMg (already rounded UP to a valid daily total),
+// split exactly into AM/PM in multiples of the lowest selected unit,
+// then bias by preference when a perfect 50/50 is impossible.
+function distributeBID(totalMg, selectedUnitsMg, preference /* 'PM>AM' | 'AM>PM' */) {
+  const units = (selectedUnitsMg || []).filter(Number.isFinite);
+  const lsu = Math.min(...units);
 
-  let AM = amPack.totalMg, PM = pmPack.totalMg;
-  // If unequal and preference requires inversion, adjust by one LSU if it helps
+  // Guard: if we can't determine a sensible step, fall back to simple split
+  if (!Number.isFinite(lsu) || lsu <= 0) {
+    const half = Math.floor(totalMg / 2);
+    return { AM: half, PM: totalMg - half };
+  }
+
+  // Helper to snap any value to the nearest multiple of lsu within [0, totalMg]
+  const toStepClamped = (v) => {
+    let m = Math.round(v / lsu) * lsu;
+    if (m < 0) m = 0;
+    if (m > totalMg) m = totalMg;
+    return m;
+  };
+
+  // Start with a near-even split on lsu grid
+  let AM = toStepClamped(totalMg / 2);
+  let PM = totalMg - AM; // stays on-grid because totalMg is a multiple of lsu
+
+  // If not perfectly equal, nudge one lsu toward the requested preference
   if (AM !== PM) {
-    const want = (preference === 'PM>AM') ? 'PM' : 'AM';
-    if (want === 'PM' && AM > PM) { // push lsu from AM to PM if possible
-      if (AM - lsu >= 0) { AM -= lsu; PM += lsu; }
-    } else if (want === 'AM' && PM > AM) {
-      if (PM - lsu >= 0) { PM -= lsu; AM += lsu; }
+    if (preference === 'PM>AM' && AM > PM && AM - lsu >= 0) {
+      AM -= lsu; PM += lsu;
+    } else if (preference === 'AM>PM' && PM > AM && PM - lsu >= 0) {
+      PM -= lsu; AM += lsu;
     }
   }
+
+  // Safety: ensure AM+PM == totalMg and both non-negative multiples of lsu
+  // (AM already on grid; recompute PM from total)
+  PM = totalMg - AM;
+
   return { AM, PM };
 }
-
 
 // --- End-sequence helpers for BID classes (SR opioids & pregabalin) ---
 // Lowest commercial strength AVAILABLE in the catalogue for the CURRENT med/form (ignores user selection)
@@ -635,7 +671,7 @@ function apGetReductionOrder(){
     .map(ch => ch.getAttribute("data-slot"));
 }
 
-  // Hook up events once
+// Hook up events once
 document.addEventListener("DOMContentLoaded", () => {
   ["classSelect","medicineSelect","formSelect"].forEach(id=>{
     const el = document.getElementById(id);
@@ -643,26 +679,35 @@ document.addEventListener("DOMContentLoaded", () => {
     el.addEventListener("change", () => {
       const cls = document.getElementById("classSelect")?.value || "";
       const isAP = (cls === "Antipsychotic");
-      if (id === "medicineSelect" && isAP) apResetInputsToZero(true);  // <-- reset to 0 on med change
-      apVisibilityTick();
+      if (id === "medicineSelect" && isAP) apResetInputsToZero(true);  // reset to 0 on med change
+
+      apVisibilityTick();               // (existing)
+      toggleAmPmPrefVisibility();       // ★ NEW: show/hide AM/PM preference for Opioid SR Tablets
     });
   });
 
-    // Inputs → recompute total live
-    ["apDoseAM","apDoseMID","apDoseDIN","apDosePM"].forEach(id => {
-      const el = $id(id);
-      if (el) el.addEventListener("input", apUpdateTotal);
+  // When the user clicks the AM/PM radio, just mark dirty so a new generate uses it (optional)
+  document.querySelectorAll('input[name="amPmPref"]').forEach(r => {
+    r.addEventListener('change', () => {
+      // if you want auto-regenerate, call buildPlan(); otherwise just mark dirty:
+      if (typeof setDirty === "function") setDirty(true);
     });
-
-    // First paint
-    apVisibilityTick();
-    apRefreshBadges();
-    apEnsureChipLabels();
-    apInitChips();
-    apToggleCurrentDoseUI((document.getElementById("classSelect")?.value || "") === "Antipsychotic");
-
   });
-})();
+
+  // Inputs → recompute total live (existing)
+  ["apDoseAM","apDoseMID","apDoseDIN","apDosePM"].forEach(id => {
+    const el = $id(id);
+    if (el) el.addEventListener("input", apUpdateTotal);
+  });
+
+  // First paint
+  apVisibilityTick();                   // (existing)
+  toggleAmPmPrefVisibility();           // ★ NEW: initial show/hide on first paint
+  apRefreshBadges();
+  apEnsureChipLabels();
+  apInitChips();
+  apToggleCurrentDoseUI((document.getElementById("classSelect")?.value || "") === "Antipsychotic");
+});
 
 /* ===== Antipsychotics: seed packs from the four AM/MID/DIN/PM inputs ===== */
 function apSeedPacksFromFourInputs(){
