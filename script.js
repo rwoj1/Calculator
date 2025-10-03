@@ -1534,24 +1534,36 @@ function renderProductPicker(){
     cb.dataset.mg = String(mg);
 
     // if user has any selection, reflect it; otherwise leave unchecked (meaning "use all")
-    cb.checked = (SelectedFormulations.size > 0) ? SelectedFormulations.has(mg) : false;
+    const anySelected = (SelectedFormulations && SelectedFormulations.size > 0);
+    cb.checked = anySelected ? SelectedFormulations.has(mg) : false;
 
     cb.addEventListener("change", () => {
-      if (cb.checked) SelectedFormulations.add(mg);
-      else SelectedFormulations.delete(mg);
+      if (!window.SelectedFormulations) window.SelectedFormulations = new Set();
+      const base = parseFloat(cb.dataset.mg);
+      if (cb.checked) SelectedFormulations.add(base);
+      else            SelectedFormulations.delete(base);
+
+      // If the set becomes empty, treat as “use all”
+      if (SelectedFormulations.size === 0) {
+        // no-op; empty set means all allowed
+      }
       if (typeof setDirty === "function") setDirty(true);
     });
 
-    const span = document.createElement("span");
-    const title = (typeof strengthToProductLabel === "function")
-      ? strengthToProductLabel(cls, med, form, s)   // e.g., "600 mg tablet"
-      : `${mg} mg`;
-    span.textContent = title;
+    const txt = document.createElement("span");
+    // Use a nice per-product label if available, else simple “X mg”
+    if (typeof strengthToProductLabel === "function") {
+      txt.textContent = strengthToProductLabel(cls, med, form, s);
+    } else {
+      txt.textContent = `${mg} mg`;
+    }
 
     label.appendChild(cb);
-    label.appendChild(span);
+    label.appendChild(txt);
     host.appendChild(label);
   });
+}
+
 
   // wire buttons (rebind on every render so they're always current)
   const btnSelectAll = document.getElementById("selectAllProductSelection");
