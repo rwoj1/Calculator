@@ -1589,7 +1589,7 @@ function renderProductPicker(){
       if (typeof setDirty === "function") setDirty(true);
     };
   }
-}
+
 
 
 /* ===== Minimal print / save helpers (do NOT duplicate elsewhere) ===== */
