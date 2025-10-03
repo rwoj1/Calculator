@@ -18,8 +18,6 @@
   11. Boot / Init
 ============================================================== */
 
-"use strict";
-
 /* ====================== Helpers ====================== */
 
 const $ = (id) => document.getElementById(id);
@@ -39,8 +37,6 @@ const EPS = 1e-6;
 //#endregion
 //#region 2. Patch Interval Rules (safety)
 function patchIntervalRule(){
-//#endregion
-//#region 10. Event Wiring
   const form = document.getElementById("formSelect")?.value || "";
   if (!/Patch/i.test(form)) return null;
   const med = document.getElementById("medicineSelect")?.value || "";
@@ -398,26 +394,16 @@ function lowestStepMg(cls, med, form){
   return (mgList && mgList.length) ? mgList[0] : 5;
 }
 
-// Snap a %-reduced target to the effective step size.
-// Policy: round UP to avoid under-dose; if unchanged, nudge down by one step for progress.
+// Snap target using ALWAYS-ROUND-UP policy
 function snapTargetToSelection(totalMg, percent, cls, med, form){
   const step = lowestStepMg(cls, med, form) || 1;
   const raw  = totalMg * (1 - percent/100);
-
-  const down = Math.floor(raw / step) * step;
-  const up   = Math.ceil(raw / step) * step;
-
-  let target;
-  const dDown = raw - down;
-  const dUp   = up  - raw;
-
-  if (dDown < dUp)       target = down;       // nearer below
-  else if (dUp < dDown)  target = up;         // nearer above
-  else                   target = up;         // exact tie → prefer UP
+  let target = Math.ceil(raw / step) * step;   // ⟵ always up
 
   // ensure progress if rounding lands unchanged
-  if (target === totalMg && totalMg > 0) target = Math.max(0, totalMg - step);
-
+  if (target === totalMg && totalMg > 0) {
+    target = Math.max(0, totalMg - step);      // nudge down by one step so the dose actually reduces
+  }
   return { target, step };
 }
 
@@ -967,7 +953,7 @@ function validatePatchIntervals(showToastToo=false){
   }
 
   const gen = document.getElementById("generateBtn");
-  if (gen) gen.disabled = gen.disabled || !ok;
+  if (gen) gen.disabled = !ok;
   if (!ok && showToastToo && rule) alert((rule===3) ? "Patch intervals must be multiples of 3 days." : "Patch intervals must be multiples of 7 days.");
   return ok;
 }
@@ -1442,28 +1428,17 @@ function strengthsForSelectedSafe(cls, med, form){
   }
 }
 function hasSelectedCommercialLowest(cls, med, form) {
-  const toMg = (s) => {
-    const m = String(s).match(/([\d.]+)\s*mg/i);
-    return m ? parseFloat(m[1]) : NaN;
-  };
+  // 1) All commercial strengths for this med/form (catalogue truth)
+  const all = allCommercialStrengthsMg(cls, med, form);
+  if (!all.length) return false;
+  const lcs = Math.min(...all);
 
-  const catalog = (typeof strengthsForSelected === "function")
-    ? (strengthsForSelected() || [])
-    : [];
-  const catalogMg = catalog.map(toMg).filter((x) => Number.isFinite(x));
-  if (catalogMg.length === 0) return false;
+  // 2) What the user has selected (or "all" if none ticked)
+  const sel = selectedProductMgs();
+  const selected = (sel && sel.length) ? sel.slice() : all.slice();
 
-  const lowestCommercial = Math.min.apply(null, catalogMg);
-
-  const selected = (typeof strengthsForSelectedSafe === "function")
-    ? (strengthsForSelectedSafe(cls, med, form) || [])
-    : catalog;
-
-  const selectedList = (selected.length === 0) ? catalog : selected;
-  const selectedMg = selectedList.map(toMg).filter((x) => Number.isFinite(x));
-  if (selectedMg.length === 0) return false;
-
-  return selectedMg.some((mg) => Math.abs(mg - lowestCommercial) < 1e-9);
+  // 3) True if user's effective set includes the catalogue LCS
+  return selected.some((mg) => Math.abs(mg - lcs) < 1e-9);
 }
 
 function renderProductPicker(){
@@ -2309,7 +2284,14 @@ function canSplitTablets(cls, form, med){
   // Default (rare fallback)
   return { half:true, quarter:true };
 }
-
+function strengthsForPicker(){
+  // use full commercial list; render labels with strengthToProductLabel()
+  const cls  = document.getElementById("classSelect")?.value || "";
+  const med  = document.getElementById("medicineSelect")?.value || "";
+  const form = document.getElementById("formSelect")?.value || "";
+  const mgList = strengthsForSelectedSafe(cls, med, form);
+  return mgList.map(mg => `${mg} mg`);
+}
 
 /* default frequency */
 function defaultFreq(){
