@@ -266,7 +266,90 @@ button.ghost{
     0 10px 22px rgba(17,139,213,0.06),
     0 2px 6px rgba(0,0,0,0.03);
 }
+/* ===== Antipsychotic panel (layout only) ===== */
+.ap-dose-grid { display: grid; gap: .5rem; grid-template-columns: 1fr; max-width: 440px; }
+.ap-row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.ap-row input { width: 140px; text-align: right; }
 
+.ap-total-line { margin: .5rem 0; display: flex; align-items: center; gap: .5rem; }
+.ap-total-box { padding: .2rem .5rem; border-radius: .4rem; font-weight: 600; }
+.ap-ok  { background: #e9f7ef; color: #146c43; }
+.ap-err { background: #fdecea; color: #b02a37; }
+
+.ap-brief { font-size: .9rem; color: var(--muted); margin-bottom: .75rem; }
+
+.ap-dose-grid {
+  display: grid;
+  gap: .5rem;
+  max-width: 480px;
+}
+.ap-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto; /* label | input | mg */
+  align-items: center;
+  gap: .5rem;
+}
+.ap-row input { width: 140px; text-align: right; }
+.ap-row span:last-child { min-width: 2.2rem; }
+
+/* Antipsychotic reduction-order chips: ensure text isn’t white */
+.ap-order-chips .ap-chip { color: var(--text); }   /* show labels */
+.ap-order-chips .ap-badge { color: var(--text); }  /* show 1..4 */
+
+/* Antipsychotic reduction-order chips */
+.ap-order-label { font-size: .9rem; color: #333; margin-bottom: .25rem; }
+.ap-order-chips { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
+
+/* Pill */
+.ap-chip{
+  display:inline-flex; align-items:center; gap:.45rem;
+  padding:.45rem .7rem;
+  border:1px solid #e5e7eb;
+  background:#f8fafc;
+  border-radius:9999px;
+  color:var(--text, #111827);
+  font-weight:600; letter-spacing:.2px;
+  box-shadow:0 1px 1px rgba(0,0,0,.04), 0 2px 8px rgba(0,0,0,.06);
+  cursor:grab; user-select:none;
+  transition:transform .08s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease;
+}
+.ap-chip:active{ cursor:grabbing; transform:scale(.98); }
+.ap-chip:focus-visible{ outline:2px solid #a5b4fc; outline-offset:2px; }
+
+/* Badge inside pill (optional) */
+.ap-badge{
+  display:inline-flex; align-items:center; justify-content:center;
+  min-width:1.15rem; height:1.15rem; padding:0 .2rem;
+  border-radius:9999px; background:#eef2f7; color:inherit; font-size:.8rem; font-weight:700;
+}
+/* Ensure text is visible even on themed chips */
+.ap-order-chips .ap-chip { color: var(--text, #111827); }
+.ap-order-chips .ap-badge{ color: inherit; }
+/* Unified blue styling for all AP reduction-order pills */
+.ap-order-chips .ap-chip{
+  background: linear-gradient(180deg, #eef2ff, #e0e7ff);
+  border-color: #c7d2fe;
+}
+/* Optional: slightly darker on press */
+.ap-order-chips .ap-chip:active{
+  background: linear-gradient(180deg, #e0e7ff, #dbeafe);
+  border-color: #a5b4fc;
+}
+
+/* DnD affordances */
+#apOrder .ap-chip{ cursor:grab; }
+#apOrder .ap-chip.dragging{ opacity:.6; cursor:grabbing; }
+
+/* === Show Calculations — minimal extras === */
+.calc-toggle { margin-left: 6px; }
+#calcBlock h3 { margin: 0 0 8px 0; }
+
+
+/* Reuse plan-table visuals */
+.calc-table { width: 100%; }
+.calc-table th, .calc-table td { white-space: nowrap; }
+.calc-table .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.calc-table .wrap { white-space: normal; }
 
 /* ==============================
    PRINT / PDF rules
