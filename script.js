@@ -2697,7 +2697,7 @@ if (isSROpioid && CALC_CFG.features.BID_V2) {
   // Respect mandatory 1-month review cap in the scheduler (don’t change totals)
   if (daysSinceStart + stepIntervalDays > CALC_CFG.reviewCapDays) {
     scheduleReviewRow(currentDatePlus(stepIntervalDays));
-    break; // stop generating more rows
+    return schedule; 
   }
 
   // Distribute to AM/PM
