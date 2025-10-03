@@ -1715,7 +1715,7 @@ function mapClassToKey(label){
 // Normalize a visible label to one of our keys above
 function footerKeyFromLabel(label) {
   const s = String(label || "").toLowerCase();
-  if (s.includes("opioid") || s.includes("fentanyl") || s.includes("buprenorphine")) return "opiods" || "opioids";
+  if (s.includes("opioid") || s.includes("fentanyl") || s.includes("buprenorphine")) return "opioids";
   if (s.includes("benzodiazep") || s.includes("z-drug") || s.includes("z drug")) return "bzra";
   if (s.includes("antipsych")) return "antipsychotic";
   if (s.includes("proton") || s.includes("ppi")) return "ppi";
