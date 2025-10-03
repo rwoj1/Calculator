@@ -1607,6 +1607,19 @@ function _printCSS(){
     @page{size:A4;margin:12mm}
   </style>`;
 }
+
+// Use existing preparePrintDecorations if present; otherwise a safe no-op
+const _preparePrintDecorations = (typeof preparePrintDecorations === "function")
+  ? preparePrintDecorations
+  : function preparePrintDecorations(){
+      // Minimal fallback: inject print CSS; return a cleanup fn
+      const style = document.createElement("style");
+      style.type = "text/css";
+      style.textContent = _printCSS();
+      document.head.appendChild(style);
+      return () => { try { style.remove(); } catch(_){} };
+    };
+
 function printOutputOnly() {
   const tableExists = document.querySelector("#scheduleBlock table, #patchBlock table");
   if (!tableExists) { alert("Please generate a chart first."); return; }
@@ -1614,19 +1627,19 @@ function printOutputOnly() {
   document.body.classList.add("printing");
 
   // Add print-only header + layout hints; get cleanup
-  const cleanupDecor = preparePrintDecorations();
+  const cleanupDecor = _preparePrintDecorations();
 
   window.print();
 
+  // Allow the print dialog to open before removing decorations
   setTimeout(() => {
     document.body.classList.remove("printing");
-    cleanupDecor();
+    try { cleanupDecor(); } catch(_){}
   }, 100);
 }
+
 // Save PDF uses the browser's Print dialog; choose "Save as PDF"
 function saveOutputAsPdf() {
-//#endregion
-//#region 8. UI State, Dirty Flags, Toasts
   showToast('In the dialog, choose "Save as PDF".');
   printOutputOnly();
 }
