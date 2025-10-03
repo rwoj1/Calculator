@@ -154,24 +154,25 @@ function toggleAmPmPrefVisibility() {
 
 // === Calculator configuration (central switches) ===
 const CALC_CFG = {
-  roundingMode: 'UP',           // 'UP' means always round up to next achievable pack
-  reviewCapDays: 30,            // mandatory review at 1 month
+  roundingMode: 'UP',
+  reviewCapDays: 30,
   features: {
-    BID_V2: true,              
+    BID_V2: true,   // ← enable the new BID logic
   },
   opioids: {
     sr: {
-      amPmPreference: 'PM>AM',  // default when AM cannot equal PM; user can override in UI
-      lowestCommercialStrengthsMg: {  // SR lowest strengths by molecule
+      amPmPreference: 'PM>AM',
+      lowestCommercialStrengthsMg: {
         morphine: 5,
         oxycodone: 5,
-        oxycodone_naloxone: 2.5, // use the opioid part for unit size (2.5/1.25)
+        oxycodone_naloxone: 2.5,
         tramadol: 50,
         tapentadol: 50,
       }
     }
   }
 };
+
 function getAmPmPreference() {
   const el = document.querySelector('input[name="amPmPref"]:checked');
   return el ? el.value : CALC_CFG.opioids.sr.amPmPreference;
@@ -222,13 +223,13 @@ function distributeBID(totalMg, selectedUnitsMg, preference /* 'PM>AM' | 'AM>PM'
   const units = (selectedUnitsMg || []).filter(Number.isFinite);
   const lsu = Math.min(...units);
 
-  // Guard: if we can't determine a sensible step, fall back to simple split
+  // Fallback if we can't infer a sensible unit
   if (!Number.isFinite(lsu) || lsu <= 0) {
     const half = Math.floor(totalMg / 2);
     return { AM: half, PM: totalMg - half };
   }
 
-  // Helper to snap any value to the nearest multiple of lsu within [0, totalMg]
+  // Snap any value to lsu-grid within [0, totalMg]
   const toStepClamped = (v) => {
     let m = Math.round(v / lsu) * lsu;
     if (m < 0) m = 0;
@@ -236,23 +237,17 @@ function distributeBID(totalMg, selectedUnitsMg, preference /* 'PM>AM' | 'AM>PM'
     return m;
   };
 
-  // Start with a near-even split on lsu grid
+  // Start near-even, on-grid
   let AM = toStepClamped(totalMg / 2);
-  let PM = totalMg - AM; // stays on-grid because totalMg is a multiple of lsu
+  let PM = totalMg - AM; // exact sum preserved
 
-  // If not perfectly equal, nudge one lsu toward the requested preference
+  // Bias one lsu toward the preferred side if not equal
   if (AM !== PM) {
-    if (preference === 'PM>AM' && AM > PM && AM - lsu >= 0) {
-      AM -= lsu; PM += lsu;
-    } else if (preference === 'AM>PM' && PM > AM && PM - lsu >= 0) {
-      PM -= lsu; AM += lsu;
-    }
+    if (preference === 'PM>AM' && AM > PM && AM - lsu >= 0) { AM -= lsu; PM += lsu; }
+    else if (preference === 'AM>PM' && PM > AM && PM - lsu >= 0) { PM -= lsu; AM += lsu; }
   }
 
-  // Safety: ensure AM+PM == totalMg and both non-negative multiples of lsu
-  // (AM already on grid; recompute PM from total)
-  PM = totalMg - AM;
-
+  PM = totalMg - AM; // keep AM+PM exact
   return { AM, PM };
 }
 
@@ -2712,6 +2707,7 @@ function stepOpioid_Shave(packs, percent, cls, med, form){
   const lcsSelected    = pickedAny ? selList.some(mg => Math.abs(mg - lcs) < 1e-9) : true;  // none selected → treat as all
   const selectedMinMg  = pickedAny ? selList[0] : lcs;  // selected minimum (or lcs if none selected)
   const thresholdMg    = lcsSelected ? lcs : selectedMinMg; // end-sequence threshold
+  const selectedUnits = (selList.length ? selList : catalog); // none selected ⇒ treat as all
 
   const AM0  = slotTotalMg(packs,"AM");
   const MID0 = slotTotalMg(packs,"MID");
@@ -2776,41 +2772,31 @@ function stepOpioid_Shave(packs, percent, cls, med, form){
   if (cur.DIN > EPS) { shave("DIN"); shave("MID"); }
   else               { shave("MID"); }
 
-  // Rebalance across AM/PM if reduction remains
-  if (reduce > EPS) {
-    const desiredBidTotal = Math.max(0, +(cur.AM + cur.PM - reduce).toFixed(3));
+ // Rebalance across AM/PM if reduction remains
+if (reduce > EPS) {
+  const desiredBidTotal = Math.max(0, +(cur.AM + cur.PM - reduce).toFixed(3));
 
-    // Try your existing helper first if it exists and supports selection
-    let bid = null;
-    if (typeof preferredBidTargets === "function") {
-      try {
-        // If your helper accepts preference, pass it; else fall back.
-        const pref = (typeof getAmPmPreference === "function") ? getAmPmPreference() : "PM>AM";
-        bid = preferredBidTargets(desiredBidTotal, cls, med, form, pref);
-      } catch(_) { bid = null; }
-    }
+  // Use exact-total splitter with preference
+  const pref = (typeof getAmPmPreference === "function") ? getAmPmPreference() : "PM>AM";
+  const split = (typeof distributeBID === "function")
+    ? distributeBID(desiredBidTotal, selectedUnits, pref)
+    : (function fallbackSplit(){
+        // Fallback: near-even on selected-min grid, then bias one unit
+        const unit = (selectedUnits.length ? Math.min(...selectedUnits) : step);
+        const half = desiredBidTotal / 2;
+        let AM = Math.floor(half / unit) * unit;
+        let PM = desiredBidTotal - AM;
+        if (AM !== PM) {
+          if (pref === "PM>AM" && AM > PM && AM - unit >= 0) { AM -= unit; PM += unit; }
+          else if (pref === "AM>PM" && PM > AM && PM - unit >= 0) { PM -= unit; AM += unit; }
+        }
+        return { AM, PM };
+      })();
 
-    if (!bid) {
-      // Fallback: split ~half/half, then bias by preference by ≥ selected minimum
-      const pref = (typeof getAmPmPreference === "function") ? getAmPmPreference() : "PM>AM";
-      const half = desiredBidTotal / 2;
-      const unit = selectedMinMg || step;
-
-      let AM = Math.floor(half / unit) * unit;
-      let PM = desiredBidTotal - AM;
-
-      // If unequal and preference requires inversion, adjust by one unit if possible
-      if (AM !== PM) {
-        if (pref === "PM>AM" && AM > PM && AM - unit >= 0) { AM -= unit; PM += unit; }
-        if (pref === "AM>PM" && PM > AM && PM - unit >= 0) { PM -= unit; AM += unit; }
-      }
-      bid = { AM, PM };
-    }
-
-    cur.AM = bid.AM; 
-    cur.PM = bid.PM;
-    reduce = 0;
-  }
+  cur.AM = split.AM;
+  cur.PM = split.PM;
+  reduce = 0;
+}
 
   // tidy negatives to zero
   for (const k of ["AM","MID","DIN","PM"]) if (cur[k] < EPS) cur[k] = 0;
