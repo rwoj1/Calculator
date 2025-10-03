@@ -1503,65 +1503,57 @@ function renderProductPicker(){
     ? shouldShowProductPicker(cls, med, form)
     : true;
 
-  if (!canShow) {
-    card.style.display = "none";
-    SelectedFormulations.clear();
-    host.innerHTML = "";
-    return;
-  }
-
   // figure out strengths we can list
   const strengths = (typeof strengthsForPicker === "function") ? strengthsForPicker() : [];
   const hasAny = Array.isArray(strengths) && strengths.length > 0;
 
-  card.style.display = hasAny ? "" : "none";
+  // hide when not applicable / empty
+  if (!canShow || !hasAny){
+    card.style.display = "none";
+    host.innerHTML = "";
+    return;
+  }
+
+  card.style.display = "";
   host.innerHTML = "";
-  if (!hasAny) return;
 
-  // header + controls
-  const hdr = document.createElement("div");
-  hdr.className = "picker-head";
-  hdr.innerHTML = `
-    <div class="picker-title">Select formulations to allow</div>
-    <div class="picker-actions">
-      <button type="button" id="selectAllProductSelection" class="btn btn-xs">Select all</button>
-      <button type="button" id="clearProductSelection"     class="btn btn-xs">Clear</button>
-    </div>
-  `;
-  host.appendChild(hdr);
+  // build the checkbox list
+  strengths.forEach(s => {
+    const mg = (typeof parseMgFromStrength === "function")
+      ? parseMgFromStrength(s)
+      : (parseFloat(String(s).replace(/[^\d.]/g,"")) || 0);
+    if (!Number.isFinite(mg) || mg <= 0) return;
 
-  // list
-  const list = document.createElement("div");
-  list.className = "picker-list";
-  host.appendChild(list);
+    const id = `prod_${String(med).replace(/\W+/g,'_')}_${mg}`;
 
-  strengths
-    .slice()
-    .sort((a,b)=>parseMgFromStrength(a)-parseMgFromStrength(b))
-    .forEach(s => {
-      const mg = parseMgFromStrength(s);
-      if (!Number.isFinite(mg) || mg <= 0) return;
+    const label = document.createElement("label");
+    label.className = "checkbox";
+    label.setAttribute("for", id);
 
-      const row = document.createElement("label");
-      row.className = "checkbox";
-      const id = `prod_${String(med).replace(/\W+/g,'_')}_${mg}`;
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.id = id;
+    cb.dataset.mg = String(mg);
 
-      row.innerHTML = `
-        <input type="checkbox" id="${id}" data-mg="${mg}">
-        <span>${strengthToProductLabel(cls, med, form, s)}</span>
-      `;
-      list.appendChild(row);
+    // if user has any selection, reflect it; otherwise leave unchecked (meaning "use all")
+    cb.checked = (SelectedFormulations.size > 0) ? SelectedFormulations.has(mg) : false;
 
-      const cb = row.querySelector("input[type='checkbox']");
-      // reflect current selection if any (empty set ⇒ treat as "all allowed" but unchecked visually)
-      cb.checked = SelectedFormulations.size > 0 ? SelectedFormulations.has(mg) : false;
-
-      cb.addEventListener("change", () => {
-        if (cb.checked) SelectedFormulations.add(mg);
-        else SelectedFormulations.delete(mg);
-        if (typeof setDirty === "function") setDirty(true);
-      });
+    cb.addEventListener("change", () => {
+      if (cb.checked) SelectedFormulations.add(mg);
+      else SelectedFormulations.delete(mg);
+      if (typeof setDirty === "function") setDirty(true);
     });
+
+    const span = document.createElement("span");
+    const title = (typeof strengthToProductLabel === "function")
+      ? strengthToProductLabel(cls, med, form, s)   // e.g., "600 mg tablet"
+      : `${mg} mg`;
+    span.textContent = title;
+
+    label.appendChild(cb);
+    label.appendChild(span);
+    host.appendChild(label);
+  });
 
   // wire buttons (rebind on every render so they're always current)
   const btnSelectAll = document.getElementById("selectAllProductSelection");
@@ -1588,6 +1580,7 @@ function renderProductPicker(){
     };
   }
 }
+
 
 /* ===== Minimal print / save helpers (do NOT duplicate elsewhere) ===== */
 
@@ -3589,104 +3582,7 @@ if (packsTotalMg(packs) > EPS && (cls === "Opioid" || cls === "Gabapentinoids"))
   setDirty(false);
   return rows;
 }
-function renderProductPicker(){
-  // elements
-  const card = document.getElementById("productPickerCard");
-  const host = document.getElementById("productPicker");
-  if (!card || !host) return;
 
-  // current selection in the controls
-  const clsEl  = document.getElementById("classSelect");
-  const medEl  = document.getElementById("medicineSelect");
-  const formEl = document.getElementById("formSelect");
-  const cls  = (clsEl  && clsEl.value)  || "";
-  const med  = (medEl  && medEl.value)  || "";
-  const form = (formEl && formEl.value) || "";
-
-  // ensure session store exists
-  if (!window.SelectedFormulations) window.SelectedFormulations = new Set();
-
-  // should we show this picker for the current med/form?
-  const canShow = (typeof shouldShowProductPicker === "function")
-    ? shouldShowProductPicker(cls, med, form)
-    : true;
-
-  // figure out strengths we can list
-  const strengths = (typeof strengthsForPicker === "function") ? strengthsForPicker() : [];
-  const hasAny = Array.isArray(strengths) && strengths.length > 0;
-
-  if (!canShow || !hasAny){
-    card.style.display = "none";
-    host.innerHTML = "";
-    return;
-  }
-
-  card.style.display = "";
-  host.innerHTML = "";
-
-  // build the checkbox list
-  strengths.forEach(s => {
-    const mg = (typeof parseMgFromStrength === "function")
-      ? parseMgFromStrength(s)
-      : (parseFloat(String(s).replace(/[^\d.]/g,"")) || 0);
-    if (!Number.isFinite(mg) || mg <= 0) return;
-
-    const id = `prod_${String(med).replace(/\W+/g,'_')}_${mg}`;
-
-    const label = document.createElement("label");
-    label.className = "checkbox";
-    label.setAttribute("for", id);
-
-    const cb = document.createElement("input");
-    cb.type = "checkbox";
-    cb.id = id;
-    cb.dataset.mg = String(mg);
-
-    // if user has any selection, reflect it; otherwise leave unchecked (meaning "use all")
-    cb.checked = (SelectedFormulations.size > 0) ? SelectedFormulations.has(mg) : false;
-
-    cb.addEventListener("change", () => {
-      if (cb.checked) SelectedFormulations.add(mg);
-      else SelectedFormulations.delete(mg);
-      if (typeof setDirty === "function") setDirty(true);
-    });
-
-    const span = document.createElement("span");
-    const title = (typeof strengthToProductLabel === "function")
-      ? strengthToProductLabel(cls, med, form, s)   // e.g., "600 mg tablet"
-      : `${mg} mg`;
-    span.textContent = title;
-
-    label.appendChild(cb);
-    label.appendChild(span);
-    host.appendChild(label);
-  });
-
-  // wire buttons (rebind on every render so they're always current)
-  const btnSelectAll = document.getElementById("selectAllProductSelection");
-  const btnClear     = document.getElementById("clearProductSelection");
-
-  if (btnSelectAll){
-    btnSelectAll.onclick = () => {
-      SelectedFormulations.clear();
-      // tick everything currently shown
-      host.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-        cb.checked = true;
-        const mg = parseFloat(cb.dataset.mg);
-        if (Number.isFinite(mg) && mg > 0) SelectedFormulations.add(mg);
-      });
-      if (typeof setDirty === "function") setDirty(true);
-    };
-  }
-
-  if (btnClear){
-    btnClear.onclick = () => {
-      SelectedFormulations.clear();
-      host.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
-      if (typeof setDirty === "function") setDirty(true);
-    };
-  }
-}
 // Auto-clear the selection whenever medicine or form changes, then re-render
 (function wireProductPickerResets(){
   const med  = document.getElementById("medicineSelect");
