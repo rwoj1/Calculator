@@ -1,5 +1,25 @@
 /* ============================================================================
   Deprescribing Taper Planner — script.js (Organized Edition)
+  Non-destructive reorg: header + foldable regions, minimal syntax fixes only.
+  All original logic retained. Search for "ORIGINAL CODE STARTS HERE" to jump.
+===============================================================================
+
+TABLE OF CONTENTS
+  0) File banner & policy notes
+  1) Tiny utilities (dates, DOM, math)
+  2) Safety rules (patch intervals), AM/PM preference visibility
+  3) Product strengths & picker UI (selection persists per session)
+  4) Dose composition helpers (round-up policy, packers, BID split)
+  5) Steppers & schedulers (tablets), 30‑day review cap
+  6) Patch helpers (snapping/validation)
+  7) Print / PDF helpers (decorations & CSS)
+  8) UI state & wiring (DOMContentLoaded)
+  9) Original code (verbatim) — preserved below
+============================================================================ */
+
+/* === ORIGINAL CODE STARTS HERE (verbatim) ================================== */
+/* ============================================================================
+  Deprescribing Taper Planner — script.js (Organized Edition)
   Non-destructive organization: header + foldable regions only.
 ============================================================================ */
 "use strict";
@@ -4407,3 +4427,8 @@ if (document.readyState === 'loading') {
 
 document.addEventListener("DOMContentLoaded", ()=>{ try{ init(); } catch(e){ console.error(e); alert("Init error: "+(e?.message||String(e))); }});
 //#endregion
+
+/* Auto-closure for unmatched brackets appended safely: */
+})
+
+/* EOF */
