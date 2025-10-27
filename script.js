@@ -1693,7 +1693,20 @@ const SUGGESTED_PRACTICE = {
 // ---- Class-specific footer copy (placeholder text) ----
 const CLASS_FOOTER_COPY = {
   opioids:       "Insert specific footer + disclaimer for Opioids",
-  bzra:          "Insert specific footer + disclaimer for Benzodiazepines / Z Drugs (BZRA)",
+  bzra:          "Talk to your doctor, pharmacist or nurse before making any changes to your medicine. They can help you plan and monitor your dose reduction safely.
+Discuss the following with your doctor, pharmacist or nurse:
+•	Other strategies to help manage your insomnia
+•	Regular review and follow-up appointments
+•	Your support network
+•	Plans to prevent and manage withdrawal symptoms if you get any – these are temporary and usually mild (e.g. sleeplessness, anxiety, restlessness).
+Additional Notes:
+[Space for healthcare professional to add information]
+
+
+
+  
+This information is not intended as a substitute for medical advice and should not be exclusively relied on to diagnose and manage a medical condition. Monash University disclaims all liability (including for negligence) for any loss, damage or injury resulting from reliance on or use of this information.
+",
   antipsychotic: "Insert specific footer + disclaimer for Antipsychotics",
   ppi:           "Insert specific footer + disclaimer for Proton Pump Inhibitors",
   gabapentinoids: "Insert specific footer + disclaimer for Gabapentinoids",
