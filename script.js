@@ -4460,7 +4460,7 @@ card.innerHTML = `
     </p>
 
     <p>
-      This calculator is not designed for generating an individualised tapering plan for patients with severe substance use disorder; 
+      This calculator is <strong>not<strong> designed for generating an individualised tapering plan for patients with severe substance use disorder; 
       these patients require tailored plans beyond the scope of this calculator.
     </p>
 
