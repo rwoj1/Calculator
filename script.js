@@ -1545,17 +1545,63 @@ function saveOutputAsPdf() {
 // --- Suggested practice copy (exact wording from your doc) ---
 //#endregion
 //#region 7. Suggested Practice & Footers
+// --- Suggested Practice copy (updated wording and titles) ---
 const SUGGESTED_PRACTICE = {
-  opioids: `Tailor the deprescribing plan based on the person’s clinical characteristics, goals and preferences. Consider:
-• < 3 months use: reduce the dose by 10% to 25% every week
-• >3 months use: reduce the dose by 10% to 25% every 4 weeks
-• Long-term opioid use (e.g. 1> year) or on high doses: slower tapering and frequent monitoring
-[INSERT ALGORITHM]  [INSERT SUMMARY OF EVIDENCE] [INSERT GUIDE TO RULESET]`,
+  opioids: `
+  <h3>Opioids for persistent non-cancer pain</h3>
 
-  bzra: `Tailor the deprescribing plan based on the person’s clinical characteristics, goals and preferences:
-•	Taper slowly; e.g., 25% every 2 weeks.
-•	Near end: consider 12.5% reductions and/or planned drug-free days.
-[INSERT ALGORITHM]  [INSERT SUMMARY OF EVIDENCE] [INSERT GUIDE TO RULESET]`,
+  <p>
+    Tapering should be gradual and individualised to the person’s clinical characteristics, treatment goals and preferences. 
+    A variety of tapering regimens have been recommended in guidelines – summarised here [LINK].
+  </p>
+
+  <p>
+    The following approach may be considered as a general guide:
+    <br>• Short-term use (less than 3 months): slow dose reduction (e.g. 10 to 25% every week).
+    <br>• Longer-term use (longer than 3 months): slower dose reduction (e.g. 10 to 25% every 4 weeks). 
+      Some patients (e.g. those taking higher doses or for long periods) may need slower reductions.
+  </p>
+
+  <p>
+    Closely monitor and regularly review patients during tapering, and adjust tapering plan if needed.
+  </p>
+
+  <p>
+    This calculator is designed to use whole slow-release dose forms (which cannot be cut). 
+    It is not designed for reducing immediate-release formulations, or for patients with severe substance use disorder, high risk of withdrawal, 
+    or symptom recurrence – seek specialist advice for tailored tapering plans for these patients.
+  </p>
+
+  <p>
+    At the later stages of a taper, the desired dose reduction may not be possible with a slow-release formulation; 
+    a short-acting opioid may be required to complete the taper or to manage withdrawal symptoms.
+  </p>
+
+  <p>
+    If the patient is also taking a short-acting opioid, ensure the dose is reviewed as their total daily opioid dose reduces.
+  </p>
+  `,
+
+  bzra: `
+  <h3>Benzodiazepines and Z-drugs for insomnia in older adults</h3>
+
+  <p>
+    Tapering should occur gradually and be individualised to the person’s clinical characteristics, treatment goals and preferences. 
+    Tapering recommendations in guidelines vary from 5 to 25% reductions every 1 to 4 weeks, with slower or faster tapers depending on dose and duration of use – summarised here [LINK].
+  </p>
+
+  <p>
+  Closely monitor and regularly review patients during tapering, and adjust tapering plan if needed.
+  <p>
+
+  <p>
+    This calculator is designed to use commercially available formulations in whole or half dose forms. 
+    It is not designed to calculate a slower taper using quarter-tablet doses or compounded formulations; 
+    such approaches may be required for patients with severe substance use disorder, high risk of withdrawal, or symptom recurrence.
+  </p>
+  `,
+};
+
 
   antipsychotic: `• Reduce ~25–50% every 1–2 weeks with close monitoring.
 • Slower taper may be appropriate depending on symptoms.
