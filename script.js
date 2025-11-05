@@ -2445,12 +2445,12 @@ const sanitizeQty = (val) => {
   return Math.round(v);
 };
 
-// Keep the model & UI snapped
-qtyInput.oninput = (e) => {
-  e.target.value = sanitizeQty(e.target.value);
-};
+// Only sanitize after editing (no cursor jumping)
+qtyInput.addEventListener("blur", () => {
+  qtyInput.value = sanitizeQty(qtyInput.value);
+});
 
-qtyInput.onchange = (e) => {
+qtyInput.addEventListener("change", (e) => {
   const id = +e.target.dataset.id;
   const v  = sanitizeQty(e.target.value);
   e.target.value = v;
@@ -2459,7 +2459,8 @@ qtyInput.onchange = (e) => {
   if (l) l.qty = v;
 
   setDirty(true);
-};
+});
+
 
     row.querySelector(".dl-remove").onclick=(e)=>{ const id=+e.target.dataset.id; doseLines=doseLines.filter(x=>x.id!==id); renderDoseLines(); setDirty(true); };
   });
