@@ -3509,8 +3509,8 @@ if (packsTotalMg(packs) > EPS) {
 if (packsTotalMg(packs) > EPS && (cls === "Opioid" || cls === "Gabapentinoids")) {
   const selMin = selectedMinMg(cls, med, form);
   if (isAtSelectedBID(packs, selMin) && lowestSelectedForClassIsPresent(cls, med, form)) {
-    window._pmOnlySnapshot = pmOnlyFrom(packs);
-  }
+  window._pmOnlySnapshot = singleDoseFrom(packs);
+}
 }
   
   let week=1;
@@ -3529,11 +3529,13 @@ if (window._forceStopNext) {
 // If a PM-only row was scheduled for this boundary, emit it now and prepare to Stop next
 if (window._pmOnlySnapshot) {
   date = nextDate; week++;
-  packs = deepCopy(window._pmOnlySnapshot);
+  // Re-assert preference defensively in case some other code mutated the snapshot
+  packs = singleDoseFrom(window._pmOnlySnapshot);
   window._pmOnlySnapshot = null;
+
   rows.push({ week, date: fmtDate(date), packs: deepCopy(packs), med, form, cls });
-  window._forceStopNext = true;   // Stop at the *following* boundary
-  continue; // skip normal stepping this iteration
+  window._forceStopNext = true;
+  continue;
 }
     
    // Phase rule: Phase 2 begins only AFTER the current Phase 1 step completes
@@ -3600,8 +3602,8 @@ if (typeof window !== "undefined" && window._forceReviewNext){
 if (packsTotalMg(packs) > EPS && (cls === "Opioid" || cls === "Gabapentinoids")) {
   const selMin = selectedMinMg(cls, med, form);
   if (isAtSelectedBID(packs, selMin) && lowestSelectedForClassIsPresent(cls, med, form)) {
-    window._pmOnlySnapshot = pmOnlyFrom(packs);
-  }
+  window._pmOnlySnapshot = singleDoseFrom(packs);
+}
 }
  
   if (packsTotalMg(packs) <= EPS) rows.push({ week: week+1, date: fmtDate(date), packs: {}, med, form, cls, stop:true });
