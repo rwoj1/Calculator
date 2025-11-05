@@ -664,33 +664,64 @@ button.ghost{
 .suggested-practice li {
   margin-bottom: 6px;
 }
-/* === Advanced Settings (outer card) === */
-.advanced-card {
-  background-color: #d6ebf8;      /* darker blue base */
+/* ===== Advanced Settings: card within a card ===== */
+
+/* Outer card (the <details> block) */
+#advancedSettings {
+  background-color: #d6ebf8;            /* medium blue */
   border: 1px solid #b5d9f1;
-  border-radius: 10px;
-  padding: 20px;
-  margin-top: 20px;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  padding: 12px 14px 14px;              /* leave room for sub-cards */
+  margin-top: 14px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.06);
 }
 
-/* === Inner cards (each section) === */
-.advanced-card .sub-card {
-  background-color: #eaf4fb;      /* lighter inner blue */
-  border: 1px solid #c6e0f2;
-  border-radius: 8px;
-  padding: 15px 20px;
-  margin-bottom: 15px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-}
-
-/* === Heading styling === */
-.advanced-card h3 {
-  color: #004b7a;
-  margin-top: 0;
-  margin-bottom: 15px;
-  font-size: 1.1rem;
+/* Make the summary (clickable header) blend in nicely */
+#advancedSettings > summary {
+  list-style: none;                      /* remove default triangle */
+  cursor: pointer;
   font-weight: 700;
+  color: #004b7a;
+  margin: -4px -2px 6px;                 /* pull it tight to the border */
+}
+
+/* Optional chevron */
+#advancedSettings > summary::after {
+  content: "▾";
+  float: right;
+  opacity: .7;
+  transition: transform .2s ease;
+}
+#advancedSettings[open] > summary::after {
+  transform: rotate(180deg);
+}
+
+/* Inner cards (everything inside the details except the summary) */
+#advancedSettings > *:not(summary) {
+  background-color: #eaf4fb;             /* lighter inner blue */
+  border: 1px solid #c6e0f2;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin: 10px 0;                        /* spacing between the three sections */
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+
+/* Typography tweaks so spacing feels even inside the inner cards */
+#advancedSettings p { margin: 0 0 .75rem; line-height: 1.55; }
+#advancedSettings .control-row { margin-bottom: .6rem; }  /* if you use rows */
+#advancedSettings .inline-label { margin-bottom: .5rem; }
+
+/* Ensure product “chip” buttons don’t inherit inner card background */
+#advancedSettings .product-picker,
+#advancedSettings .product-picker * {
+  background: transparent;
+}
+
+/* If your inputs looked cramped after the new padding, gently widen them */
+#advancedSettings input[type="text"],
+#advancedSettings input[type="number"],
+#advancedSettings input[type="date"] {
+  background: #fff;
 }
 
 /* Fine-tuning inner text spacing for suggested practice content */
