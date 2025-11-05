@@ -693,3 +693,31 @@ button.ghost{
   font-weight: 700;
 }
 
+/* Fine-tuning inner text spacing for suggested practice content */
+.practice-text {
+  line-height: 1.6;
+  color: #003366;
+}
+
+.practice-text p {
+  margin: 0 0 1em;
+}
+
+.practice-text ul, 
+.practice-text ol {
+  margin: 0 0 1em 1.25rem;
+  padding: 0;
+  list-style: disc;
+}
+
+.practice-text li {
+  margin: 0.3em 0;
+}
+
+.practice-text h3 {
+  margin-top: 0;
+  margin-bottom: 0.8em;
+  color: #004b7a;
+  font-weight: 700;
+}
+
