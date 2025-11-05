@@ -634,3 +634,34 @@ button.ghost{
     color: #000 !important; /* prevent pale or grey text when printing */
   }
 }
+/* Suggested practice styling */
+.suggested-practice {
+  background: #f2f8fc;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 15px;
+  line-height: 1.6;
+  color: #003366;
+  font-size: 0.95rem;
+}
+
+.suggested-practice h3 {
+  margin-top: 0;
+  color: #004b7a;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.suggested-practice p {
+  margin-bottom: 1em;
+}
+
+.suggested-practice ul {
+  margin-left: 20px;
+  list-style-type: disc;
+}
+
+.suggested-practice li {
+  margin-bottom: 6px;
+}
+
