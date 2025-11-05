@@ -634,36 +634,6 @@ button.ghost{
     color: #000 !important; /* prevent pale or grey text when printing */
   }
 }
-/* Suggested practice styling */
-.suggested-practice {
-  background: #f2f8fc;
-  border-radius: 8px;
-  padding: 20px;
-  margin-top: 15px;
-  line-height: 1.6;
-  color: #003366;
-  font-size: 0.95rem;
-}
-
-.suggested-practice h3 {
-  margin-top: 0;
-  color: #004b7a;
-  font-size: 1.15rem;
-  font-weight: 700;
-}
-
-.suggested-practice p {
-  margin-bottom: 1em;
-}
-
-.suggested-practice ul {
-  margin-left: 20px;
-  list-style-type: disc;
-}
-
-.suggested-practice li {
-  margin-bottom: 6px;
-}
 /* ===== Advanced Settings: card within a card ===== */
 
 /* Outer card (the <details> block) */
@@ -735,31 +705,69 @@ button.ghost{
 /* (Optional) tidy up spacing inside cards */
 #advancedSettings .sub-card p { margin: 0 0 .75rem; line-height: 1.55; }
 
-/* Fine-tuning inner text spacing for suggested practice content */
-.practice-text {
-  line-height: 1.6;
-  color: #003366;
+/* ===== Readability upgrades for Suggested Practice card ===== */
+.suggested-practice {
+  /* keep your existing card look; just soften & space it a bit more */
+  background: #e9f4fb;                    /* lighter for better contrast */
+  border: 1px solid #cfe6f5;
+  border-radius: 12px;
+  padding: 22px 24px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.05);
 }
 
-.practice-text p {
-  margin: 0 0 1em;
+/* the inner text container */
+.suggested-practice .practice-text {
+  /* 1) readable column width */
+  max-width: 72ch;                         /* ~70–75 characters per line */
+  /* 2) type rhythm */
+  font-size: 1.02rem;                      /* tiny bump */
+  line-height: 1.7;
+  color: #073a53;                          /* higher contrast on blue bg */
 }
 
-.practice-text ul, 
-.practice-text ol {
-  margin: 0 0 1em 1.25rem;
+/* heading */
+.suggested-practice h3 {
+  margin: 0 0 0.6rem;
+  color: #004b7a;
+  font-size: 1.18rem;
+  font-weight: 700;
+}
+
+/* paragraphs */
+.suggested-practice .practice-text p {
+  margin: 0 0 0.9rem;
+}
+
+/* lists */
+.suggested-practice .practice-text ul,
+.suggested-practice .practice-text ol {
+  margin: 0.2rem 0 1rem 1.25rem;           /* tidy top/bottom gap + indent */
   padding: 0;
   list-style: disc;
 }
-
-.practice-text li {
-  margin: 0.3em 0;
+.suggested-practice .practice-text li {
+  margin: 0.35rem 0;                        /* space between bullets */
 }
 
-.practice-text h3 {
-  margin-top: 0;
-  margin-bottom: 0.8em;
-  color: #004b7a;
-  font-weight: 700;
+/* optional: emphasize the first paragraph slightly for scanning */
+.suggested-practice .practice-text .lead {
+  font-weight: 500;
+  color: #062f44;
+}
+
+/* links inside the card */
+.suggested-practice .practice-text a {
+  color: #005a98;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 2px;
+}
+.suggested-practice .practice-text a:hover {
+  color: #00406e;
+}
+
+/* responsive: on very small screens, relax the spacing slightly */
+@media (max-width: 480px) {
+  .suggested-practice { padding: 18px; }
+  .suggested-practice .practice-text { font-size: 1rem; line-height: 1.65; }
 }
 
