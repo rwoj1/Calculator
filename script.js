@@ -351,6 +351,28 @@ function effectiveQuantumMg(cls, med, form){
   }
 }
 
+// --- Always-UP rounding helpers for % reductions (selection-aware) ---
+function ceilToQuantum(val, q){
+  return Math.ceil(val / q) * q;
+}
+
+// Centralised target calculation used by the schedule/table
+// - Rounds UP to quantum (GCD of selected strengths)
+// - If rounding-up would stall (no change), drop by one quantum
+function alwaysUpTarget(totalMg, percent, cls, med, form){
+  const q = (typeof effectiveQuantumMg === "function"
+    ? effectiveQuantumMg(cls, med, form)
+    : (typeof lowestStepMg === "function" ? lowestStepMg(cls, med, form) : 1)) || 1;
+
+  const raw = totalMg * (1 - percent/100);
+  let target = ceilToQuantum(raw, q);
+
+  if (target === totalMg && totalMg > 0){
+    target = Math.max(0, totalMg - q);
+  }
+  return { target, quantum: q };
+}
+
 function snapTargetToSelection(totalMg, percent, cls, med, form){
   const stepMin = lowestStepMg(cls, med, form) || 1;           // difference cap / UI rules
   const q       = effectiveQuantumMg(cls, med, form) || stepMin; // rounding grid (GCD)
@@ -3440,9 +3462,30 @@ const doStep = (phasePct) => {
 
   // Step 1 on start date using whichever phase applies at start
   const useP2Now = p2Start && (+startDate >= +p2Start);
-  doStep(useP2Now ? p2Pct : p1Pct);
-  console.log("[DEBUG] Step1 packs:", JSON.stringify(packs));
-  if (packsTotalMg(packs) > EPS) rows.push({ week: 1, date: fmtDate(date), packs: deepCopy(packs), med, form, cls });
+// STEP 1 — compute “calculated” from pre-step total, and “rounded” from the packs after stepping
+const prevTotalMg_step1 = packsTotalMg(packs);
+const usedPct_step1 = (useP2Now ? p2Pct : p1Pct);
+
+doStep(usedPct_step1);
+console.log("[DEBUG] Step1 packs:", JSON.stringify(packs));
+
+if (packsTotalMg(packs) > EPS) {
+  const roundedMg_step1   = packsTotalMg(packs);                             // policy-rounded, from engine
+  const calculatedMg_step1= prevTotalMg_step1 * (1 - (usedPct_step1/100));   // informational
+  const actualPct_step1   = prevTotalMg_step1 > EPS
+    ? (100 * (1 - (roundedMg_step1 / prevTotalMg_step1)))
+    : 0;
+
+  rows.push({
+    week: 1,
+    date: fmtDate(date),
+    packs: deepCopy(packs),
+    med, form, cls,
+    calculatedMg: calculatedMg_step1,
+    roundedMg:    roundedMg_step1,
+    actualPct:    actualPct_step1
+  });
+}
 
 // If a BID class has reached selected-min BID and the class-lowest is among selections,
 // schedule PM-only at next boundary, then Stop at the following boundary.
@@ -3494,9 +3537,11 @@ if (window._forceReviewNext) {
   window._forceReviewNext = false;
   break;
 }
-    
+    // Stash the pre-step total for THIS iteration’s row
+const _prevTotalMg_beforeStep = packsTotalMg(packs);
     date = nextDate; week++;
     const nowInP2 = p2Start && (+date >= +p2Start);
+    const _usedPct_forStep = (nowInP2 ? p2Pct : p1Pct);
     doStep(nowInP2 ? p2Pct : p1Pct);
 
     // Suppress duplicate row if a step forced review and did not change packs
@@ -3508,7 +3553,29 @@ if (typeof window !== "undefined" && window._forceReviewNext){
   break;
 }
     
-    if (packsTotalMg(packs) > EPS) rows.push({ week, date: fmtDate(date), packs: deepCopy(packs), med, form, cls });
+    if (packsTotalMg(packs) > EPS) {
+  // For the row we just produced, show the policy-rounded total and the actual % change
+  // We need the "pre-step" total and the pct we used for THIS step:
+  // 1) pre-step total was what we had before calling doStep this iteration
+  // 2) pct used was decided by nowInP2 (see below where we compute it)
+
+  // We stashed these just before calling doStep in this iteration:
+  const roundedMg_iter   = packsTotalMg(packs);                                   // policy-rounded after step
+  const calculatedMg_iter= _prevTotalMg_beforeStep * (1 - (_usedPct_forStep/100)); // informational
+  const actualPct_iter   = _prevTotalMg_beforeStep > EPS
+    ? (100 * (1 - (roundedMg_iter / _prevTotalMg_beforeStep)))
+    : 0;
+
+  rows.push({
+    week,
+    date: fmtDate(date),
+    packs: deepCopy(packs),
+    med, form, cls,
+    calculatedMg: calculatedMg_iter,
+    roundedMg:    roundedMg_iter,
+    actualPct:    actualPct_iter
+  });
+}
     if (week > MAX_WEEKS) break;
   }
 
