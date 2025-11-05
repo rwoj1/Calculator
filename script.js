@@ -352,24 +352,17 @@ function effectiveQuantumMg(cls, med, form){
 }
 
 function snapTargetToSelection(totalMg, percent, cls, med, form){
-  const stepMin = lowestStepMg(cls, med, form) || 1;          // for caps like difference cap
+  const stepMin = lowestStepMg(cls, med, form) || 1;           // difference cap / UI rules
   const q       = effectiveQuantumMg(cls, med, form) || stepMin; // rounding grid (GCD)
+  const raw     = totalMg * (1 - percent/100);
 
-  const raw  = totalMg * (1 - percent/100);
+  // ALWAYS ROUND UP to the quantum
+  let target = Math.ceil(raw / q) * q;
 
-  const down = Math.floor(raw / q) * q;
-  const up   = Math.ceil (raw / q) * q;
-
-  let target;
-  const dDown = raw - down;
-  const dUp   = up  - raw;
-
-  if (dDown < dUp)       target = down;       // nearer below
-  else if (dUp < dDown)  target = up;         // nearer above
-  else                   target = up;         // exact tie → prefer UP
-
-  // ensure progress if rounding lands unchanged
-  if (target === totalMg && totalMg > 0) target = Math.max(0, totalMg - q);
+  // ensure progress if rounding would stall (i.e., stays the same dose)
+  if (target === totalMg && totalMg > 0) {
+    target = Math.max(0, totalMg - q);
+  }
 
   return { target, step: stepMin, quantum: q };
 }
@@ -2745,14 +2738,14 @@ function stepOpioid_Shave(packs, percent, cls, med, form){
     }
   }
 
-  // ----- Normal SR-style reduction (as in your original logic) -----
   const q = (typeof effectiveQuantumMg === "function" ? effectiveQuantumMg(cls, med, form) : step) || step;
 
-  let target = roundTo(tot * (1 - percent/100), q);
+  // ALWAYS ROUND UP to the quantum
+  let target = Math.ceil((tot * (1 - percent/100)) / q) * q;
+
+  // Anti-stall: if "up" keeps us at the same dose, step down one quantum
   if (target === tot && tot > 0) {
-    // force progress if rounding would stall (by one quantum)
     target = Math.max(0, tot - q);
-    target = roundTo(target, q);
   }
 
   let cur = { AM, MID, DIN, PM };
