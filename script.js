@@ -1548,19 +1548,15 @@ function saveOutputAsPdf() {
 // --- Suggested Practice copy (updated wording and titles) ---
 const SUGGESTED_PRACTICE = {
   opioids: `
-  <h3>Opioids for persistent non-cancer pain</h3>
-
   <p>
     Tapering should be gradual and individualised to the person’s clinical characteristics, treatment goals and preferences. 
     A variety of tapering regimens have been recommended in guidelines – summarised here [LINK].
   </p>
 
-  <p>
-    The following approach may be considered as a general guide:
-    <br>• Short-term use (less than 3 months): slow dose reduction (e.g. 10 to 25% every week).
-    <br>• Longer-term use (longer than 3 months): slower dose reduction (e.g. 10 to 25% every 4 weeks). 
-      Some patients (e.g. those taking higher doses or for long periods) may need slower reductions.
-  </p>
+  <ul>
+    <li>Short-term use (less than 3 months): slow dose reduction (e.g. 10 to 25 % every week).</li>
+    <li>Longer-term use (more than 3 months): slower dose reduction (e.g. 10 to 25 % every 4 weeks). Some patients (e.g. those taking higher doses or for long periods) may need slower reductions.</li>
+  </ul>
 
   <p>
     Closely monitor and regularly review patients during tapering, and adjust tapering plan if needed.
