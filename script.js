@@ -1701,12 +1701,12 @@ function updateBestPracticeBox() {
 };
   
   const text = SUGGESTED_PRACTICE[key] || "";
-  box.innerHTML = `
-    <h2>${titleMap[key]}</h2>
-    <div class="practice-text">
-      ${text.split("\n").map(line => `<p>${line}</p>`).join("")}
-    </div>
-  `;
+ box.innerHTML = `
+  <h2>${titleMap[key]}</h2>
+  <div class="practice-text">
+    ${text}
+  </div>
+`;
 }
 
 /* ---- Dirty state + gating ---- */
