@@ -3413,12 +3413,29 @@ function isAtSelectedBID(packs, selMin){
   return Math.abs(AM - selMin) < EPS && Math.abs(PM - selMin) < EPS && MID < EPS && DIN < EPS;
 }
 
-// Make a PM-only snapshot from current packs (drop AM/MID/DIN, keep PM composition)
+// Helper: read the user's AM/PM preference (default PM)
+function heavierPref(){
+  try {
+    const am = document.getElementById("bidHeavyAM");
+    const pm = document.getElementById("bidHeavyPM");
+    if (am && am.checked) return "AM";
+    return "PM";
+  } catch { return "PM"; }
+}
+
+// Make a single-dose snapshot from current packs (keep AM or PM per preference; drop the rest)
 function pmOnlyFrom(packs){
+  // We keep the slot that matches the user's preference.
+  // If someone wants "AM heavier", they likely want the last single dose in the morning.
+  const keep = (heavierPref() === "AM") ? "AM" : "PM";
   const q = deepCopy(packs);
-  if (q.AM)  q.AM.length = 0;
-  if (q.MID) q.MID.length = 0;
-  if (q.DIN) q.DIN.length = 0;
+
+  // Clear all other slots
+  if (keep !== "AM"  && q.AM)  q.AM.length  = 0;
+  if (keep !== "MID" && q.MID) q.MID.length = 0;
+  if (keep !== "DIN" && q.DIN) q.DIN.length = 0;
+  if (keep !== "PM"  && q.PM)  q.PM.length  = 0;
+
   return q;
 }
 
