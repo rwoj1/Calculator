@@ -312,14 +312,53 @@ function lowestStepMg(cls, med, form){
   return (mgList && mgList.length) ? mgList[0] : 5;
 }
 
-// Snap a %-reduced target to the effective step size.
-// Policy: round UP to avoid under-dose; if unchanged, nudge down by one step for progress.
+// Greatest common divisor for integers (mg strengths should be integers)
+function _gcd(a, b){
+  a = Math.abs(a|0); b = Math.abs(b|0);
+  while (b) { const t = b; b = a % b; a = t; }
+  return a || 0;
+}
+
+// Compute the effective rounding grid ("quantum") from selected strengths (mg).
+// Use GCD(selected); if none selected, GCD(all available). Fallback to lowestStepMg.
+function effectiveQuantumMg(cls, med, form){
+  try {
+    // Prefer explicitly selected formulations if present
+    let arr = (typeof selectedProductMgs === "function" ? (selectedProductMgs() || []) : []) 
+      .map(v => (typeof v === "number" ? v : parseMgFromStrength(v)))
+      .filter(n => Number.isFinite(n) && n > 0);
+
+    // If none selected, use all strengths for the current med/form
+    if (!arr.length) {
+      arr = (typeof strengthsForSelectedSafe === "function" ? strengthsForSelectedSafe(cls, med, form) : [])
+        .map(v => (typeof v === "number" ? v : parseMgFromStrength(v)))
+        .filter(n => Number.isFinite(n) && n > 0);
+    }
+
+    // Dedup & integerize
+    arr = Array.from(new Set(arr.map(n => Math.round(n)))).sort((a,b)=>a-b);
+
+    // Compute GCD across the list
+    let g = 0;
+    for (const n of arr) g = _gcd(g, n);
+
+    if (g && Number.isFinite(g) && g > 0) return g;
+
+    // Fallback: use your existing min step
+    return lowestStepMg(cls, med, form) || 1;
+  } catch {
+    return lowestStepMg(cls, med, form) || 1;
+  }
+}
+
 function snapTargetToSelection(totalMg, percent, cls, med, form){
-  const step = lowestStepMg(cls, med, form) || 1;
+  const stepMin = lowestStepMg(cls, med, form) || 1;          // for caps like difference cap
+  const q       = effectiveQuantumMg(cls, med, form) || stepMin; // rounding grid (GCD)
+
   const raw  = totalMg * (1 - percent/100);
 
-  const down = Math.floor(raw / step) * step;
-  const up   = Math.ceil(raw / step) * step;
+  const down = Math.floor(raw / q) * q;
+  const up   = Math.ceil (raw / q) * q;
 
   let target;
   const dDown = raw - down;
@@ -330,9 +369,9 @@ function snapTargetToSelection(totalMg, percent, cls, med, form){
   else                   target = up;         // exact tie → prefer UP
 
   // ensure progress if rounding lands unchanged
-  if (target === totalMg && totalMg > 0) target = Math.max(0, totalMg - step);
+  if (target === totalMg && totalMg > 0) target = Math.max(0, totalMg - q);
 
-  return { target, step };
+  return { target, step: stepMin, quantum: q };
 }
 
 /* ===== Antipsychotic UI wiring (layout only) ===== */
@@ -2549,30 +2588,62 @@ function composeForSlot_AP_Selected(targetMg, cls, med, form){
 
 /* ===== Preferred BID split ===== */
 function preferredBidTargets(total, cls, med, form){
-  const EPS  = 1e-9;
-  const step = (typeof lowestStepMg === "function" ? lowestStepMg(cls, med, form) : 1) || 1;
+  const EPS     = 1e-9;
+  const stepMin = (typeof lowestStepMg     === "function" ? lowestStepMg(cls, med, form)     : 1) || 1; // difference cap
+  const q       = (typeof effectiveQuantumMg === "function" ? effectiveQuantumMg(cls, med, form) : stepMin) || stepMin;
 
-  // Snap total to the grid once (selection-aware)
-  total = Math.max(0, Math.round(total / step) * step);
+  // Read user preference: default to PM heavier
+  function heavierPref(){
+    try {
+      const am = document.getElementById("bidHeavyAM");
+      const pm = document.getElementById("bidHeavyPM");
+      if (am && am.checked) return "AM";
+      return "PM";
+    } catch { return "PM"; }
+  }
+  const pref = heavierPref();
 
-  // Base even split on the grid
-  let am = Math.floor((total / 2) / step) * step;  // floor half on the grid
-  let pm = total - am;                             // remainder to PM (so PM >= AM)
+  // Snap total to quantum grid (selection-aware)
+  total = Math.max(0, Math.round(total / q) * q);
 
-  // Snap PM to grid (guard tiny float noise), recompute AM as the remainder
-  pm = Math.round(pm / step) * step;
+  // Base even split on the quantum grid
+  let am = Math.floor((total / 2) / q) * q;
+  let pm = total - am;
+
+  // clean to grid
+  pm = Math.round(pm / q) * q;
   am = total - pm;
 
   // Clean tiny negatives
   if (am < EPS) am = 0;
   if (pm < EPS) pm = 0;
 
-  // Prefer PM >= AM; swap if needed
-  if (am > pm) { const t = am; am = pm; pm = t; }
+  // Enforce heavier-side preference when AM != PM
+  if (am !== pm) {
+    const amHeavier = am > pm;
+    if (pref === "PM" && amHeavier) { const t = am; am = pm; pm = t; }
+    if (pref === "AM" && !amHeavier){ const t = am; am = pm; pm = t; }
+  }
+
+  // Cap the difference to <= lowest selected strength
+  const cap = stepMin;
+  let diff = Math.abs(pm - am);
+  if (diff > cap) {
+    // Nudge by quantum chunks from heavier to lighter until within cap (or best effort)
+    const heavyIsPM = (pm >= am);
+    while (diff > cap && (heavyIsPM ? pm : am) - q >= 0) {
+      if (heavyIsPM) { pm -= q; am += q; }
+      else           { am -= q; pm += q; }
+      diff = Math.abs(pm - am);
+    }
+  }
+
+  // Final safety snaps to grid
+  am = Math.max(0, Math.round(am / q) * q);
+  pm = Math.max(0, Math.round(pm / q) * q);
 
   return { AM: am, PM: pm };
 }
-
 
 /* ===== Opioids (tablets/capsules) — shave DIN→MID, then rebalance BID ===== */
 function stepOpioid_Shave(packs, percent, cls, med, form){
@@ -2675,11 +2746,13 @@ function stepOpioid_Shave(packs, percent, cls, med, form){
   }
 
   // ----- Normal SR-style reduction (as in your original logic) -----
-  let target = roundTo(tot * (1 - percent/100), step);
+  const q = (typeof effectiveQuantumMg === "function" ? effectiveQuantumMg(cls, med, form) : step) || step;
+
+  let target = roundTo(tot * (1 - percent/100), q);
   if (target === tot && tot > 0) {
-    // force progress if rounding would stall
-    target = Math.max(0, tot - step);
-    target = roundTo(target, step);
+    // force progress if rounding would stall (by one quantum)
+    target = Math.max(0, tot - q);
+    target = roundTo(target, q);
   }
 
   let cur = { AM, MID, DIN, PM };
