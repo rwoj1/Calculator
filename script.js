@@ -2733,32 +2733,38 @@ function stepOpioid_Shave(packs, percent, cls, med, form){
     Number.isFinite(mg) &&
     Math.abs(AM - mg) < EPS && Math.abs(PM - mg) < EPS && MID < EPS && DIN < EPS;
 
-  const isExactPMOnlyAt = (mg) =>
-    Number.isFinite(mg) &&
-    AM < EPS && MID < EPS && DIN < EPS && Math.abs(PM - mg) < EPS;
+// Preference-aware single-slot detector (AM-only or PM-only at the threshold)
+function isExactSingleOnlyAt(mg){
+  const keep = (typeof heavierPref === "function" && heavierPref() === "AM") ? "AM" : "PM";
+  const amOk  = (keep === "AM") ? Math.abs(AM - mg) < EPS : AM < EPS;
+  const pmOk  = (keep === "PM") ? Math.abs(PM - mg) < EPS : PM < EPS;
+  return Number.isFinite(mg) && amOk && pmOk && MID < EPS && DIN < EPS;
+}
 
-  // ----- BID end-sequence gate -----
-  if (Number.isFinite(thresholdMg)) {
-    // Already PM-only at threshold => signal STOP
-    if (isExactPMOnlyAt(thresholdMg)) {
+// ----- BID end-sequence gate (preference-aware) -----
+if (Number.isFinite(thresholdMg)) {
+  // Already at single-dose (AM-only or PM-only by preference) ⇒ STOP
+  if (isExactSingleOnlyAt(thresholdMg)) {
+    if (window._forceReviewNext) window._forceReviewNext = false;
+    return {}; // empty packs ⇒ buildPlanTablets() prints STOP row
+  }
+
+  // First time we hit exact BID at threshold
+  if (isExactBIDAt(thresholdMg)) {
+    if (lcsSelected) {
+      // LCS among selected ⇒ emit single-dose at threshold per preference (no rebalancing)
       if (window._forceReviewNext) window._forceReviewNext = false;
-      return {}; // empty packs ⇒ buildPlanTablets() prints STOP row
-    }
-
-    // First time we hit exact BID at threshold:
-    if (isExactBIDAt(thresholdMg)) {
-      if (lcsSelected) {
-        // LCS is among selected ⇒ emit PM-only at threshold (no rebalancing)
-        if (window._forceReviewNext) window._forceReviewNext = false;
-        const cur = { AM:0, MID:0, DIN:0, PM:thresholdMg };
-        return recomposeSlots(cur, cls, med, form);
-      } else {
-        // LCS not selected ⇒ Review next boundary
-        window._forceReviewNext = true;
-        return packs; // unchanged; loop will schedule Review
-      }
+      const keep = (typeof heavierPref === "function" && heavierPref() === "AM") ? "AM" : "PM";
+      const cur = { AM:0, MID:0, DIN:0, PM:0 };
+      cur[keep] = thresholdMg;
+      return recomposeSlots(cur, cls, med, form);
+    } else {
+      // LCS not selected ⇒ Review next boundary
+      window._forceReviewNext = true;
+      return packs; // unchanged; loop will schedule Review
     }
   }
+}
 
   const q = (typeof effectiveQuantumMg === "function" ? effectiveQuantumMg(cls, med, form) : step) || step;
 
