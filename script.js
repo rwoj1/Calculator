@@ -2402,26 +2402,64 @@ sSel.onchange = (e) => {
     sSel.onchange=(e)=>{ const id=+e.target.dataset.id; const l=doseLines.find(x=>x.id===id); if(l) l.strengthStr=e.target.value; setDirty(true); };
     fSel.onchange=(e)=>{ const id=+e.target.dataset.id; const l=doseLines.find(x=>x.id===id); if(l) l.freqMode=e.target.value; setDirty(true); };
 
-    // Quantity constraints per form
-    const qtyInput = row.querySelector(".dl-qty");
-    const split = canSplitTablets(cls, form, med);
-    if (/Patch/i.test(form)) {
-      qtyInput.min = 0; qtyInput.max = 2; qtyInput.step = 1;
-    } else {
-      qtyInput.min = 0; qtyInput.max = 4;
-      qtyInput.step = split.quarter ? 0.25 : (split.half ? 0.5 : 1);
-    }
-    qtyInput.value = (ln.qty ?? 1);
+// Quantity constraints per form (no hard caps; snap to allowed step)
+const qtyInput = row.querySelector(".dl-qty");
 
-    qtyInput.onchange = (e)=>{
-      const id=+e.target.dataset.id; let v=parseFloat(e.target.value);
-      if(isNaN(v)) v=0;
-      const min=parseFloat(e.target.min||"0"), max=parseFloat(e.target.max||"4"), step=parseFloat(e.target.step||"1");
-      v=Math.max(min, Math.min(max, Math.round(v/step)*step));
-      e.target.value=v;
-      const l=doseLines.find(x=>x.id===id); if(l) l.qty=v;
-      setDirty(true);
-    };
+// Better mobile keypad + lower bound
+qtyInput.inputMode = "decimal";
+qtyInput.min = 0;
+
+// Decide the allowed increment ("step")
+let step;
+if (/Patch/i.test(form)) {
+  // Patches: whole-only
+  step = 1;
+} else if (/SR/i.test(form)) {
+  // SR tablets: whole-only
+  step = 1;
+} else {
+  // Others: allow halves (or quarters if your split rules permit)
+  const split = (typeof canSplitTablets === "function")
+    ? canSplitTablets(cls, form, med)   // keep your existing signature/order
+    : { half: true, quarter: false };
+
+  step = split.quarter ? 0.25 : (split.half ? 0.5 : 1);
+}
+
+// Remove any upper cap and set step
+qtyInput.removeAttribute("max");
+qtyInput.step = String(step);
+
+// Initial value (keep existing if present, otherwise 1 or a single step)
+qtyInput.value = (typeof ln.qty !== "undefined")
+  ? ln.qty
+  : (step < 1 ? step : 1);
+
+// Shared snapper (no negatives, snap to step, keep sensible precision)
+const sanitizeQty = (val) => {
+  let v = parseFloat(val);
+  if (!Number.isFinite(v)) v = 0;
+  v = Math.max(0, Math.round(v / step) * step);
+  if (step === 0.25) return Math.round(v * 4) / 4;
+  if (step === 0.5)  return Math.round(v * 2) / 2;
+  return Math.round(v);
+};
+
+// Keep the model & UI snapped
+qtyInput.oninput = (e) => {
+  e.target.value = sanitizeQty(e.target.value);
+};
+
+qtyInput.onchange = (e) => {
+  const id = +e.target.dataset.id;
+  const v  = sanitizeQty(e.target.value);
+  e.target.value = v;
+
+  const l = doseLines.find(x => x.id === id);
+  if (l) l.qty = v;
+
+  setDirty(true);
+};
 
     row.querySelector(".dl-remove").onclick=(e)=>{ const id=+e.target.dataset.id; doseLines=doseLines.filter(x=>x.id!==id); renderDoseLines(); setDirty(true); };
   });
