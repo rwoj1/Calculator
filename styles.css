@@ -664,4 +664,32 @@ button.ghost{
 .suggested-practice li {
   margin-bottom: 6px;
 }
+/* === Advanced Settings (outer card) === */
+.advanced-card {
+  background-color: #d6ebf8;      /* darker blue base */
+  border: 1px solid #b5d9f1;
+  border-radius: 10px;
+  padding: 20px;
+  margin-top: 20px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+}
+
+/* === Inner cards (each section) === */
+.advanced-card .sub-card {
+  background-color: #eaf4fb;      /* lighter inner blue */
+  border: 1px solid #c6e0f2;
+  border-radius: 8px;
+  padding: 15px 20px;
+  margin-bottom: 15px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* === Heading styling === */
+.advanced-card h3 {
+  color: #004b7a;
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
 
