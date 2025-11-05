@@ -1699,8 +1699,8 @@ function updateBestPracticeBox() {
   _lastPracticeKey = key;
 
  const titleMap = {
-  opioids: "Opioids",
-  bzra: "Benzodiazepines / Z-Drugs (BZRA)",
+  opioids: "Opioids for persistent noncancer pain",
+  bzra: "Benzodiazepines and Z-drugs for insomnia in older adults",
   antipsychotic: "Antipsychotics",
   ppi: "Proton Pump Inhibitors",
   gabapentinoids: "Gabapentinoids"
@@ -1708,7 +1708,7 @@ function updateBestPracticeBox() {
   
   const text = SUGGESTED_PRACTICE[key] || "";
   box.innerHTML = `
-    <h2>Suggested practice for ${titleMap[key]}</h2>
+    <h2>${titleMap[key]}</h2>
     <div class="practice-text">
       ${text.split("\n").map(line => `<p>${line}</p>`).join("")}
     </div>
