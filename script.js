@@ -1600,9 +1600,6 @@ const SUGGESTED_PRACTICE = {
     such approaches may be required for patients with severe substance use disorder, high risk of withdrawal, or symptom recurrence.
   </p>
   `,
-};
-
-
   antipsychotic: `• Reduce ~25–50% every 1–2 weeks with close monitoring.
 • Slower taper may be appropriate depending on symptoms.
 [INSERT ALGORITHM]  [INSERT SUMMARY OF EVIDENCE] [INSERT GUIDE TO RULESET]`,
