@@ -4450,21 +4450,32 @@ function setupDisclaimerGate(){
   const card = document.createElement('div');
   card.id = 'disclaimerCard';
   card.className = 'card';
-  card.innerHTML = `
-    <div class="card-head"><h2>Important Notice</h2></div>
-    <div class="disclaimer-copy">
-      <p>This calculator and its associated content therein are intended exclusively for use by qualified medical professionals. It is designed to support deprescribing, where this is deemed clinically appropriate by the prescriber.
-This calculator does not replace professional clinical judgment. The interpretation and application of any information obtained from this calculator remain the sole responsibility of the user.
+card.innerHTML = `
+  <div class="card-head"><h2>Important Notice</h2></div>
+  <div class="disclaimer-copy">
+    <p>
+      This calculator and its associated content are intended exclusively for use by qualified health professionals and developed for the Australian context. 
+      It is designed to support deprescribing, when this is deemed clinically appropriate by the prescriber. 
+      This calculator does not replace professional clinical judgment. The interpretation and application of any information obtained from this calculator remain the sole responsibility of the user.
+    </p>
 
-By accessing and using this site, you acknowledge and agree to the following:
-·         You will exercise your own independent clinical judgement when treating patients.
-·         You accept and agree to these terms and conditions.</p>
-      <label class="inline-label" for="acceptTaperDisclaimer">
-        <strong>Check the box if you accept</strong>
-        <input id="acceptTaperDisclaimer" type="checkbox" />
-      </label>
-    </div>
-  `;
+    <p>
+      This calculator is not designed for generating an individualised tapering plan for patients with severe substance use disorder; 
+      these patients require tailored plans beyond the scope of this calculator.
+    </p>
+
+    <p>
+      <strong>By accessing and using this site, you acknowledge and agree to the following:</strong><br>
+      • You will exercise your own independent clinical judgement when treating patients.<br>
+      • You accept and agree to these terms and conditions.
+    </p>
+
+    <label class="inline-label" for="acceptTaperDisclaimer" style="margin-top:10px; display:block;">
+      <strong>Check the box if you accept</strong>
+      <input id="acceptTaperDisclaimer" type="checkbox" />
+    </label>
+  </div>
+`;
 
   // Insert at the very top of the app container
   container.insertBefore(card, container.firstChild);
