@@ -1579,8 +1579,6 @@ const SUGGESTED_PRACTICE = {
   `,
 
   bzra: `
-  <h3>Benzodiazepines and Z-drugs for insomnia in older adults</h3>
-
   <p>
     Tapering should occur gradually and be individualised to the person’s clinical characteristics, treatment goals and preferences. 
     Tapering recommendations in guidelines vary from 5 to 25% reductions every 1 to 4 weeks, with slower or faster tapers depending on dose and duration of use – summarised here [LINK].
