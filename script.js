@@ -2676,14 +2676,14 @@ function composeForSlot_AP_Selected(targetMg, cls, med, form){
   return pack || composeForSlot(targetMg, cls, med, form);
 }
 
-/* ===== Preferred BID split ===== */
+/* ===== Preferred BID split (robust; never single-slot unless total < 2*q) ===== */
 function preferredBidTargets(total, cls, med, form){
   const EPS     = 1e-9;
-  const stepMin = (typeof lowestStepMg     === "function" ? lowestStepMg(cls, med, form)     : 1) || 1; // difference cap
+  const stepMin = (typeof lowestStepMg       === "function" ? lowestStepMg(cls, med, form)       : 1) || 1; // difference cap
   const q       = (typeof effectiveQuantumMg === "function" ? effectiveQuantumMg(cls, med, form) : stepMin) || stepMin;
 
-  // Read user preference: default to PM heavier
-  function heavierPref(){
+  // preference: default PM heavier (Night larger)
+  function heavierPrefSafe(){
     try {
       const am = document.getElementById("bidHeavyAM");
       const pm = document.getElementById("bidHeavyPM");
@@ -2691,78 +2691,61 @@ function preferredBidTargets(total, cls, med, form){
       return "PM";
     } catch { return "PM"; }
   }
-  const pref = heavierPref();
+  const pref = heavierPrefSafe();
 
-  // Snap total to quantum grid (selection-aware)
+  // snap total to grid
   total = Math.max(0, Math.round(total / q) * q);
 
-  // Base even split on the quantum grid
-  let am = Math.floor((total / 2) / q) * q;
-  let pm = total - am;
+  // trivial cases
+  if (total <= 0) return { AM:0, PM:0 };
+  if (total < 2*q){
+    // not enough to support BID; let AM/PM be zero except the preferred slot
+    return (pref === "AM") ? { AM: total, PM: 0 } : { AM: 0, PM: total };
+  }
 
-  // clean to grid
-  pm = Math.round(pm / q) * q;
-  am = total - pm;
+  // start from an even split on the grid
+  let am = Math.floor((total / 2) / q) * q;   // ≤ total/2
+  let pm = total - am;                        // ≥ total/2
+  pm = Math.round(pm / q) * q;                // clean
+  am = total - pm;                            // keep sum exact
 
-  // Clean tiny negatives
-  if (am < EPS) am = 0;
-  if (pm < EPS) pm = 0;
-
-  // Enforce heavier-side preference when AM != PM
+  // preference: make the chosen side heavier when unequal
   if (am !== pm) {
     const amHeavier = am > pm;
     if (pref === "PM" && amHeavier) { const t = am; am = pm; pm = t; }
     if (pref === "AM" && !amHeavier){ const t = am; am = pm; pm = t; }
   }
 
-  // Cap the difference to <= lowest selected strength
+  // cap difference to ≤ stepMin
   const cap = stepMin;
   let diff = Math.abs(pm - am);
   if (diff > cap) {
-    // Nudge by quantum chunks from heavier to lighter until within cap (or best effort)
-    const heavyIsPM = (pm >= am);
-    while (diff > cap && (heavyIsPM ? pm : am) - q >= 0) {
-      if (heavyIsPM) { pm -= q; am += q; }
-      else           { am -= q; pm += q; }
+    const giveTo = (pm >= am) ? "AM" : "PM";  // move from heavier to lighter
+    while (diff > cap) {
+      if (giveTo === "AM" && pm - q >= 0) { pm -= q; am += q; }
+      else if (giveTo === "PM" && am - q >= 0) { am -= q; pm += q; }
+      else break;
       diff = Math.abs(pm - am);
     }
   }
-    // ---- Guard: avoid accidental single-slot splits before end-sequence logic ----
-  // If we somehow ended up with AM-only or PM-only while total can support BID,
-  // force a minimal split that keeps the user's heavier-side preference.
-  const canSplitBID = total >= 2 * q;    // enough for at least q + q
-  const isSingle = (am === 0 && pm > 0) || (pm === 0 && am > 0);
-  if (canSplitBID && isSingle) {
-    // seed the lighter side with one quantum, keep the rest on the preferred heavy side
-    const preferAM = (pref === "AM");
-    if (preferAM) {
-      pm = q;
-      am = total - pm;
-    } else {
-      am = q;
-      pm = total - am;
-    }
 
-    // Re-apply difference cap (≤ stepMin) if needed
-    let diff2 = Math.abs(pm - am);
-    if (diff2 > stepMin) {
-      const heavyIsPM = (pm >= am);
-      while (diff2 > stepMin && (heavyIsPM ? pm : am) - q >= 0) {
-        if (heavyIsPM) { pm -= q; am += q; }
-        else           { am -= q; pm += q; }
-        diff2 = Math.abs(pm - am);
-      }
+  // final guard: with total ≥ 2*q, forbid single-slot outcomes
+  if ((am === 0 || pm === 0) && total >= 2*q) {
+    if (pref === "AM") { am = q; pm = total - q; }
+    else               { pm = q; am = total - q; }
+    // re-cap if needed
+    let d = Math.abs(pm - am);
+    while (d > stepMin) {
+      if (pm >= am && pm - q >= 0) { pm -= q; am += q; }
+      else if (am > pm && am - q >= 0) { am -= q; pm += q; }
+      else break;
+      d = Math.abs(pm - am);
     }
-
-    // Snap to grid one last time
-    am = Math.max(0, Math.round(am / q) * q);
-    pm = Math.max(0, Math.round(pm / q) * q);
   }
 
-  // Final safety snaps to grid
+  // snap
   am = Math.max(0, Math.round(am / q) * q);
   pm = Math.max(0, Math.round(pm / q) * q);
-
   return { AM: am, PM: pm };
 }
 
