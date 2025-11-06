@@ -2727,6 +2727,37 @@ function preferredBidTargets(total, cls, med, form){
       diff = Math.abs(pm - am);
     }
   }
+    // ---- Guard: avoid accidental single-slot splits before end-sequence logic ----
+  // If we somehow ended up with AM-only or PM-only while total can support BID,
+  // force a minimal split that keeps the user's heavier-side preference.
+  const canSplitBID = total >= 2 * q;    // enough for at least q + q
+  const isSingle = (am === 0 && pm > 0) || (pm === 0 && am > 0);
+  if (canSplitBID && isSingle) {
+    // seed the lighter side with one quantum, keep the rest on the preferred heavy side
+    const preferAM = (pref === "AM");
+    if (preferAM) {
+      pm = q;
+      am = total - pm;
+    } else {
+      am = q;
+      pm = total - am;
+    }
+
+    // Re-apply difference cap (≤ stepMin) if needed
+    let diff2 = Math.abs(pm - am);
+    if (diff2 > stepMin) {
+      const heavyIsPM = (pm >= am);
+      while (diff2 > stepMin && (heavyIsPM ? pm : am) - q >= 0) {
+        if (heavyIsPM) { pm -= q; am += q; }
+        else           { am -= q; pm += q; }
+        diff2 = Math.abs(pm - am);
+      }
+    }
+
+    // Snap to grid one last time
+    am = Math.max(0, Math.round(am / q) * q);
+    pm = Math.max(0, Math.round(pm / q) * q);
+  }
 
   // Final safety snaps to grid
   am = Math.max(0, Math.round(am / q) * q);
