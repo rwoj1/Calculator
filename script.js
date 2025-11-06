@@ -3105,11 +3105,15 @@ function stepGabapentinoid(packs, percent, med, form){
     }
   }
 
-  // ---- Compute this step's target from PREVIOUS ACHIEVED total, then quantise ----
-  const rawTarget     = tot * (1 - percent/100);
-  const targetRounded = nearestStep(rawTarget, stepMg);   // ties → round up
-  let reductionNeeded = Math.max(0, +(tot - targetRounded).toFixed(3));
-  if (reductionNeeded <= EPS) reductionNeeded = stepMg;   // ensure progress on first call
+// ---- Compute this step's target from PREVIOUS ACHIEVED total, then quantise ----
+const rawTarget = tot * (1 - percent/100);
+let targetRounded = nearestStep(rawTarget, stepMg);     // ties → round up
+// ✅ Anti-stall: if rounding returns the SAME total (e.g., 500 → 450 → ⤴︎ 500), force a one-step drop
+if (Math.abs(targetRounded - tot) < EPS && tot > 0) {
+  targetRounded = Math.max(0, tot - stepMg);           // e.g., 500 → 400
+}
+let reductionNeeded = Math.max(0, +(tot - targetRounded).toFixed(3));
+if (reductionNeeded <= EPS) reductionNeeded = stepMg;   // safety: still ensure progress
 
   // ---- QID: rebuild DIN to the reduced target, leave AM/MID/PM untouched this step ----
   if (isQID) {
