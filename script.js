@@ -69,6 +69,13 @@ function formSuffixWithSR(formLabel) {
   if (f.includes('capsule')) return 'Capsule';
   return 'Tablet'; // safe default for tablet-like forms
 }
+const lcs = (typeof lowestStepMg === "function") ? lowestStepMg("Opioid", med, form) : 1;
+const tot = split.AM + split.PM;
+if (tot >= 2*lcs && (split.AM === 0 || split.PM === 0)) {
+  // Should never happen; fix by shifting LCS from the nonzero side
+  if (split.AM === 0) { split.AM = lcs; split.PM = tot - lcs; }
+  else                { split.PM = lcs; split.AM = tot - lcs; }
+}
 
 // Apply step/min and static hint text for patch intervals
 function applyPatchIntervalAttributes(){
@@ -2677,62 +2684,57 @@ function composeForSlot_AP_Selected(targetMg, cls, med, form){
 }
 
 
-/* ===== Preferred BID split ===== */
-function preferredBidTargets(total, cls, med, form){
-  const EPS     = 1e-9;
-  const stepMin = (typeof lowestStepMg     === "function" ? lowestStepMg(cls, med, form)     : 1) || 1; // difference cap
-  const q       = (typeof effectiveQuantumMg === "function" ? effectiveQuantumMg(cls, med, form) : stepMin) || stepMin;
+// Split a daily total into AM/PM on the selected grid,
+// enforcing: (a) both slots populated when total >= 2*LCS,
+// (b) AM/PM preference with max difference = LCS,
+// (c) never create PM-only unless total < 2*LCS (true endpoint).
+function preferredBidTargets(totalMg, cls, med, form) {
+  // Step (quantum) = lowest selected strength for this med/form
+  const step = (typeof lowestStepMg === "function")
+    ? lowestStepMg(cls, med, form)
+    : 0;
+  const lcs = step || 1;
 
-  // Read user preference: default to PM heavier
-  function heavierPref(){
-    try {
-      const am = document.getElementById("bidHeavyAM");
-      const pm = document.getElementById("bidHeavyPM");
-      if (am && am.checked) return "AM";
-      return "PM";
-    } catch { return "PM"; }
+  // Preference: AM or PM heavier when unequal
+  const prefer = (typeof heavierPref === "function" && heavierPref() === "AM") ? "AM" : "PM";
+
+  // Base equal-ish split on the grid
+  const floorTo = (x,s)=> s ? Math.floor(x/s)*s : x;
+  const ceilTo  = (x,s)=> s ? Math.ceil (x/s)*s : x;
+
+  // Start with a 50/50 split on the grid
+  let am = floorTo(totalMg/2, lcs);
+  let pm = totalMg - am;            // forces pm onto the same grid
+
+  // If pm overshot the grid by rounding artifacts, correct to the grid
+  pm = floorTo(pm, lcs);
+  am = totalMg - pm;
+
+  // === Rule A: populate both slots when feasible ===
+  if (totalMg >= 2*lcs) {
+    if (am < lcs) { am = lcs; pm = totalMg - am; }
+    if (pm < lcs) { pm = lcs; am = totalMg - pm; }
+  } else {
+    // total < 2*lcs → legit single-dose endpoint; keep all in preferred slot
+    am = (prefer === "AM") ? totalMg : 0;
+    pm = (prefer === "PM") ? totalMg : 0;
+    return { AM: am, PM: pm };
   }
-  const pref = heavierPref();
 
-  // Snap total to quantum grid (selection-aware)
-  total = Math.max(0, Math.round(total / q) * q);
-
-  // Base even split on the quantum grid
-  let am = Math.floor((total / 2) / q) * q;
-  let pm = total - am;
-
-  // clean to grid
-  pm = Math.round(pm / q) * q;
-  am = total - pm;
-
-  // Clean tiny negatives
-  if (am < EPS) am = 0;
-  if (pm < EPS) pm = 0;
-
-  // Enforce heavier-side preference when AM != PM
+  // === Rule B: apply preference with max difference = LCS ===
   if (am !== pm) {
-    const amHeavier = am > pm;
-    if (pref === "PM" && amHeavier) { const t = am; am = pm; pm = t; }
-    if (pref === "AM" && !amHeavier){ const t = am; am = pm; pm = t; }
-  }
-
-  // Cap the difference to <= lowest selected strength
-  const cap = stepMin;
-  let diff = Math.abs(pm - am);
-  if (diff > cap) {
-    // Nudge by quantum chunks from heavier to lighter until within cap (or best effort)
-    const heavyIsPM = (pm >= am);
-    while (diff > cap && (heavyIsPM ? pm : am) - q >= 0) {
-      if (heavyIsPM) { pm -= q; am += q; }
-      else           { am -= q; pm += q; }
-      diff = Math.abs(pm - am);
+    if (prefer === "AM" && am < pm) {
+      const shift = Math.min(lcs, pm - am);
+      am += shift; pm -= shift;
+    } else if (prefer === "PM" && pm < am) {
+      const shift = Math.min(lcs, am - pm);
+      pm += shift; am -= shift;
     }
   }
 
-  // Final safety snaps to grid
-  am = Math.max(0, Math.round(am / q) * q);
-  pm = Math.max(0, Math.round(pm / q) * q);
-
+  // Final sanity: keep on grid and non-negative
+  am = Math.max(0, floorTo(am, lcs));
+  pm = Math.max(0, totalMg - am);
   return { AM: am, PM: pm };
 }
 
