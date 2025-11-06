@@ -2676,13 +2676,19 @@ function composeForSlot_AP_Selected(targetMg, cls, med, form){
   return pack || composeForSlot(targetMg, cls, med, form);
 }
 
-/* ===== Preferred BID split (robust; never single-slot unless total < 2*q) ===== */
+/* ===== Preferred BID split (robust + hardened; never single-slot unless total < 2*q) ===== */
 function preferredBidTargets(total, cls, med, form){
-  const EPS     = 1e-9;
-  const stepMin = (typeof lowestStepMg       === "function" ? lowestStepMg(cls, med, form)       : 1) || 1; // difference cap
-  const q       = (typeof effectiveQuantumMg === "function" ? effectiveQuantumMg(cls, med, form) : stepMin) || stepMin;
+  const EPS = 1e-9;
 
-  // preference: default PM heavier (Night larger)
+  // Helpers
+  const isNum = (x) => Number.isFinite(x);
+  const clampGrid = (x, q) => Math.max(0, Math.round(x / q) * q);
+
+  // Read rules
+  const stepMinRaw = (typeof lowestStepMg       === "function" ? lowestStepMg(cls, med, form)       : 1);
+  const qRaw       = (typeof effectiveQuantumMg === "function" ? effectiveQuantumMg(cls, med, form) : stepMinRaw);
+
+  // Preference (default Night/PM heavier)
   function heavierPrefSafe(){
     try {
       const am = document.getElementById("bidHeavyAM");
@@ -2693,59 +2699,86 @@ function preferredBidTargets(total, cls, med, form){
   }
   const pref = heavierPrefSafe();
 
-  // snap total to grid
-  total = Math.max(0, Math.round(total / q) * q);
+  // --- Sanitise inputs (CRITICAL to prevent NaNs / freezes) ---
+  let stepMin = isNum(stepMinRaw) && stepMinRaw > 0 ? stepMinRaw : 1;
+  let q       = isNum(qRaw)       && qRaw       > 0 ? qRaw       : stepMin;
+  if (!(isNum(q) && q > 0)) q = 1;               // last-resort floor
+  if (!(isNum(stepMin) && stepMin > 0)) stepMin = q;
 
-  // trivial cases
+  // Safe divide (avoids NaN/Inf if q ever drifted)
+  const sdiv = (a,b) => (isNum(a) && isNum(b) && b !== 0) ? (a / b) : 0;
+
+  total = isNum(total) ? total : 0;
+  total = Math.max(0, Math.round(sdiv(total, q)) * q); // snap safely to grid
+
+  // Trivial cases
   if (total <= 0) return { AM:0, PM:0 };
   if (total < 2*q){
-    // not enough to support BID; let AM/PM be zero except the preferred slot
+    // Not enough to support BID; return single-slot on preferred side
     return (pref === "AM") ? { AM: total, PM: 0 } : { AM: 0, PM: total };
   }
 
-  // start from an even split on the grid
-  let am = Math.floor((total / 2) / q) * q;   // ≤ total/2
-  let pm = total - am;                        // ≥ total/2
-  pm = Math.round(pm / q) * q;                // clean
-  am = total - pm;                            // keep sum exact
+  // Start from an even split on the grid
+  let am = Math.floor(sdiv(total, 2) / q) * q; // ≤ total/2, integer multiples of q
+  let pm = total - am;
+  pm = clampGrid(pm, q);
+  am = total - pm;
 
-  // preference: make the chosen side heavier when unequal
+  // Enforce heavier-side preference (when unequal)
   if (am !== pm) {
     const amHeavier = am > pm;
     if (pref === "PM" && amHeavier) { const t = am; am = pm; pm = t; }
     if (pref === "AM" && !amHeavier){ const t = am; am = pm; pm = t; }
   }
 
-  // cap difference to ≤ stepMin
+  // Cap difference to ≤ lowest selected strength
   const cap = stepMin;
   let diff = Math.abs(pm - am);
   if (diff > cap) {
-    const giveTo = (pm >= am) ? "AM" : "PM";  // move from heavier to lighter
-    while (diff > cap) {
-      if (giveTo === "AM" && pm - q >= 0) { pm -= q; am += q; }
-      else if (giveTo === "PM" && am - q >= 0) { am -= q; pm += q; }
+    const targetLight = (pm >= am) ? "AM" : "PM";   // move from heavier → lighter
+    let guard = 64;                                 // hard cap to prevent runaway loops
+    while (diff > cap && guard-- > 0) {
+      if (targetLight === "AM" && pm - q >= 0) { pm -= q; am += q; }
+      else if (targetLight === "PM" && am - q >= 0) { am -= q; pm += q; }
       else break;
       diff = Math.abs(pm - am);
     }
   }
 
-  // final guard: with total ≥ 2*q, forbid single-slot outcomes
+  // Final guard: forbid single-slot when BID is possible
   if ((am === 0 || pm === 0) && total >= 2*q) {
     if (pref === "AM") { am = q; pm = total - q; }
     else               { pm = q; am = total - q; }
-    // re-cap if needed
-    let d = Math.abs(pm - am);
-    while (d > stepMin) {
+
+    // Re-apply cap with a guard
+    let guard = 64;
+    while (Math.abs(pm - am) > stepMin && guard-- > 0) {
       if (pm >= am && pm - q >= 0) { pm -= q; am += q; }
       else if (am > pm && am - q >= 0) { am -= q; pm += q; }
       else break;
-      d = Math.abs(pm - am);
     }
   }
 
-  // snap
-  am = Math.max(0, Math.round(am / q) * q);
-  pm = Math.max(0, Math.round(pm / q) * q);
+  // Snap to grid one last time
+  am = clampGrid(am, q);
+  pm = clampGrid(pm, q);
+
+  // Safety: keep sums exact to total if tiny drift happened
+  const drift = (am + pm) - total;
+  if (Math.abs(drift) >= q - EPS) {
+    // If something is badly off, just rebuild to preferred minimal split
+    if (pref === "AM") { am = q; pm = total - q; }
+    else               { pm = q; am = total - q; }
+  } else if (Math.abs(drift) >= EPS) {
+    // Nudge the heavier side down by the drift
+    if (pm >= am && pm - drift >= 0) pm -= drift;
+    else if (am > pm && am - drift >= 0) am -= drift;
+  }
+
+  // Final snap
+  am = clampGrid(am, q);
+  pm = clampGrid(pm, q);
+
   return { AM: am, PM: pm };
 }
 
