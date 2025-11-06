@@ -2676,58 +2676,62 @@ function composeForSlot_AP_Selected(targetMg, cls, med, form){
   return pack || composeForSlot(targetMg, cls, med, form);
 }
 
+/* ===== Preferred BID split ===== */
+function preferredBidTargets(total, cls, med, form){
+  const EPS     = 1e-9;
+  const stepMin = (typeof lowestStepMg     === "function" ? lowestStepMg(cls, med, form)     : 1) || 1; // difference cap
+  const q       = (typeof effectiveQuantumMg === "function" ? effectiveQuantumMg(cls, med, form) : stepMin) || stepMin;
 
-// Split a daily total into AM/PM on the selected grid,
-// enforcing: (a) both slots populated when total >= 2*LCS,
-// (b) AM/PM preference with max difference = LCS,
-// (c) never create PM-only unless total < 2*LCS (true endpoint).
-function preferredBidTargets(totalMg, cls, med, form) {
-  // Step (quantum) = lowest selected strength for this med/form
-  const step = (typeof lowestStepMg === "function")
-    ? lowestStepMg(cls, med, form)
-    : 0;
-  const lcs = step || 1;
+  // Read user preference: default to PM heavier
+  function heavierPref(){
+    try {
+      const am = document.getElementById("bidHeavyAM");
+      const pm = document.getElementById("bidHeavyPM");
+      if (am && am.checked) return "AM";
+      return "PM";
+    } catch { return "PM"; }
+  }
+  const pref = heavierPref();
 
-  // Preference: AM or PM heavier when unequal
-  const prefer = (typeof heavierPref === "function" && heavierPref() === "AM") ? "AM" : "PM";
+  // Snap total to quantum grid (selection-aware)
+  total = Math.max(0, Math.round(total / q) * q);
 
-  // Base equal-ish split on the grid
-  const floorTo = (x,s)=> s ? Math.floor(x/s)*s : x;
-  const ceilTo  = (x,s)=> s ? Math.ceil (x/s)*s : x;
+  // Base even split on the quantum grid
+  let am = Math.floor((total / 2) / q) * q;
+  let pm = total - am;
 
-  // Start with a 50/50 split on the grid
-  let am = floorTo(totalMg/2, lcs);
-  let pm = totalMg - am;            // forces pm onto the same grid
+  // clean to grid
+  pm = Math.round(pm / q) * q;
+  am = total - pm;
 
-  // If pm overshot the grid by rounding artifacts, correct to the grid
-  pm = floorTo(pm, lcs);
-  am = totalMg - pm;
+  // Clean tiny negatives
+  if (am < EPS) am = 0;
+  if (pm < EPS) pm = 0;
 
-  // === Rule A: populate both slots when feasible ===
-  if (totalMg >= 2*lcs) {
-    if (am < lcs) { am = lcs; pm = totalMg - am; }
-    if (pm < lcs) { pm = lcs; am = totalMg - pm; }
-  } else {
-    // total < 2*lcs → legit single-dose endpoint; keep all in preferred slot
-    am = (prefer === "AM") ? totalMg : 0;
-    pm = (prefer === "PM") ? totalMg : 0;
-    return { AM: am, PM: pm };
+  // Enforce heavier-side preference when AM != PM
+  if (am !== pm) {
+    const amHeavier = am > pm;
+    if (pref === "PM" && amHeavier) { const t = am; am = pm; pm = t; }
+    if (pref === "AM" && !amHeavier){ const t = am; am = pm; pm = t; }
   }
 
-  // === Rule B: apply preference with max difference = LCS ===
-  if (am !== pm) {
-    if (prefer === "AM" && am < pm) {
-      const shift = Math.min(lcs, pm - am);
-      am += shift; pm -= shift;
-    } else if (prefer === "PM" && pm < am) {
-      const shift = Math.min(lcs, am - pm);
-      pm += shift; am -= shift;
+  // Cap the difference to <= lowest selected strength
+  const cap = stepMin;
+  let diff = Math.abs(pm - am);
+  if (diff > cap) {
+    // Nudge by quantum chunks from heavier to lighter until within cap (or best effort)
+    const heavyIsPM = (pm >= am);
+    while (diff > cap && (heavyIsPM ? pm : am) - q >= 0) {
+      if (heavyIsPM) { pm -= q; am += q; }
+      else           { am -= q; pm += q; }
+      diff = Math.abs(pm - am);
     }
   }
 
-  // Final sanity: keep on grid and non-negative
-  am = Math.max(0, floorTo(am, lcs));
-  pm = Math.max(0, totalMg - am);
+  // Final safety snaps to grid
+  am = Math.max(0, Math.round(am / q) * q);
+  pm = Math.max(0, Math.round(pm / q) * q);
+
   return { AM: am, PM: pm };
 }
 
@@ -2865,25 +2869,7 @@ if (Number.isFinite(thresholdMg)) {
 // Rebalance across AM/PM if reduction remains
 if (reduce > EPS) {
   const bidTarget = Math.max(0, +(cur.AM + cur.PM - reduce).toFixed(3));
-  let bid = preferredBidTargets(bidTarget, cls, med, form);
-
-  // ✅ Safeguard: when total >= 2 × LCS, ensure BOTH slots populated.
-  // Only allow AM-only / PM-only when we're truly under 2 × LCS (the endpoint case).
-  const lcs = (typeof lowestStepMg === "function") ? lowestStepMg(cls, med, form) : 1;
-  const totBid = (bid.AM || 0) + (bid.PM || 0);
-
-  if (totBid >= 2 * lcs && (bid.AM === 0 || bid.PM === 0)) {
-    // Put at least one LCS on the preferred heavier side, keep total the same.
-    const preferAM = (typeof heavierPref === "function" && heavierPref() === "AM");
-    if (preferAM) {
-      bid.AM = lcs;
-      bid.PM = Math.max(0, totBid - lcs);
-    } else {
-      bid.PM = lcs;
-      bid.AM = Math.max(0, totBid - lcs);
-    }
-  }
-
+  const bid = preferredBidTargets(bidTarget, cls, med, form);
   cur.AM = bid.AM; cur.PM = bid.PM;
   reduce = 0;
 }
