@@ -69,13 +69,6 @@ function formSuffixWithSR(formLabel) {
   if (f.includes('capsule')) return 'Capsule';
   return 'Tablet'; // safe default for tablet-like forms
 }
-const lcs = (typeof lowestStepMg === "function") ? lowestStepMg("Opioid", med, form) : 1;
-const tot = split.AM + split.PM;
-if (tot >= 2*lcs && (split.AM === 0 || split.PM === 0)) {
-  // Should never happen; fix by shifting LCS from the nonzero side
-  if (split.AM === 0) { split.AM = lcs; split.PM = tot - lcs; }
-  else                { split.PM = lcs; split.AM = tot - lcs; }
-}
 
 // Apply step/min and static hint text for patch intervals
 function applyPatchIntervalAttributes(){
@@ -2869,13 +2862,31 @@ if (Number.isFinite(thresholdMg)) {
   if (cur.DIN > EPS) { shave("DIN"); shave("MID"); }
   else               { shave("MID"); }
 
-  // Rebalance across AM/PM if reduction remains
-  if (reduce > EPS) {
-    const bidTarget = Math.max(0, +(cur.AM + cur.PM - reduce).toFixed(3));
-    const bid = preferredBidTargets(bidTarget, cls, med, form);
-    cur.AM = bid.AM; cur.PM = bid.PM;
-    reduce = 0;
+// Rebalance across AM/PM if reduction remains
+if (reduce > EPS) {
+  const bidTarget = Math.max(0, +(cur.AM + cur.PM - reduce).toFixed(3));
+  let bid = preferredBidTargets(bidTarget, cls, med, form);
+
+  // ✅ Safeguard: when total >= 2 × LCS, ensure BOTH slots populated.
+  // Only allow AM-only / PM-only when we're truly under 2 × LCS (the endpoint case).
+  const lcs = (typeof lowestStepMg === "function") ? lowestStepMg(cls, med, form) : 1;
+  const totBid = (bid.AM || 0) + (bid.PM || 0);
+
+  if (totBid >= 2 * lcs && (bid.AM === 0 || bid.PM === 0)) {
+    // Put at least one LCS on the preferred heavier side, keep total the same.
+    const preferAM = (typeof heavierPref === "function" && heavierPref() === "AM");
+    if (preferAM) {
+      bid.AM = lcs;
+      bid.PM = Math.max(0, totBid - lcs);
+    } else {
+      bid.PM = lcs;
+      bid.AM = Math.max(0, totBid - lcs);
+    }
   }
+
+  cur.AM = bid.AM; cur.PM = bid.PM;
+  reduce = 0;
+}
 
   // tidy negatives to zero
   for (const k of ["AM","MID","DIN","PM"]) if (cur[k] < EPS) cur[k] = 0;
