@@ -2779,6 +2779,26 @@ function preferredBidTargets(total, cls, med, form){
   am = clampGrid(am, q);
   pm = clampGrid(pm, q);
 
+  // === FINAL re-assertion of heavier-side preference (after all nudges/snaps) ===
+  if (am !== pm) {
+    const amHeavier = am > pm;
+    if (pref === "PM" && amHeavier) { const t = am; am = pm; pm = t; }
+    if (pref === "AM" && !amHeavier){ const t = am; am = pm; pm = t; }
+
+    // ensure the difference cap still holds (one guarded pass)
+    if (Math.abs(pm - am) > stepMin) {
+      let guard = 8;
+      while (Math.abs(pm - am) > stepMin && guard-- > 0) {
+        if (pm >= am && pm - q >= 0) { pm -= q; am += q; }
+        else if (am > pm && am - q >= 0) { am -= q; pm += q; }
+        else break;
+      }
+      // snap again for safety
+      am = Math.max(0, Math.round(am / q) * q);
+      pm = Math.max(0, Math.round(pm / q) * q);
+    }
+  }
+  
   return { AM: am, PM: pm };
 }
 
