@@ -138,6 +138,16 @@ function ensureIntervalHints(){
   return [mk("p1IntHint","p1Interval"), mk("p2IntHint","p2Interval")];
 }
 
+// --- Global AM/PM preference (used by all splitters & end-sequence code)
+function getBidHeavierPreference(){
+  try {
+    const am = document.getElementById("bidHeavyAM");
+    const pm = document.getElementById("bidHeavyPM");
+    if (am && am.checked) return "AM";
+    return "PM"; // default Night heavier
+  } catch { return "PM"; }
+}
+
 // --- End-sequence helpers for BID classes (SR opioids & pregabalin) ---
 // Lowest commercial strength AVAILABLE in the catalogue for the CURRENT med/form (ignores user selection)
 // --- Commercial vs Selected strength helpers (robust) ---
@@ -2688,16 +2698,8 @@ function preferredBidTargets(total, cls, med, form){
   const stepMinRaw = (typeof lowestStepMg       === "function" ? lowestStepMg(cls, med, form)       : 1);
   const qRaw       = (typeof effectiveQuantumMg === "function" ? effectiveQuantumMg(cls, med, form) : stepMinRaw);
 
-  // Preference (default Night/PM heavier)
-  function heavierPrefSafe(){
-    try {
-      const am = document.getElementById("bidHeavyAM");
-      const pm = document.getElementById("bidHeavyPM");
-      if (am && am.checked) return "AM";
-      return "PM";
-    } catch { return "PM"; }
-  }
-  const pref = heavierPrefSafe();
+  // Preference (global source of truth)
+  const pref = (typeof getBidHeavierPreference === "function") ? getBidHeavierPreference() : "PM";
 
   // --- Sanitise inputs (CRITICAL to prevent NaNs / freezes) ---
   let stepMin = isNum(stepMinRaw) && stepMinRaw > 0 ? stepMinRaw : 1;
@@ -2798,7 +2800,7 @@ function preferredBidTargets(total, cls, med, form){
       pm = Math.max(0, Math.round(pm / q) * q);
     }
   }
-  
+
   return { AM: am, PM: pm };
 }
 
@@ -2875,11 +2877,10 @@ function stepOpioid_Shave(packs, percent, cls, med, form){
     Number.isFinite(mg) &&
     Math.abs(AM - mg) < EPS && Math.abs(PM - mg) < EPS && MID < EPS && DIN < EPS;
 
-// Preference-aware single-slot detector (AM-only or PM-only at the threshold)
 function isExactSingleOnlyAt(mg){
-  const keep = (typeof heavierPref === "function" && heavierPref() === "AM") ? "AM" : "PM";
-  const amOk  = (keep === "AM") ? Math.abs(AM - mg) < EPS : AM < EPS;
-  const pmOk  = (keep === "PM") ? Math.abs(PM - mg) < EPS : PM < EPS;
+  const pref = (typeof getBidHeavierPreference === "function" && getBidHeavierPreference() === "AM") ? "AM" : "PM";
+  const amOk = (pref === "AM") ? Math.abs(AM - mg) < EPS : AM < EPS;
+  const pmOk = (pref === "PM") ? Math.abs(PM - mg) < EPS : PM < EPS;
   return Number.isFinite(mg) && amOk && pmOk && MID < EPS && DIN < EPS;
 }
 
@@ -2894,12 +2895,12 @@ if (Number.isFinite(thresholdMg)) {
   // First time we hit exact BID at threshold
   if (isExactBIDAt(thresholdMg)) {
     if (lcsSelected) {
-      // LCS among selected ⇒ emit single-dose at threshold per preference (no rebalancing)
-      if (window._forceReviewNext) window._forceReviewNext = false;
-      const keep = (typeof heavierPref === "function" && heavierPref() === "AM") ? "AM" : "PM";
-      const cur = { AM:0, MID:0, DIN:0, PM:0 };
-      cur[keep] = thresholdMg;
-      return recomposeSlots(cur, cls, med, form);
+   // LCS among selected ⇒ emit single-dose at threshold per preference (no rebalancing)
+if (window._forceReviewNext) window._forceReviewNext = false;
+const pref = (typeof getBidHeavierPreference === "function" && getBidHeavierPreference() === "AM") ? "AM" : "PM";
+const cur = { AM:0, MID:0, DIN:0, PM:0 };
+cur[pref] = thresholdMg;
+return recomposeSlots(cur, cls, med, form);
     } else {
       // LCS not selected ⇒ Review next boundary
       window._forceReviewNext = true;
