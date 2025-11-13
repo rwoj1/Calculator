@@ -68,15 +68,34 @@
 <section class="card" id="taperCard">
   <h2>Taper controls</h2>
 
-  <!-- Dates row -->
-  <div class="grid">
-    <label>Start date for tapering
-      <input id="startDate" class="datepick" placeholder="Select date" />
-    </label>
-    <label>Next review date (optional)
-      <input id="reviewDate" class="datepick" placeholder="Select date" />
-    </label>
-  </div>
+<!-- Dates row -->
+<div class="grid">
+  <label>Start date for tapering
+    <input id="startDate" class="datepick" placeholder="Select date" />
+  </label>
+
+  <label style="display:flex; flex-direction:column; gap:8px;">
+    <span>Generate chart for:</span>
+
+    <span class="inline-label" style="display:flex; align-items:center; gap:8px;">
+      <input type="radio" name="taperMode" id="taperModeDuration" value="duration" checked />
+      <select id="taperDuration">
+        <option value="1">1 month</option>
+        <option value="2">2 months</option>
+        <option value="3" selected>3 months</option>
+        <option value="4">4 months</option>
+        <option value="5">5 months</option>
+        <option value="6">6 months</option>
+        <option value="complete">Until complete</option>
+      </select>
+    </span>
+
+    <span class="inline-label" style="display:flex; align-items:center; gap:8px;">
+      <input type="radio" name="taperMode" id="taperModeDate" value="date" />
+      <input id="taperEndDate" class="datepick" placeholder="Select end date" disabled />
+    </span>
+  </label>
+</div>
 
   <!-- Phase 1 stays visible -->
   <div class="taper-block">
