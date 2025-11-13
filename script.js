@@ -2329,33 +2329,65 @@ function populateForms(){
 /* ---- Dose lines (state) ---- */
 let doseLines=[]; let nextLineId=1;
 
-/* splitting rules */
-function canSplitTablets(cls, form, med){
-  const f = String(form || "");
-  const isModified =
-    (typeof isMR === "function" && isMR(form)) ||
-    /(?:^|\W)(sr|cr|er|mr)(?:\W|$)/i.test(f); // fallback MR detection
-  // Forms that must never be split
-  if (/Patch|Capsule|Orally\s*Dispersible\s*Tablet/i.test(f) || isModified) {
-    return { half:false, quarter:false };
-  }
-  // Classes that never split
-  if (cls === "Opioid" || cls === "Proton Pump Inhibitor" || cls === "Gabapentinoids") {
-    return { half:false, quarter:false };
-  }
-  // BZRA: plain tablets can be halved (no quarters)
-  if (cls === "Benzodiazepines / Z-Drug (BZRA)") {
-    const nonSplittable = /odt|wafer|dispers/i.test(f); // extra guard, though blocked above
-    return nonSplittable ? { half:false, quarter:false } : { half:true, quarter:false };
-  }
-  // Antipsychotics: plain IR tablets can be halved (no quarters)
-  if (cls === "Antipsychotic" && /Tablet/i.test(f)) {
-    return { half:true, quarter:false };
-  }
-  // Default (rare fallback)
-  return { half:true, quarter:true };
+// Helper: are quarter tablets currently allowed for BZRA?
+function isBzraQuarterAllowed(){
+  const yes = document.getElementById("bzraQuarterYes");
+  if (yes && yes.checked) return true;
+  return false; // default is "No"
 }
 
+function canSplitTablets(cls, form, med){
+  const f = String(form || "");
+  const m = String(med || "");
+
+  // Anything that is clearly not a solid oral tablet/capsule: don't split
+  if (!/tablet|tab|capsule|cap/i.test(f)) {
+    return { half: false, quarter: false };
+  }
+
+  // Patches: never split
+  if (/patch/i.test(f)) {
+    return { half: false, quarter: false };
+  }
+
+  // Orally disintegrating / dispersible forms – treat as non-splittable
+  if (/odt|wafer|dispers/i.test(f)) {
+    return { half: false, quarter: false };
+  }
+
+  const isMRform = (typeof isMR === "function")
+    ? isMR(form)
+    : /slow\s*release|(?:^|\W)(sr|cr|er|mr)(?:\W|$)/i.test(f);
+
+  // Zolpidem SR: do not split at all
+  if (/zolpidem/i.test(m) && isMRform) {
+    return { half: false, quarter: false };
+  }
+
+  // Opioid modified-release tablets: allow halves only
+  if (cls === "Opioid" && isMRform) {
+    return { half: true, quarter: false };
+  }
+
+  // Benzodiazepines / Z-Drug (BZRA):
+  // - halves always allowed (for splittable tablets)
+  // - quarter only when the setting allows it and form is not MR/ODT/etc.
+  if (cls === "Benzodiazepines / Z-Drug (BZRA)") {
+    const allowQuarter = isBzraQuarterAllowed();
+    return {
+      half: true,
+      quarter: allowQuarter && !isMRform
+    };
+  }
+
+  // Antipsychotics: plain IR tablets can be halved; no quarters
+  if (cls === "Antipsychotic") {
+    return { half: true, quarter: false };
+  }
+
+  // Default (rare fallback) – allow halves & quarters
+  return { half: true, quarter: true };
+}
 
 /* default frequency */
 function defaultFreq(){
@@ -3448,22 +3480,36 @@ function stepBZRA(packs, percent, med, form){
   return { AM:{}, MID:{}, DIN:{}, PM: pm };
 
   // ----- local helpers (scoped) -----
-  function buildUnitsBZRA(med, form, selected){
-    const name = String(med||"").toLowerCase();
-    const fr   = String(form||"").toLowerCase();
-    const nonSplit = /slow\s*release|(?:^|\W)(sr|cr|er|mr)(?:\W|$)|odt|wafer|dispers/i.test(fr);
+function buildUnitsBZRA(med, form, selected){
+  const name = String(med||"").toLowerCase();
+  const fr   = String(form||"").toLowerCase();
+  const nonSplit = /slow\s*release|(?:^|\W)(sr|cr|er|mr)(?:\W|$)|odt|wafer|dispers/i.test(fr);
+  const allowQuarter = isBzraQuarterAllowed();
 
-    const units = [];
-    for (const mgRaw of (selected || [])) {
-      const mg = Number(mgRaw);
-      if (!Number.isFinite(mg) || mg <= 0) continue;
-      units.push({ unit: mg, piece: 1.0 }); // whole tablet
-      const forbidHalf = nonSplit || (name.includes("alprazolam") && Math.abs(mg - 0.25) < 1e-6);
-      if (!forbidHalf) units.push({ unit: mg/2, piece: 0.5 }); // half tablet
+  const units = [];
+  for (const mgRaw of (selected || [])) {
+    const mg = Number(mgRaw);
+    if (!Number.isFinite(mg) || mg <= 0) continue;
+
+    // whole tablet
+    units.push({ unit: mg, piece: 1.0 });
+
+    const forbidHalf = nonSplit || (name.includes("alprazolam") && Math.abs(mg - 0.25) < 1e-6);
+    if (!forbidHalf) {
+      // half tablet
+      units.push({ unit: mg / 2, piece: 0.5 });
+
+      // quarter tablet only when allowed and form is splittable
+      if (allowQuarter && !nonSplit) {
+        units.push({ unit: mg / 4, piece: 0.25 });
+      }
     }
-    units.sort((a,b)=> b.unit - a.unit);
-    return units;
   }
+
+  // Greedy composer will always try bigger units first → whole > halves > quarters
+  units.sort((a,b)=> b.unit - a.unit);
+  return units;
+}
 
   function piecesNeededBZRA(amount, med, form, selected){
     const units = buildUnitsBZRA(med, form, selected);
@@ -3477,22 +3523,34 @@ function stepBZRA(packs, percent, med, form){
     return (r > EPS) ? null : pieces;
   }
 }
-// Compute the rounding grid from the current selection (GCD of selected tablets and allowed halves).
+// Compute the rounding grid from the current selection (GCD of selected tablets and allowed halves/quarters).
 function selectionGridStepBZRA(med, form, selectedMg){
   if (!Array.isArray(selectedMg) || !selectedMg.length) return 0;
 
   const name = String(med||"").toLowerCase();
   const fr   = String(form||"").toLowerCase();
-  const isMR = /slow\s*release|sr|cr|er|mr/.test(fr);
-  const noSplitForm = isMR || /odt|wafer|dispers/i.test(fr);
+  const isMRform = /slow\s*release|sr|cr|er|mr/.test(fr);
+  const noSplitForm = isMRform || /odt|wafer|dispers/i.test(fr);
   const forbidAlp025 = (mg) => (name.includes("alprazolam") && Math.abs(mg - 0.25) < 1e-6);
+  const allowQuarter = isBzraQuarterAllowed();
 
   const units = [];
   for (const mgRaw of selectedMg){
     const m = Number(mgRaw);
     if (!Number.isFinite(m) || m <= 0) continue;
+
+    // whole tablet
     units.push(+m.toFixed(3));
-    if (!noSplitForm && !forbidAlp025(m)) units.push(+(m/2).toFixed(3));
+
+    // halves (when splittable)
+    if (!noSplitForm && !forbidAlp025(m)) {
+      units.push(+(m / 2).toFixed(3));
+
+      // quarters (when allowed and splittable)
+      if (allowQuarter) {
+        units.push(+(m / 4).toFixed(3));
+      }
+    }
   }
   if (!units.length) return 0;
 
