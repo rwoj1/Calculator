@@ -112,8 +112,32 @@
     </div>
   </div>
 
-      <!-- Reduction order (Antipsychotic) -->
-<div id="apOrderRow" style="display:none; margin-bottom: .5rem;">
+  <!-- Benzodiazepine tablet options -->
+  <div id="bzraSplitOptions" class="taper-block">
+    <h3>Benzodiazepine tablet options</h3>
+    <p class="hint">
+      For benzodiazepines and Z-drugs, choose whether to allow quarter tablets in the taper.
+    </p>
+    <div class="taper-row">
+      <label class="inline-label">
+        <span>Allow quarter tablets:</span>
+        <span class="inline-radios" style="display:inline-flex; gap:1rem; align-items:center;">
+          <label>
+            <input type="radio" name="bzraQuarter" id="bzraQuarterNo" value="no" checked>
+            No (whole and half tablets only)
+          </label>
+          <label>
+            <input type="radio" name="bzraQuarter" id="bzraQuarterYes" value="yes">
+            Yes (allow quarter tablets where appropriate)
+          </label>
+        </span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Reduction order (Antipsychotic) -->
+  <div id="apOrderRow" style="display:none; margin-bottom: .5rem;">
+
   <div class="ap-order-label">Select which dose time to reduce first (drag and drop to reorder):</div>
   <div id="apOrder" class="ap-order-chips" aria-label="Reduction order">
     <button class="ap-chip" data-slot="AM"><span class="ap-badge">1</span><span class="ap-chip-label">Morning</span></button>
