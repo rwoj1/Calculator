@@ -3391,7 +3391,7 @@ function stepBZRA(packs, percent, med, form){
   const tot = packsTotalMg(packs);
   if (tot <= EPS) return packs;
 
-  // Base step (your original): 6.25 for Zolpidem SR, else per map (default 0.5)
+  // Base step: 6.25 for Zolpidem SR, else per map (default 0.5)
   const baseStep = (!isMR(form) || !/Zolpidem/i.test(med))
     ? ((BZRA_MIN_STEP && BZRA_MIN_STEP[med]) || 0.5)
     : 6.25;
@@ -3406,47 +3406,33 @@ function stepBZRA(packs, percent, med, form){
       .sort((a,b)=>a-b);
   }
 
-  // Prefer a selection-driven grid (GCD of selected units incl. halves); else fall back to baseStep
+  // Grid step from selection (LCS + quarter toggle) or fall back to baseStep
   const gridStep = (typeof selectionGridStepBZRA === "function")
     ? (selectionGridStepBZRA(med, form, selectedMg) || 0)
     : 0;
   const step = gridStep || baseStep;
 
-  // Quantise to nearest step
+  // 1) Calculate raw target based on percentage reduction
   const raw = tot * (1 - percent/100);
-  const down = floorTo(raw, step), up = ceilTo(raw, step);
-  const dUp = Math.abs(up - raw), dDown = Math.abs(raw - down);
 
-  let target;
-  if (dUp < dDown) {
-    target = up;
-  } else if (dDown < dUp) {
-    target = down;
-  } else {
-    // --- TIE ---
-    if (selectedMg.length > 0) {
-      // With a selection: choose FEWEST pieces; if still tie, round up
-      const piecesDown = piecesNeededBZRA(down, med, form, selectedMg);
-      const piecesUp   = piecesNeededBZRA(up,   med, form, selectedMg);
-      if (piecesDown != null && piecesUp != null) {
-        if (piecesDown < piecesUp)      target = down;
-        else if (piecesUp < piecesDown) target = up;
-        else                            target = up;   // tie → up
-      } else {
-        target = down; // conservative fallback
-      }
-    } else {
-      // No selection: prefer round DOWN on tie (fewest units before rounding up)
-      target = down;
-    }
+  // 2) Round UP to the nearest allowed by the grid
+  let target = ceilTo(raw, step);
+
+  // Never increase the dose above the current total
+  if (target > tot + EPS) {
+    target = tot;
   }
 
-  // Ensure progress (never repeat same total)
+  // 2b) If still same as prior step, step DOWN by one grid step
   if (Math.abs(target - tot) < EPS && tot > 0) {
     target = roundTo(Math.max(0, tot - step), step);
   }
 
-  // Compose: try selection-aware first, then fallback to original composer
+  // Safety: clamp very small negatives to zero
+  if (target < 0 && Math.abs(target) < EPS) target = 0;
+  if (target < 0) target = 0;
+
+  // 3) Compose: try selection-aware first, then fallback to original composer
   let pm = null;
   if (typeof composeForSlot_BZRA_Selected === "function") {
     pm = composeForSlot_BZRA_Selected(target, "Benzodiazepines / Z-Drug (BZRA)", med, form, selectedMg);
@@ -3457,6 +3443,7 @@ function stepBZRA(packs, percent, med, form){
 
   return { AM:{}, MID:{}, DIN:{}, PM: pm };
 
+  // ----- local helpers (scoped) -----
   function buildUnitsBZRA(med, form, selected){
     const name = String(med||"").toLowerCase();
     const fr   = String(form||"").toLowerCase();
@@ -3482,14 +3469,11 @@ function stepBZRA(packs, percent, med, form){
       // Always allow whole tablets
       units.push({ unit: mgClean, piece: 1.0 });
 
-      // Safety: do not split tiny alprazolam 0.25 mg tablets
-      const isTinyAlp = name.includes("alprazolam") && Math.abs(mgClean - 0.25) < 1e-6;
-
-      if (!nonSplit && allowHalf && !isTinyAlp) {
+      if (!nonSplit && allowHalf) {
         const halfUnit = +(mgClean / 2).toFixed(3);
         units.push({ unit: halfUnit, piece: 0.5 });
 
-        if (allowQuarter && !isTinyAlp) {
+        if (allowQuarter) {
           const quarterUnit = +(mgClean / 4).toFixed(3);
           units.push({ unit: quarterUnit, piece: 0.25 });
         }
@@ -3513,6 +3497,7 @@ function stepBZRA(packs, percent, med, form){
     return (r > EPS) ? null : pieces;
   }
 }
+
 // Compute the rounding grid from the current selection (GCD of selected tablets and allowed halves).
 function selectionGridStepBZRA(med, form, selectedMg){
   if (!Array.isArray(selectedMg) || !selectedMg.length) return 0;
@@ -3537,7 +3522,7 @@ function selectionGridStepBZRA(med, form, selectedMg){
     .filter(v => Number.isFinite(v) && v > 0)
     .sort((a,b)=>a-b);
   if (!mgList.length) return 0;
-  let lcs = mgList[0]; // lowest commercial strength
+  const lcs = mgList[0]; // lowest commercial strength
 
   // If we cannot split this form, the grid is just the tablet strength
   if (noSplitForm) {
@@ -3546,12 +3531,7 @@ function selectionGridStepBZRA(med, form, selectedMg){
 
   const allowQuarter = (typeof isBzraQuarterAllowed === "function" && isBzraQuarterAllowed());
 
-  // Do not split "tiny" tablets further (e.g. alprazolam 0.25 mg)
-  if (lcs <= 0.25 + 1e-9) {
-    return +lcs.toFixed(3);
-  }
-
-  // Otherwise, grid = half or quarter of the LCS depending on the toggle
+  // Grid = half or quarter of the LCS depending on the toggle
   const smallestPiece = allowQuarter ? (lcs / 4) : (lcs / 2);
   return +smallestPiece.toFixed(3);
 }
