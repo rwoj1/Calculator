@@ -3457,20 +3457,46 @@ function stepBZRA(packs, percent, med, form){
 
   return { AM:{}, MID:{}, DIN:{}, PM: pm };
 
-  // ----- local helpers (scoped) -----
   function buildUnitsBZRA(med, form, selected){
     const name = String(med||"").toLowerCase();
     const fr   = String(form||"").toLowerCase();
     const nonSplit = /slow\s*release|(?:^|\W)(sr|cr|er|mr)(?:\W|$)|odt|wafer|dispers/i.test(fr);
 
+    const cls = "Benzodiazepines / Z-Drug (BZRA)";
+    let allowHalf  = false;
+    let allowQuarter = false;
+
+    if (!nonSplit && typeof canSplitTablets === "function") {
+      const rule = canSplitTablets(cls, form, med) || {};
+      allowHalf    = !!rule.half;
+      allowQuarter = !!rule.quarter;
+    }
+
     const units = [];
     for (const mgRaw of (selected || [])) {
       const mg = Number(mgRaw);
       if (!Number.isFinite(mg) || mg <= 0) continue;
-      units.push({ unit: mg, piece: 1.0 }); // whole tablet
-      const forbidHalf = nonSplit || (name.includes("alprazolam") && Math.abs(mg - 0.25) < 1e-6);
-      if (!forbidHalf) units.push({ unit: mg/2, piece: 0.5 }); // half tablet
+
+      const mgClean = +mg.toFixed(3);
+
+      // Always allow whole tablets
+      units.push({ unit: mgClean, piece: 1.0 });
+
+      // Safety: do not split tiny alprazolam 0.25 mg tablets
+      const isTinyAlp = name.includes("alprazolam") && Math.abs(mgClean - 0.25) < 1e-6;
+
+      if (!nonSplit && allowHalf && !isTinyAlp) {
+        const halfUnit = +(mgClean / 2).toFixed(3);
+        units.push({ unit: halfUnit, piece: 0.5 });
+
+        if (allowQuarter && !isTinyAlp) {
+          const quarterUnit = +(mgClean / 4).toFixed(3);
+          units.push({ unit: quarterUnit, piece: 0.25 });
+        }
+      }
     }
+
+    // Greedy composer will always try bigger units first → whole > halves > quarters
     units.sort((a,b)=> b.unit - a.unit);
     return units;
   }
