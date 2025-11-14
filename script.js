@@ -2634,50 +2634,70 @@ function recomposeSlots(targets, cls, med, form){
   for(const slot of ["AM","MID","DIN","PM"]) out[slot] = composeForSlot(targets[slot]||0, cls, med, form);
   return out;
 }
-/* === BZRA selection-only composer (PM-only). Keeps halves on their source product. === */
+/* === BZRA selection-only composer (PM-only). 
 function composeForSlot_BZRA_Selected(targetMg, cls, med, form, selectedMg){
-  // Use this ONLY when there really is a selection
+  // Use this ONLY when there really is a selection (stepBZRA passes a non-empty mg list)
   if (!Array.isArray(selectedMg) || selectedMg.length === 0) return null;
   if (!(targetMg > 0)) return {};
 
+  // Determine generic splitting permissions for this BZRA (uses your global rules)
+  let allowHalf = false;
+  let allowQuarter = false;
+  if (typeof canSplitTablets === "function") {
+    const split = canSplitTablets(cls, form, med) || {};
+    allowHalf    = !!split.half;
+    allowQuarter = !!split.quarter;
+  }
+
   // Build allowed units from the selected list:
-  // - full tablet: unit = mg,   piece = 1.0, source = mg
-  // - half tablet: unit = mg/2, piece = 0.5, source = mg (only if halving allowed)
-  const name = String(med||"").toLowerCase();
-  const fr   = String(form||"").toLowerCase();
-
-  const isMR = /slow\s*release|sr|cr|er|mr/.test(fr);
-  const isNoSplitForm = isMR || /odt|wafer|dispers/i.test(fr);
-  const noSplitAlp025 = (mg) => (name.includes("alprazolam") && Math.abs(mg - 0.25) < 1e-6);
-
+  // - full tablet:  unit = mg,    piece = 1.0, source = mg
+  // - half tablet:  unit = mg/2,  piece = 0.5, source = mg (if allowed)
+  // - quarter tab:  unit = mg/4,  piece = 0.25, source = mg (if allowed)
   const units = [];
   for (const mg of selectedMg){
     const m = Number(mg);
     if (!Number.isFinite(m) || m <= 0) continue;
-    // full
-    units.push({ unit:m, source:m, piece:1.0 });
-    // half (only when allowed)
-    if (!isNoSplitForm && !noSplitAlp025(m)) {
-      units.push({ unit:m/2, source:m, piece:0.5 });
+
+    const mClean = +m.toFixed(3);
+
+    // Full tablet
+    units.push({ unit: mClean,      source: mClean, piece: 1.0 });
+
+    if (allowHalf) {
+      const halfUnit = +(mClean / 2).toFixed(3);
+      units.push({ unit: halfUnit,  source: mClean, piece: 0.5 });
+    }
+    if (allowQuarter) {
+      const quarterUnit = +(mClean / 4).toFixed(3);
+      units.push({ unit: quarterUnit, source: mClean, piece: 0.25 });
     }
   }
   if (!units.length) return null;
 
+  // Prefer whole > half > quarter, then larger strengths within each
+  units.sort((a, b) => {
+    if (b.piece !== a.piece) return b.piece - a.piece; // 1.0 > 0.5 > 0.25
+    return b.unit - a.unit;                            // within that, larger mg first
+  });
+
   // Greedy largest-first exact pack into PM, crediting pieces to the SOURCE mg
-  units.sort((a,b)=> b.unit - a.unit);
   let r = +targetMg.toFixed(6);
   const PM = {};
   for (const u of units){
     if (r <= 1e-6) break;
     const q = Math.floor(r / u.unit + 1e-9);
     if (q > 0){
-      PM[u.source] = (PM[u.source] || 0) + q * u.piece; // halves stay on the same product row
+      PM[u.source] = (PM[u.source] || 0) + q * u.piece;
       r -= q * u.unit;
+      r = +r.toFixed(6);
     }
   }
-  if (r > 1e-6) return null; // cannot represent exactly with the selected set → caller will fallback
+
+  // If we cannot hit the target exactly with the selected set, tell caller to fall back
+  if (r > 1e-6) return null;
   return PM;
 }
+
 // Selection-aware AP composer with safe fallback to "all"
 function composeForSlot_AP_Selected(targetMg, cls, med, form){
   let sel = [];
