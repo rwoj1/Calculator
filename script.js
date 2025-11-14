@@ -35,6 +35,48 @@ const MAX_WEEKS = 60;
 const THREE_MONTHS_MS = 90 * 24 * 3600 * 1000;
 const EPS = 1e-6;
 
+// Compute the maximum plan/chart date from user controls.
+// Defaults to 3 months from startDate if controls are missing or unset.
+function getChartCapDate(startDate){
+  const base = new Date(startDate);
+  if (!(base instanceof Date) || isNaN(+base)) {
+    return new Date(+startDate + THREE_MONTHS_MS);
+  }
+
+  // Default: 3 months from start date (current behaviour)
+  let cap = new Date(+base + THREE_MONTHS_MS);
+
+  // Expected HTML IDs:
+  //  - radio for "duration" option:    chartRangePresetMode
+  //  - <select> for e.g. "1 month":    chartRangePreset  (value = number of months, e.g. "1", "3")
+  //  - radio for "specific end date":  chartRangeEndMode
+  //  - <input type="date">:            chartRangeEndDate
+  const presetRadio = document.getElementById("chartRangePresetMode");
+  const presetSelect = document.getElementById("chartRangePreset");
+  const endRadio    = document.getElementById("chartRangeEndMode");
+  const endInput    = document.getElementById("chartRangeEndDate");
+
+  // Option A: duration from dropdown (e.g. 1, 2, 3 months…)
+  if (presetRadio && presetRadio.checked && presetSelect) {
+    const months = parseInt(presetSelect.value, 10);
+    if (Number.isFinite(months) && months > 0) {
+      cap = new Date(base);
+      cap.setMonth(cap.getMonth() + months);
+      return cap;
+    }
+  }
+
+  // Option B: explicit end date
+  if (endRadio && endRadio.checked && endInput && endInput.value) {
+    const d = new Date(endInput.value);
+    if (!isNaN(+d)) {
+      cap = d;
+    }
+  }
+
+  return cap;
+}
+
 /* ===== Patch interval safety (Fentanyl: ×3 days, Buprenorphine: ×7 days) ===== */
 //#endregion
 //#region 2. Patch Interval Rules (safety)
@@ -3705,7 +3747,7 @@ if (cls === "Antipsychotic") {
   }
   apMarkDirty?.(false); // clean state before rendering
 }
-  const rows=[]; let date=new Date(startDate); const capDate=new Date(+startDate + THREE_MONTHS_MS);
+  const rows=[]; let date=new Date(startDate); const capDate = getChartCapDate(startDate);
 
 const doStep = (phasePct) => {
   if (cls === "Opioid") packs = stepOpioid_Shave(packs, phasePct, cls, med, form);
@@ -3786,7 +3828,7 @@ if (p2Start && +date < +p2Start) {
 }
 
     if (reviewDate && +nextDate >= +reviewDate) { rows.push({ week: week+1, date: fmtDate(reviewDate), packs:{}, med, form, cls, review:true }); break; }
-    if (+nextDate - +startDate >= THREE_MONTHS_MS) { rows.push({ week: week+1, date: fmtDate(nextDate), packs:{}, med, form, cls, review:true }); break; }
+    if (+nextDate >= +capDate) { rows.push({ date: fmtDate(nextDate), packs:{}, med, form, cls, review:true }); break; }
 
 // NEW: end-sequence Case B (LCS not selected) → force Review on the next boundary
 if (window._forceReviewNext) {
@@ -4130,7 +4172,7 @@ if (startTotal <= 0) {
   let currentPct = p1Pct, currentReduceEvery = p1Int;
   let nextReductionCutoff = new Date(startDate); // first reduction on start date
 
-  const capDate = new Date(+startDate + THREE_MONTHS_MS);
+  const capDate = getChartCapDate(startDate);
   let smallestAppliedOn = null;
   let stopThresholdDate = null;
 
