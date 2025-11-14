@@ -2634,57 +2634,67 @@ function recomposeSlots(targets, cls, med, form){
   for(const slot of ["AM","MID","DIN","PM"]) out[slot] = composeForSlot(targets[slot]||0, cls, med, form);
   return out;
 }
-/* === BZRA selection-only composer (PM-only). 
+
+/* === BZRA selection-only composer (PM-only). LCS-based splitting, whole > half > quarter === */
 function composeForSlot_BZRA_Selected(targetMg, cls, med, form, selectedMg){
-  // Use this ONLY when there really is a selection (stepBZRA passes a non-empty mg list)
-  if (!Array.isArray(selectedMg) || selectedMg.length === 0) return null;
+  // Require a positive target
   if (!(targetMg > 0)) return {};
 
-  // Determine generic splitting permissions for this BZRA (uses your global rules)
+  // Normalise the mg list
+  let mgList = Array.isArray(selectedMg) ? selectedMg.slice() : [];
+  mgList = mgList
+    .map(Number)
+    .filter(n => Number.isFinite(n) && n > 0)
+    .sort((a,b)=>a-b);
+  if (!mgList.length) return null;
+
+  // Check global splitting rules for this class / med / form
   let allowHalf = false;
   let allowQuarter = false;
   if (typeof canSplitTablets === "function") {
-    const split = canSplitTablets(cls, form, med) || {};
-    allowHalf    = !!split.half;
-    allowQuarter = !!split.quarter;
+    const rule = canSplitTablets(cls, form, med) || {};
+    allowHalf    = !!rule.half;
+    allowQuarter = !!rule.quarter;
   }
 
-  // Build allowed units from the selected list:
-  // - full tablet:  unit = mg,    piece = 1.0, source = mg
-  // - half tablet:  unit = mg/2,  piece = 0.5, source = mg (if allowed)
-  // - quarter tab:  unit = mg/4,  piece = 0.25, source = mg (if allowed)
+  // Lowest commercial strength (LCS) defines the grid and which strength we split
+  const lcs = +mgList[0].toFixed(3);
+
+  // Build units:
+  // - whole tablets for all strengths
+  // - half/quarter only from LCS
   const units = [];
-  for (const mg of selectedMg){
-    const m = Number(mg);
-    if (!Number.isFinite(m) || m <= 0) continue;
+  for (const mg of mgList){
+    const m = +Number(mg).toFixed(3);
+    if (!(m > 0)) continue;
 
-    const mClean = +m.toFixed(3);
+    // Whole tablet always allowed
+    units.push({ unit: m, source: m, piece: 1.0 });
 
-    // Full tablet
-    units.push({ unit: mClean,      source: mClean, piece: 1.0 });
+    // Only split the LCS (this keeps the grid consistent)
+    if (m === lcs && allowHalf) {
+      const halfUnit = +(m / 2).toFixed(3);
+      units.push({ unit: halfUnit, source: m, piece: 0.5 });
 
-    if (allowHalf) {
-      const halfUnit = +(mClean / 2).toFixed(3);
-      units.push({ unit: halfUnit,  source: mClean, piece: 0.5 });
-    }
-    if (allowQuarter) {
-      const quarterUnit = +(mClean / 4).toFixed(3);
-      units.push({ unit: quarterUnit, source: mClean, piece: 0.25 });
+      if (allowQuarter) {
+        const quarterUnit = +(m / 4).toFixed(3);
+        units.push({ unit: quarterUnit, source: m, piece: 0.25 });
+      }
     }
   }
   if (!units.length) return null;
 
   // Prefer whole > half > quarter, then larger strengths within each
-  units.sort((a, b) => {
+  units.sort((a,b)=>{
     if (b.piece !== a.piece) return b.piece - a.piece; // 1.0 > 0.5 > 0.25
     return b.unit - a.unit;                            // within that, larger mg first
   });
 
-  // Greedy largest-first exact pack into PM, crediting pieces to the SOURCE mg
+  // Greedy pack into PM, crediting pieces to their source strength
   let r = +targetMg.toFixed(6);
   const PM = {};
   for (const u of units){
-    if (r <= 1e-6) break;
+    if (r <= EPS) break;
     const q = Math.floor(r / u.unit + 1e-9);
     if (q > 0){
       PM[u.source] = (PM[u.source] || 0) + q * u.piece;
@@ -2693,8 +2703,8 @@ function composeForSlot_BZRA_Selected(targetMg, cls, med, form, selectedMg){
     }
   }
 
-  // If we cannot hit the target exactly with the selected set, tell caller to fall back
-  if (r > 1e-6) return null;
+  // If we can't hit the target exactly with these units, let the caller fall back
+  if (r > EPS) return null;
   return PM;
 }
 
