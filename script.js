@@ -3385,13 +3385,13 @@ if (reductionNeeded <= EPS) reductionNeeded = stepMg;   // safety: still ensure 
     return out;
   }
 }
-
-/* ===== Benzodiazepines / Z-Drug (BZRA) — PM-only daily taper with selection-only & halving rules ===== */
+/* ===== Benzodiazepines / Z-Drug (BZRA) — PM-only daily taper with selection & split rules ===== */
 function stepBZRA(packs, percent, med, form){
+  const cls = "Benzodiazepines / Z-Drug (BZRA)";
   const tot = packsTotalMg(packs);
   if (tot <= EPS) return packs;
 
-  // Base step: 6.25 for Zolpidem SR, else per map (default 0.5)
+  // Base step fallback: 6.25 for Zolpidem SR, else per map (default 0.5)
   const baseStep = (!isMR(form) || !/Zolpidem/i.test(med))
     ? ((BZRA_MIN_STEP && BZRA_MIN_STEP[med]) || 0.5)
     : 6.25;
@@ -3406,9 +3406,20 @@ function stepBZRA(packs, percent, med, form){
       .sort((a,b)=>a-b);
   }
 
-  // Grid step from selection (LCS + quarter toggle) or fall back to baseStep
+  // If nothing explicitly selected, treat as "all products" for this BZRA
+  let gridMg = selectedMg.slice();
+  if ((!gridMg || !gridMg.length) && typeof strengthsForPicker === "function") {
+    const all = strengthsForPicker(cls, med, form) || [];
+    gridMg = all
+      .map(v => (typeof v === "number" ? v : (String(v).match(/(\d+(\.\d+)?)/)||[])[1]))
+      .map(Number)
+      .filter(n => Number.isFinite(n) && n > 0)
+      .sort((a,b)=>a-b);
+  }
+
+  // 0) Determine grid step from selection (LCS + quarter toggle) or fall back to baseStep
   const gridStep = (typeof selectionGridStepBZRA === "function")
-    ? (selectionGridStepBZRA(med, form, selectedMg) || 0)
+    ? (selectionGridStepBZRA(med, form, gridMg) || 0)
     : 0;
   const step = gridStep || baseStep;
 
@@ -3434,11 +3445,12 @@ function stepBZRA(packs, percent, med, form){
 
   // 3) Compose: try selection-aware first, then fallback to original composer
   let pm = null;
-  if (typeof composeForSlot_BZRA_Selected === "function") {
-    pm = composeForSlot_BZRA_Selected(target, "Benzodiazepines / Z-Drug (BZRA)", med, form, selectedMg);
+  const selectedForCompose = gridMg && gridMg.length ? gridMg : selectedMg;
+  if (typeof composeForSlot_BZRA_Selected === "function" && selectedForCompose && selectedForCompose.length) {
+    pm = composeForSlot_BZRA_Selected(target, cls, med, form, selectedForCompose);
   }
   if (!pm) {
-    pm = composeForSlot(target, "Benzodiazepines / Z-Drug (BZRA)", med, form);
+    pm = composeForSlot(target, cls, med, form);
   }
 
   return { AM:{}, MID:{}, DIN:{}, PM: pm };
@@ -3449,7 +3461,6 @@ function stepBZRA(packs, percent, med, form){
     const fr   = String(form||"").toLowerCase();
     const nonSplit = /slow\s*release|(?:^|\W)(sr|cr|er|mr)(?:\W|$)|odt|wafer|dispers/i.test(fr);
 
-    const cls = "Benzodiazepines / Z-Drug (BZRA)";
     let allowHalf  = false;
     let allowQuarter = false;
 
@@ -3459,8 +3470,11 @@ function stepBZRA(packs, percent, med, form){
       allowQuarter = !!rule.quarter;
     }
 
+    // If no explicit selection passed, use gridMg as the universe
+    let mgList = Array.isArray(selected) && selected.length ? selected.slice() : gridMg.slice();
+
     const units = [];
-    for (const mgRaw of (selected || [])) {
+    for (const mgRaw of (mgList || [])) {
       const mg = Number(mgRaw);
       if (!Number.isFinite(mg) || mg <= 0) continue;
 
@@ -3498,9 +3512,9 @@ function stepBZRA(packs, percent, med, form){
   }
 }
 
-// Compute the rounding grid from the current selection (GCD of selected tablets and allowed halves).
 function selectionGridStepBZRA(med, form, selectedMg){
-  if (!Array.isArray(selectedMg) || !selectedMg.length) return 0;
+  // Accept an explicit selection list, but if empty, treat as "all products" via strengthsForPicker
+  let mgList = Array.isArray(selectedMg) ? selectedMg.slice() : [];
 
   const name = String(med||"").toLowerCase();
   const fr   = String(form||"").toLowerCase();
@@ -3516,13 +3530,20 @@ function selectionGridStepBZRA(med, form, selectedMg){
     return 6.25;
   }
 
-  // Lowest commercial strength from the current selection
-  const mgList = selectedMg
-    .map(Number)
-    .filter(v => Number.isFinite(v) && v > 0)
-    .sort((a,b)=>a-b);
-  if (!mgList.length) return 0;
-  const lcs = mgList[0]; // lowest commercial strength
+  const cls = "Benzodiazepines / Z-Drug (BZRA)";
+
+  if ((!mgList || !mgList.length) && typeof strengthsForPicker === "function") {
+    const all = strengthsForPicker(cls, med, form) || [];
+    mgList = all
+      .map(v => (typeof v === "number" ? v : (String(v).match(/(\d+(\.\d+)?)/)||[])[1]))
+      .map(Number)
+      .filter(n => Number.isFinite(n) && n > 0);
+  }
+
+  if (!mgList || !mgList.length) return 0;
+
+  // Lowest commercial strength from the current (or implied) selection
+  const lcs = mgList.slice().sort((a,b)=>a-b)[0];
 
   // If we cannot split this form, the grid is just the tablet strength
   if (noSplitForm) {
@@ -3535,6 +3556,7 @@ function selectionGridStepBZRA(med, form, selectedMg){
   const smallestPiece = allowQuarter ? (lcs / 4) : (lcs / 2);
   return +smallestPiece.toFixed(3);
 }
+
 
 /* =================== Plan builders (tablets) — date-based Phase-2 =================== */
 
