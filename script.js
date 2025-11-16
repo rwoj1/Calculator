@@ -371,30 +371,53 @@ function _gcd(a, b){
   return a || 0;
 }
 
-// Compute the effective rounding grid ("quantum") from selected strengths (mg).
-// Use GCD(selected); if none selected, GCD(all available). Fallback to lowestStepMg.
+// Compute the effective rounding grid ("quantum") from *pieces* we can actually give.
+// Uses the available/selected base strengths, then adds halves/quarters if the
+// tablet can be split (and the BZRA quarter toggle is on). The quantum is the
+// smallest positive piece.
 function effectiveQuantumMg(cls, med, form){
   try {
-    // Prefer explicitly selected formulations if present
-    let arr = (typeof selectedProductMgs === "function" ? (selectedProductMgs() || []) : []) 
-      .map(v => (typeof v === "number" ? v : parseMgFromStrength(v)))
-      .filter(n => Number.isFinite(n) && n > 0);
+    // Base strengths (mg) – respects product picker when used
+    const bases = stepBaseStrengthsMg(cls, med, form) || [];
 
-    // If none selected, use all strengths for the current med/form
-    if (!arr.length) {
-      arr = (typeof strengthsForSelectedSafe === "function" ? strengthsForSelectedSafe(cls, med, form) : [])
-        .map(v => (typeof v === "number" ? v : parseMgFromStrength(v)))
-        .filter(n => Number.isFinite(n) && n > 0);
+    // Splitting rules for this med/form (e.g. BZRA quarters toggle, SR/ODT cannot split)
+    const split = (typeof canSplitTablets === "function")
+      ? canSplitTablets(cls, form, med)
+      : { half: false, quarter: false };
+
+    const pieces = [];
+
+    for (const raw of bases) {
+      const mg = Number(raw);
+      if (!Number.isFinite(mg) || mg <= 0) continue;
+
+      // whole tablet
+      pieces.push(mg);
+
+      // half tablet if allowed
+      if (split.half) {
+        pieces.push(mg / 2);
+      }
+
+      // quarter tablet if allowed
+      if (split.quarter) {
+        pieces.push(mg / 4);
+      }
     }
 
-    // Dedup & integerize
-    arr = Array.from(new Set(arr.map(n => Math.round(n)))).sort((a,b)=>a-b);
+    // Clean up: round to 3 decimal places, dedupe, sort
+    const clean = Array.from(
+      new Set(
+        pieces
+          .map(x => +(+x).toFixed(4))
+          .filter(x => x > 0)
+      )
+    ).sort((a, b) => a - b);
 
-    // Compute GCD across the list
-    let g = 0;
-    for (const n of arr) g = _gcd(g, n);
-
-    if (g && Number.isFinite(g) && g > 0) return g;
+    if (clean.length) {
+      // The quantum is simply the smallest piece we can actually dispense
+      return clean[0];
+    }
 
     // Fallback: use your existing min step
     return lowestStepMg(cls, med, form) || 1;
@@ -2602,18 +2625,43 @@ function allowedPiecesMg(cls, med, form){
   const uniq=[...new Set(base)].sort((a,b)=>a-b);
   let pieces = uniq.slice();
   const split = canSplitTablets(cls,form,med);
-  if(split.half)   uniq.forEach(v=>pieces.push(+(v/2).toFixed(3)));
-  if(split.quarter)uniq.forEach(v=>pieces.push(+(v/4).toFixed(3)));
+  if (split.half)    uniq.forEach(v => pieces.push(+(v/2).toFixed(4)));
+  if (split.quarter) uniq.forEach(v => pieces.push(+(v/4).toFixed(4)));
   return [...new Set(pieces)].sort((a,b)=>a-b);
 }
 
 function lowestStepMg(cls, med, form){
-  if(cls==="Benzodiazepines / Z-Drug (BZRA)" && /Zolpidem/i.test(med) && isMR(form)) return 6.25;
-  if(cls==="Benzodiazepines / Z-Drug (BZRA)" && BZRA_MIN_STEP[med]) return BZRA_MIN_STEP[med];
-  if(cls==="Antipsychotic" && !isMR(form) && AP_ROUND[med]) return AP_ROUND[med];
-  const mg = strengthsForSelected().map(parseMgFromStrength).filter(v=>v>0).sort((a,b)=>a-b)[0]||0;
-  const split = canSplitTablets(cls,form,med);
-  return split.quarter ? +(mg/4).toFixed(3) : (split.half? +(mg/2).toFixed(3) : mg);
+  // BZRA: align with the BZRA-specific grid logic so step size and composition
+  // use the same smallest piece (LCS + quarter toggle).
+  if (cls === "Benzodiazepines / Z-Drug (BZRA)") {
+    // Zolpidem MR stays on its fixed 6.25 mg grid
+    if (/Zolpidem/i.test(med) && isMR(form)) return 6.25;
+
+    // Otherwise, use the same grid as the BZRA taper
+    if (typeof selectionGridStepBZRA === "function") {
+      const grid = selectionGridStepBZRA(med, form, null); // null ⇒ treat as "all products"
+      if (grid && grid > 0) return grid;
+    }
+
+    // Fallback if grid helper fails for some reason
+    if (BZRA_MIN_STEP[med]) return BZRA_MIN_STEP[med];
+  }
+
+  // Antipsychotics: existing rounding rules
+  if (cls === "Antipsychotic" && !isMR(form) && AP_ROUND[med]) {
+    return AP_ROUND[med];
+  }
+
+  // All other classes: base strength adjusted for splitting
+  const mg = strengthsForSelected()
+    .map(parseMgFromStrength)
+    .filter(v => v > 0)
+    .sort((a,b) => a - b)[0] || 0;
+
+  const split = canSplitTablets(cls, form, med);
+  return split.quarter ? +(mg/4).toFixed(3)
+       : split.half   ? +(mg/2).toFixed(3)
+                      : mg;
 }
 function composeExact(target, pieces){
   let rem=+target.toFixed(3), used={}; const arr=pieces.slice().sort((a,b)=>b-a);
@@ -2715,15 +2763,16 @@ function composeForSlot_BZRA_Selected(targetMg, cls, med, form, selectedMg){
 
     // Only split the LCS (this keeps the grid consistent)
     if (m === lcs && allowHalf) {
-      const halfUnit = +(m / 2).toFixed(3);
+      const halfUnit = +(m / 2).toFixed(4);      // was toFixed(3)
       units.push({ unit: halfUnit, source: m, piece: 0.5 });
 
       if (allowQuarter) {
-        const quarterUnit = +(m / 4).toFixed(3);
+        const quarterUnit = +(m / 4).toFixed(4); // was toFixed(3)
         units.push({ unit: quarterUnit, source: m, piece: 0.25 });
       }
     }
   }
+
   if (!units.length) return null;
 
   // Prefer whole > half > quarter, then larger strengths within each
@@ -3550,17 +3599,17 @@ function stepBZRA(packs, percent, med, form){
       const mg = Number(mgRaw);
       if (!Number.isFinite(mg) || mg <= 0) continue;
 
-      const mgClean = +mg.toFixed(3);
+      const mgClean = +mg.toFixed(3);   // base is fine at 3 d.p.
 
       // Always allow whole tablets
       units.push({ unit: mgClean, piece: 1.0 });
 
       if (!nonSplit && allowHalf) {
-        const halfUnit = +(mgClean / 2).toFixed(3);
+        const halfUnit = +(mgClean / 2).toFixed(4);
         units.push({ unit: halfUnit, piece: 0.5 });
 
         if (allowQuarter) {
-          const quarterUnit = +(mgClean / 4).toFixed(3);
+          const quarterUnit = +(mgClean / 4).toFixed(4);
           units.push({ unit: quarterUnit, piece: 0.25 });
         }
       }
@@ -3626,9 +3675,8 @@ function selectionGridStepBZRA(med, form, selectedMg){
 
   // Grid = half or quarter of the LCS depending on the toggle
   const smallestPiece = allowQuarter ? (lcs / 4) : (lcs / 2);
-  return +smallestPiece.toFixed(3);
+  return +smallestPiece.toFixed(4);   // 4 d.p. so 0.0625 is preserved
 }
-
 
 /* =================== Plan builders (tablets) — date-based Phase-2 =================== */
 
