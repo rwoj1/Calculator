@@ -2755,7 +2755,7 @@ function composeForSlot_BZRA_Selected(targetMg, cls, med, form, selectedMg){
   // - half/quarter only from LCS
   const units = [];
   for (const mg of mgList){
-    const m = +Number(mg).toFixed(3);
+    const m = +Number(mg).toFixed(4);
     if (!(m > 0)) continue;
 
     // Whole tablet always allowed
