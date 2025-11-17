@@ -3555,8 +3555,9 @@ function stepBZRA(packs, percent, med, form){
     target = tot;
   }
 
-  // 2b) If still same as prior step, step DOWN by one grid step
-  if (Math.abs(target - tot) < EPS && tot > 0) {
+  // 2b) If the rounded target is less than half a grid-step below the current dose,
+  //     force at least one full step down. This avoids "fake" steps like 0.25 → 0.25.
+  if ((tot - target) < (step / 2) && tot > 0) {
     target = roundTo(Math.max(0, tot - step), step);
   }
 
