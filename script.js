@@ -32,49 +32,58 @@ const roundTo = (x, step) => Math.round(x / step) * step;
 const floorTo = (x, step) => Math.floor(x / step) * step;
 const ceilTo  = (x, step) => Math.ceil (x / step) * step;
 const MAX_WEEKS = 60;
-const THREE_MONTHS_MS = 90 * 24 * 3600 * 1000;
+const DAYS_PER_MONTH = 28; // change to 30 if you prefer 30-day "months"
+const MS_PER_DAY = 24 * 3600 * 1000;
+const THREE_MONTHS_MS = 3 * DAYS_PER_MONTH * MS_PER_DAY; // only used as a fallback
 const EPS = 1e-6;
 
 // Compute the maximum plan/chart date from user controls.
-// Defaults to 3 months from startDate if controls are missing or unset.
 function getChartCapDate(startDate){
   const base = new Date(startDate);
+  // If the start date is somehow invalid, fall back to 3 x DAYS_PER_MONTH from "now"
   if (!(base instanceof Date) || isNaN(+base)) {
-    return new Date(+startDate + THREE_MONTHS_MS);
+    return addDays(new Date(), 3 * DAYS_PER_MONTH);
   }
 
-  // Default: 3 months from start date (current behaviour)
-  let cap = new Date(+base + THREE_MONTHS_MS);
+  const durationRadio = document.getElementById("taperModeDuration");
+  const durationSelect = document.getElementById("taperDuration");
+  const endRadio      = document.getElementById("taperModeDate");
+  const endInput      = document.getElementById("taperEndDate");
 
-  // Expected HTML IDs:
-  //  - radio for "duration" option:    chartRangePresetMode
-  //  - <select> for e.g. "1 month":    chartRangePreset  (value = number of months, e.g. "1", "3")
-  //  - radio for "specific end date":  chartRangeEndMode
-  //  - <input type="date">:            chartRangeEndDate
-  const presetRadio = document.getElementById("chartRangePresetMode");
-  const presetSelect = document.getElementById("chartRangePreset");
-  const endRadio    = document.getElementById("chartRangeEndMode");
-  const endInput    = document.getElementById("chartRangeEndDate");
+  // Helper: default to 3 x DAYS_PER_MONTH from the start date
+  const fallbackCap = () => addDays(base, 3 * DAYS_PER_MONTH);
 
-  // Option A: duration from dropdown (e.g. 1, 2, 3 months…)
-  if (presetRadio && presetRadio.checked && presetSelect) {
-    const months = parseInt(presetSelect.value, 10);
-    if (Number.isFinite(months) && months > 0) {
-      cap = new Date(base);
-      cap.setMonth(cap.getMonth() + months);
-      return cap;
+  // ----- Option A: duration-based mode (default / pre-selected) -----
+  if (durationRadio && durationRadio.checked && durationSelect) {
+    const raw = (durationSelect.value || "").trim();
+
+    // "Until complete" → effectively uncapped, but with a generous safety ceiling
+    if (raw === "complete") {
+      const months = 24; // ≈ 2 years; adjust if you ever want a longer/shorter "complete"
+      return addDays(base, months * DAYS_PER_MONTH);
     }
+
+    const months = parseInt(raw, 10);
+    if (Number.isFinite(months) && months > 0) {
+      return addDays(base, months * DAYS_PER_MONTH);
+    }
+
+    // If the value is somehow invalid, use the default
+    return fallbackCap();
   }
 
-  // Option B: explicit end date
+  // ----- Option B: explicit end date -----
   if (endRadio && endRadio.checked && endInput && endInput.value) {
     const d = new Date(endInput.value);
-    if (!isNaN(+d)) {
-      cap = d;
+    if (!isNaN(+d) && +d >= +base) {
+      return d; // respect the user’s chosen end date
     }
+    // If the chosen end date is invalid or earlier than the start date, fall back
+    return fallbackCap();
   }
 
-  return cap;
+  // If controls are missing or unchecked, fall back to 3 x DAYS_PER_MONTH
+  return fallbackCap();
 }
 
 /* ===== Patch interval safety (Fentanyl: ×3 days, Buprenorphine: ×7 days) ===== */
