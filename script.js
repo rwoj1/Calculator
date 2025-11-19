@@ -1878,15 +1878,18 @@ function tabletsPhraseDigits(q){ // instruction lines
 function makeTabletImg(kind){
   const img = document.createElement("img");
 
-  if (kind === "full")    img.src = "full-tablet.jpg";
-  else if (kind === "half")   img.src = "half-tablet.jpg";
-  else if (kind === "quarter") img.src = "quarter-tablet.jpg";
+  if (kind === "full") {
+    img.src = "images/full-tablet.jpg";
+  } else if (kind === "half") {
+    img.src = "images/half-tablet.jpg";
+  } else if (kind === "quarter") {
+    img.src = "images/quarter-tablet.jpg";
+  }
 
   img.alt = kind + " tablet";
   img.className = "tablet-icon tablet-" + kind;
   return img;
 }
-
 // Replace numeric counts in AM/MID/DIN/PM cells with tablet pictures
 function renderTabletIconsInSchedule(){
   const host = document.getElementById("scheduleBlock");
