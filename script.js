@@ -1878,9 +1878,9 @@ function tabletsPhraseDigits(q){ // instruction lines
 function makeTabletImg(kind){
   const img = document.createElement("img");
 
-  if (kind === "full")    img.src = "Full Tablet.jpg";
-  else if (kind === "half")   img.src = "Half Tablet.jpg";
-  else if (kind === "quarter") img.src = "Quarter Tablet.jpg";
+  if (kind === "full")    img.src = "full-tablet.jpg";
+  else if (kind === "half")   img.src = "half-tablet.jpg";
+  else if (kind === "quarter") img.src = "quarter-tablet.jpg";
 
   img.alt = kind + " tablet";
   img.className = "tablet-icon tablet-" + kind;
