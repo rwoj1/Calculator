@@ -1850,14 +1850,14 @@ function _smallIntToWords(n) {
   return map[n] ?? String(n);
 }
 function qToCell(q){ // q = quarters of a tablet (for table cells)
-  const tabs = q/4;
-  const whole = Math.floor(tabs + 1e-6);
-  const frac  = +(tabs - whole).toFixed(2);
-  if (frac === 0) return String(whole);
-  if (frac === 0.5)  return whole ? `${_smallIntToWords(whole)} and a half` : "half";
-  if (frac === 0.25) return whole ? `${_smallIntToWords(whole)} and a quarter` : "a quarter";
-  if (frac === 0.75) return whole ? `${_smallIntToWords(whole)} and three quarters` : "three quarters";
-  return `${_smallIntToWords(whole)} and ${String(frac)} of a tablet`;
+  if (q == null || q === "") return "";
+  const tabs = q / 4;  // convert quarters → tablets, e.g. 2 → 0.5, 6 → 1.5
+  if (!Number.isFinite(tabs)) return "";
+  // Format to at most 2 decimal places, then strip trailing zeros
+  let s = tabs.toFixed(2);            // e.g. "0.50", "1.25", "2.00"
+  s = s.replace(/\.00$/, "");         // "2.00" → "2"
+  s = s.replace(/(\.\d)0$/, "$1");    // "1.50" → "1.5"
+  return s;                           // e.g. "0.5", "0.25", "1.25"
 }
 function tabletsPhraseDigits(q){ // instruction lines
   const tabs = q/4;
