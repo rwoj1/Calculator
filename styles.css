@@ -440,6 +440,15 @@ button.ghost{
     vertical-align: middle !important;
   }
 
+  /* Make dose numbers easier to scan */
+  .plan-standard td.col-am,
+  .plan-standard td.col-mid,
+  .plan-standard td.col-din,
+  .plan-standard td.col-pm {
+    font-variant-numeric: tabular-nums; /* align digits vertically */
+    letter-spacing: 0.03em;             /* tiny extra spacing around the decimal */
+  }
+   
   /* === STEP BUBBLE (tablets/caps) === */
   /* clear inner gridlines; we'll draw only the lines we want */
   .plan-standard tbody.step-group td { border-color: transparent !important; background-clip: padding-box; }
