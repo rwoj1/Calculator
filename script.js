@@ -1850,17 +1850,14 @@ function _smallIntToWords(n) {
   return map[n] ?? String(n);
 }
 function qToCell(q){ // q = quarters of a tablet (for table cells)
-  if (!q) return "";
-  const tabs = q / 4;                 // convert quarters → tablets
-  const val  = +tabs.toFixed(2);      // 2 decimal places max
-
-  // If it's basically a whole number (e.g. 1.00, 2.00) just show the integer
-  if (Math.abs(val - Math.round(val)) < 1e-6) {
-    return String(Math.round(val));
-  }
-
-  // Otherwise show the decimal (e.g. 1.25, 1.5, 1.75)
-  return String(val);
+  const tabs = q/4;
+  const whole = Math.floor(tabs + 1e-6);
+  const frac  = +(tabs - whole).toFixed(2);
+  if (frac === 0) return String(whole);
+  if (frac === 0.5)  return whole ? `${_smallIntToWords(whole)} and a half` : "half";
+  if (frac === 0.25) return whole ? `${_smallIntToWords(whole)} and a quarter` : "a quarter";
+  if (frac === 0.75) return whole ? `${_smallIntToWords(whole)} and three quarters` : "three quarters";
+  return `${_smallIntToWords(whole)} and ${String(frac)} of a tablet`;
 }
 function tabletsPhraseDigits(q){ // instruction lines
   const tabs = q/4;
@@ -1871,66 +1868,6 @@ function tabletsPhraseDigits(q){ // instruction lines
   if (frac === 0.25) return whole ? `${_smallIntToWords(whole)} and a quarter of a tablet` : "a quarter of a tablet";
   if (frac === 0.75) return whole ? `${_smallIntToWords(whole)} and three quarters of a tablet` : "three quarters of a tablet";
   return `${_smallIntToWords(whole)} and ${String(frac)} of a tablet`;
-}
-// ===== Tablet icons for the patient chart =====
-
-// Create one <img> for a full / half / quarter tablet
-function makeTabletImg(kind){
-  const img = document.createElement("img");
-
-  if (kind === "full") {
-    img.src = "images/full-tablet.jpg";
-  } else if (kind === "half") {
-    img.src = "images/half-tablet.jpg";
-  } else if (kind === "quarter") {
-    img.src = "images/quarter-tablet.jpg";
-  }
-
-  img.alt = kind + " tablet";
-  img.className = "tablet-icon tablet-" + kind;
-  return img;
-}
-// Replace numeric counts in AM/MID/DIN/PM cells with tablet pictures
-function renderTabletIconsInSchedule(){
-  const host = document.getElementById("scheduleBlock");
-  if (!host) return;
-
-  const cells = host.querySelectorAll(
-    ".plan-standard td.col-am, " +
-    ".plan-standard td.col-mid, " +
-    ".plan-standard td.col-din, " +
-    ".plan-standard td.col-pm"
-  );
-
-  cells.forEach(cell => {
-    const txt = (cell.textContent || "").trim();
-    if (!txt) return;
-
-    const n = parseFloat(txt);
-    if (!isFinite(n) || n <= 0) return;
-
-    // Clear the text; we’ll now show icons
-    cell.textContent = "";
-
-    const whole = Math.floor(n + 1e-6);
-    const frac  = +(n - whole).toFixed(2);
-
-    // Full tablets
-    for (let i = 0; i < whole; i++) {
-      cell.appendChild(makeTabletImg("full"));
-    }
-
-    // Fractional tablet, based on quarters
-    if (Math.abs(frac - 0.50) < 1e-6) {
-      cell.appendChild(makeTabletImg("half"));
-    } else if (Math.abs(frac - 0.25) < 1e-6) {
-      cell.appendChild(makeTabletImg("quarter"));
-    } else if (Math.abs(frac - 0.75) < 1e-6) {
-      // 0.75 = half + quarter
-      cell.appendChild(makeTabletImg("half"));
-      cell.appendChild(makeTabletImg("quarter"));
-    }
-  });
 }
 // Collapse pairs of 12/12.5 to 25 (repeat until no pairs remain)
 function collapseFentanylTwelves(patches){
@@ -4595,25 +4532,15 @@ Hooks into renderStandardTable/renderPatchTable
   function td(text, cls){ const el = document.createElement("td"); if (cls) el.className = cls; el.textContent = text; return el; }
 
   // ---------- wrap existing renderers ----------
-const _renderStd   = (typeof window.renderStandardTable === "function") ? window.renderStandardTable : null;
-if (_renderStd){
-  window.renderStandardTable = function(rows){
-    try { calcLogger.buildFromRows(rows); } catch {}
-
-    const rv = _renderStd.apply(this, arguments);
-
-    // After the standard chart is drawn, swap numbers → tablet icons
-    try { renderTabletIconsInSchedule(); } catch {}
-
-    try {
-      if (document.getElementById("showCalc")?.checked) {
-        calcLogger.render();
-      }
-    } catch {}
-
-    return rv;
-  };
-}
+  const _renderStd   = (typeof window.renderStandardTable === "function") ? window.renderStandardTable : null;
+  if (_renderStd){
+    window.renderStandardTable = function(rows){
+      try { calcLogger.buildFromRows(rows); } catch {}
+      const rv = _renderStd.apply(this, arguments);
+      try { if (document.getElementById("showCalc")?.checked) calcLogger.render(); } catch {}
+      return rv;
+    };
+  }
 
   const _renderPatch = (typeof window.renderPatchTable === "function") ? window.renderPatchTable : null;
   if (_renderPatch){
