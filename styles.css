@@ -788,4 +788,83 @@ button.ghost{
   .suggested-practice { padding: 18px; }
   .suggested-practice .practice-text { font-size: 1rem; line-height: 1.65; }
 }
+  /* ===== Administration Record (print-only) ===== */
+
+  .admin-record-block {
+    page-break-before: always;   /* start calendars on a new page after the chart */
+    margin-top: 8pt;
+    font-size: 9pt;
+  }
+
+  .admin-intro {
+    margin: 4pt 0 6pt;
+  }
+
+  .admin-month {
+    page-break-after: always;    /* one month per page */
+    margin-top: 4pt;
+  }
+
+  .admin-month-heading {
+    font-size: 11pt;
+    margin: 0 0 4pt;
+  }
+
+  .admin-calendar {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+
+  .admin-calendar th,
+  .admin-calendar td {
+    border: 1px solid #000;
+    vertical-align: top;
+    padding: 2pt;
+  }
+
+  .admin-calendar th {
+    text-align: center;
+    font-weight: 600;
+    font-size: 9pt;
+  }
+
+  .admin-day {
+    height: 60pt; /* gives enough room for the four dose rows */
+  }
+
+  .admin-empty {
+    background: #fff;
+  }
+
+  .day-number {
+    font-weight: 600;
+    margin-bottom: 2pt;
+  }
+
+  .dose-row {
+    font-size: 8pt;
+    line-height: 1.2;
+  }
+
+  .admin-checkbox {
+    display: inline-block;
+    width: 8pt;
+    height: 8pt;
+    border: 1px solid #000;
+    margin-right: 2pt;
+  }
+
+  /* Days outside taper window: greyed but still present */
+  .admin-day-outside {
+    background: #f2f2f2;
+    color: #777;
+  }
+
+  /* Review day: strong border + mid-grey fill (B&W-friendly) */
+  .admin-day-review {
+    border: 2px solid #000 !important;
+    background: #d9d9d9;
+  }
+
 
