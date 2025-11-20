@@ -813,9 +813,9 @@ function apMarkDirty(isDirty, message){
     });
   };
   if (isDirty){
-    disable("#printBtn, #btnPrint, .btn-print, #downloadBtn, .btn-download");
+    disable("#printBtn, #printAdminBtn, #btnPrint, .btn-print, #downloadBtn, .btn-download");
   } else {
-    enable("#printBtn, #btnPrint, .btn-print, #downloadBtn, .btn-download");
+    enable("#printBtn, #printAdminBtn, #btnPrint, .btn-print, #downloadBtn, .btn-download");
   }
 }
 // --- PRINT DECORATIONS (header, colgroup, zebra fallback, nowrap units) ---
@@ -1601,6 +1601,212 @@ function _printCSS(){
     .instructions-pre{white-space:pre-line}
     @page{size:A4;margin:12mm}
   </style>`;
+}
+// Build print-only Administration Record calendars (one month per page)
+function buildAdministrationCalendars() {
+  const { table } = getPrintTableAndType();
+  if (!table) return () => {};
+
+  // Helper: parse DD/MM/YYYY into Date
+  const parseDMY = (s) => {
+    const m = String(s || "").trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (!m) return null;
+    const d = Number(m[1]), mo = Number(m[2]), y = Number(m[3]);
+    if (!d || !mo || !y) return null;
+    return new Date(y, mo - 1, d);
+  };
+
+  // Scan table rows to find start, end, and review dates
+  const allDates = [];
+  const reviewDates = [];
+  const rows = table.querySelectorAll("tbody.step-group tr");
+
+  rows.forEach(tr => {
+    const tdDate = tr.querySelector("td.col-date");
+    if (!tdDate) return;
+    const dateText = (tdDate.textContent || "").trim();
+    if (!dateText) return; // skip spacer rows
+
+    const dt = parseDMY(dateText);
+    if (!dt) return;
+    allDates.push(dt);
+
+    const finalCell = tr.querySelector("td.final-cell");
+    if (finalCell) {
+      const msg = (finalCell.textContent || "").toLowerCase();
+      if (msg.includes("review")) {
+        reviewDates.push(dt);
+      }
+    }
+  });
+
+  if (!allDates.length) return () => {};
+
+  // Sort and deduplicate dates
+  const uniqDates = Array.from(new Set(allDates.map(d => d.getTime())))
+    .sort((a,b)=>a-b)
+    .map(ms => new Date(ms));
+
+  const startDate = uniqDates[0];
+  const finalDate = uniqDates[uniqDates.length - 1];
+
+  let endDate = finalDate;
+  if (reviewDates.length) {
+    const uniqReview = Array.from(new Set(reviewDates.map(d => d.getTime()))).sort((a,b)=>a-b);
+    endDate = new Date(uniqReview[0]); // stop calendar at earliest review date
+  }
+
+  // Helper to compare dates by Y/M/D only
+  const sameYMD = (a, b) =>
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+
+  const isReviewDate = (d) =>
+    reviewDates.some(r => sameYMD(r, d));
+
+  // Build wrapper block (hidden on screen, shown in print)
+  const card = document.getElementById("outputCard");
+  if (!card) return () => {};
+
+  const block = document.createElement("div");
+  block.id = "adminRecordBlock";
+  block.className = "admin-record-block print-only";
+
+  // Intro text for patient
+  const intro = document.createElement("p");
+  intro.className = "admin-intro";
+  intro.textContent = "Use this chart to record when you take each dose. Tick the box after you take your medicine. Bring the chart to your next appointment.";
+  block.appendChild(intro);
+
+  // Month iteration from startDate.month to endDate.month inclusive
+  const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  let cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+  const lastMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+
+  while (cursor.getTime() <= lastMonth.getTime()) {
+    const y = cursor.getFullYear();
+    const m = cursor.getMonth();
+
+    const monthDiv = document.createElement("div");
+    monthDiv.className = "admin-month";
+
+    const heading = document.createElement("h3");
+    heading.className = "admin-month-heading";
+    heading.textContent = "Administration Record \u2013 " + monthNames[m] + " " + y;
+    monthDiv.appendChild(heading);
+
+    const tableCal = document.createElement("table");
+    tableCal.className = "admin-calendar";
+
+    const thead = document.createElement("thead");
+    const trHead = document.createElement("tr");
+    ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].forEach(lbl => {
+      const th = document.createElement("th");
+      th.textContent = lbl;
+      trHead.appendChild(th);
+    });
+    thead.appendChild(trHead);
+    tableCal.appendChild(thead);
+
+    const tbody = document.createElement("tbody");
+
+    const firstOfMonth = new Date(y, m, 1);
+    const lastOfMonth = new Date(y, m + 1, 0);
+    // JS getDay: 0=Sun..6=Sat; we want Mon=0..Sun=6
+    let dow = firstOfMonth.getDay(); // 0..6
+    let colIndex = (dow + 6) % 7; // shift so Mon=0
+
+    let tr = document.createElement("tr");
+    // leading blanks
+    for (let i = 0; i < colIndex; i++) {
+      const td = document.createElement("td");
+      td.className = "admin-empty";
+      tr.appendChild(td);
+    }
+
+    for (let day = 1; day <= lastOfMonth.getDate(); day++) {
+      if (colIndex === 7) {
+        tbody.appendChild(tr);
+        tr = document.createElement("tr");
+        colIndex = 0;
+      }
+      const td = document.createElement("td");
+      td.className = "admin-day";
+
+      const thisDate = new Date(y, m, day);
+
+      // classify day relative to taper window
+      if (thisDate < startDate || thisDate > endDate) {
+        td.classList.add("admin-day-outside");
+      }
+      if (isReviewDate(thisDate)) {
+        td.classList.add("admin-day-review");
+      }
+
+      const dayNum = document.createElement("div");
+      dayNum.className = "day-number";
+      dayNum.textContent = String(day);
+      td.appendChild(dayNum);
+
+      const labels = ["Morning","Midday","Dinner","Night"];
+      labels.forEach(label => {
+        const row = document.createElement("div");
+        row.className = "dose-row";
+        const box = document.createElement("span");
+        box.className = "admin-checkbox";
+        row.appendChild(box);
+        row.appendChild(document.createTextNode(" " + label));
+        td.appendChild(row);
+      });
+
+      tr.appendChild(td);
+      colIndex++;
+    }
+
+    // trailing blanks
+    if (tr.children.length) {
+      while (tr.children.length < 7) {
+        const td = document.createElement("td");
+        td.className = "admin-empty";
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    }
+
+    tableCal.appendChild(tbody);
+    monthDiv.appendChild(tableCal);
+    block.appendChild(monthDiv);
+
+    // next month
+    cursor = new Date(y, m + 1, 1);
+  }
+
+  card.appendChild(block);
+
+  // cleanup removes the block after printing
+  return () => {
+    block.remove();
+  };
+}
+
+// Second print flavour: chart + administration record calendars
+function printWithAdministrationRecord() {
+  const tableExists = document.querySelector("#scheduleBlock table, #patchBlock table");
+  if (!tableExists) { alert("Please generate a chart first."); return; }
+
+  document.body.classList.add("printing");
+
+  const cleanupDecor = preparePrintDecorations();
+  const cleanupAdmin = buildAdministrationCalendars();
+
+  window.print();
+
+  setTimeout(() => {
+    document.body.classList.remove("printing");
+    try { cleanupDecor(); } catch(e) {}
+    try { cleanupAdmin(); } catch(e) {}
+  }, 100);
 }
 function printOutputOnly() {
   const tableExists = document.querySelector("#scheduleBlock table, #patchBlock table");
@@ -4700,6 +4906,7 @@ function init(){
   document.getElementById("generateBtn")?.addEventListener("click", buildPlan);
   document.getElementById("resetBtn")?.addEventListener("click", ()=>location.reload());
   document.getElementById("printBtn")?.addEventListener("click", printOutputOnly);
+  document.getElementById("printAdminBtn")?.addEventListener("click", printWithAdministrationRecord);
   document.getElementById("savePdfBtn")?.addEventListener("click", saveOutputAsPdf);
 document.getElementById("classSelect")?.addEventListener("change", () => {
   updateBestPracticeBox();
