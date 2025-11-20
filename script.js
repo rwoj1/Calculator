@@ -1603,6 +1603,7 @@ function _printCSS(){
   </style>`;
 }
 // Build print-only Administration Record calendars (one month per page)
+// Build print-only Administration Record calendars (one month per page)
 function buildAdministrationCalendars() {
   const { table, type } = getPrintTableAndType();
   if (!table) return () => {};
@@ -1611,7 +1612,9 @@ function buildAdministrationCalendars() {
   const parseDMY = (s) => {
     const m = String(s || "").trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
     if (!m) return null;
-    const d = Number(m[1]), mo = Number(m[2]), y = Number(m[3]);
+    const d  = Number(m[1]),
+          mo = Number(m[2]),
+          y  = Number(m[3]);
     if (!d || !mo || !y) return null;
     return new Date(y, mo - 1, d);
   };
@@ -1662,14 +1665,7 @@ function buildAdministrationCalendars() {
     .map(ms => new Date(ms));
 
   const startDate = uniqDates[0];
-  const finalDate = uniqDates[uniqDates.length - 1];
-
-  let endDate = finalDate;
-  if (reviewDates.length) {
-    // Stop calendars at the earliest review date
-    const uniqReview = Array.from(new Set(reviewDates.map(d => d.getTime()))).sort((a, b) => a - b);
-    endDate = new Date(uniqReview[0]);
-  }
+  const endDate   = uniqDates[uniqDates.length - 1]; // ALWAYS include full taper period
 
   // Helper to compare dates by Y/M/D only
   const sameYMD = (a, b) =>
@@ -1688,20 +1684,13 @@ function buildAdministrationCalendars() {
   block.id = "adminRecordBlock";
   block.className = "admin-record-block print-only";
 
-  // Intro text for patient
-  const intro = document.createElement("p");
-  intro.className = "admin-intro";
-  intro.textContent =
-    "Use this chart to record when you take each dose. " +
-    "Tick the box after you take your medicine. Bring the chart to your next appointment.";
-  block.appendChild(intro);
-
-  // Month iteration from startDate.month to endDate.month inclusive
   const monthNames = [
     "January","February","March","April","May","June",
     "July","August","September","October","November","December"
   ];
-  let cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+
+  // Month iteration from startDate.month to endDate.month inclusive
+  let cursor    = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
   const lastMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
 
   while (cursor.getTime() <= lastMonth.getTime()) {
@@ -1711,11 +1700,19 @@ function buildAdministrationCalendars() {
     const monthDiv = document.createElement("div");
     monthDiv.className = "admin-month";
 
+    // Title
     const heading = document.createElement("h3");
     heading.className = "admin-month-heading";
-    heading.textContent = "Administration Record \u2013 " + monthNames[m] + " " + y;
+    heading.textContent = "Administration record \u2013 " + monthNames[m] + " " + y;
     monthDiv.appendChild(heading);
 
+    // Single line under the title
+    const note = document.createElement("p");
+    note.className = "admin-month-note";
+    note.textContent = "tick each box after a dose is taken.";
+    monthDiv.appendChild(note);
+
+    // Calendar table
     const tableCal = document.createElement("table");
     tableCal.className = "admin-calendar";
 
@@ -1732,10 +1729,10 @@ function buildAdministrationCalendars() {
     const tbody = document.createElement("tbody");
 
     const firstOfMonth = new Date(y, m, 1);
-    const lastOfMonth = new Date(y, m + 1, 0);
+    const lastOfMonth  = new Date(y, m + 1, 0);
     // JS getDay: 0=Sun..6=Sat; we want Mon=0..Sun=6
-    let dow = firstOfMonth.getDay(); // 0..6
-    let colIndex = (dow + 6) % 7;    // shift so Mon=0
+    let dow      = firstOfMonth.getDay(); // 0..6
+    let colIndex = (dow + 6) % 7;         // shift so Mon=0
 
     let tr = document.createElement("tr");
     // leading blanks
@@ -1809,6 +1806,7 @@ function buildAdministrationCalendars() {
     block.remove();
   };
 }
+
 // Second print flavour: chart + administration record calendars
 function printWithAdministrationRecord() {
   const tableExists = document.querySelector("#scheduleBlock table, #patchBlock table");
