@@ -1604,7 +1604,7 @@ function _printCSS(){
 }
 // Build print-only Administration Record calendars (one month per page)
 function buildAdministrationCalendars() {
-  const { table } = getPrintTableAndType();
+  const { table, type } = getPrintTableAndType();
   if (!table) return () => {};
 
   // Helper: parse DD/MM/YYYY into Date
@@ -1619,18 +1619,29 @@ function buildAdministrationCalendars() {
   // Scan table rows to find start, end, and review dates
   const allDates = [];
   const reviewDates = [];
+
+  // NOTE: use different date column depending on table type
   const rows = table.querySelectorAll("tbody.step-group tr");
 
   rows.forEach(tr => {
-    const tdDate = tr.querySelector("td.col-date");
+    let tdDate;
+    if (type === "standard") {
+      // standard tablet table: date column has class "col-date"
+      tdDate = tr.querySelector("td.col-date");
+    } else {
+      // patch table: first column ("Apply on") holds the date
+      tdDate = tr.querySelector("td") || null;
+    }
     if (!tdDate) return;
+
     const dateText = (tdDate.textContent || "").trim();
-    if (!dateText) return; // skip spacer rows
+    if (!dateText) return; // skip blank spacer rows
 
     const dt = parseDMY(dateText);
     if (!dt) return;
     allDates.push(dt);
 
+    // Final / review cell is always marked with "final-cell" in both tables
     const finalCell = tr.querySelector("td.final-cell");
     if (finalCell) {
       const msg = (finalCell.textContent || "").toLowerCase();
@@ -1640,11 +1651,14 @@ function buildAdministrationCalendars() {
     }
   });
 
-  if (!allDates.length) return () => {};
+  if (!allDates.length) {
+    // Nothing to build calendars from
+    return () => {};
+  }
 
   // Sort and deduplicate dates
   const uniqDates = Array.from(new Set(allDates.map(d => d.getTime())))
-    .sort((a,b)=>a-b)
+    .sort((a, b) => a - b)
     .map(ms => new Date(ms));
 
   const startDate = uniqDates[0];
@@ -1652,8 +1666,9 @@ function buildAdministrationCalendars() {
 
   let endDate = finalDate;
   if (reviewDates.length) {
-    const uniqReview = Array.from(new Set(reviewDates.map(d => d.getTime()))).sort((a,b)=>a-b);
-    endDate = new Date(uniqReview[0]); // stop calendar at earliest review date
+    // Stop calendars at the earliest review date
+    const uniqReview = Array.from(new Set(reviewDates.map(d => d.getTime()))).sort((a, b) => a - b);
+    endDate = new Date(uniqReview[0]);
   }
 
   // Helper to compare dates by Y/M/D only
@@ -1676,11 +1691,16 @@ function buildAdministrationCalendars() {
   // Intro text for patient
   const intro = document.createElement("p");
   intro.className = "admin-intro";
-  intro.textContent = "Use this chart to record when you take each dose. Tick the box after you take your medicine. Bring the chart to your next appointment.";
+  intro.textContent =
+    "Use this chart to record when you take each dose. " +
+    "Tick the box after you take your medicine. Bring the chart to your next appointment.";
   block.appendChild(intro);
 
   // Month iteration from startDate.month to endDate.month inclusive
-  const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const monthNames = [
+    "January","February","March","April","May","June",
+    "July","August","September","October","November","December"
+  ];
   let cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
   const lastMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
 
@@ -1715,7 +1735,7 @@ function buildAdministrationCalendars() {
     const lastOfMonth = new Date(y, m + 1, 0);
     // JS getDay: 0=Sun..6=Sat; we want Mon=0..Sun=6
     let dow = firstOfMonth.getDay(); // 0..6
-    let colIndex = (dow + 6) % 7; // shift so Mon=0
+    let colIndex = (dow + 6) % 7;    // shift so Mon=0
 
     let tr = document.createElement("tr");
     // leading blanks
@@ -1789,7 +1809,6 @@ function buildAdministrationCalendars() {
     block.remove();
   };
 }
-
 // Second print flavour: chart + administration record calendars
 function printWithAdministrationRecord() {
   const tableExists = document.querySelector("#scheduleBlock table, #patchBlock table");
