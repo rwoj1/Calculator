@@ -1609,7 +1609,6 @@ function buildAdministrationCalendars() {
   const reviewDates = [];
 
   const rows = table.querySelectorAll("tbody.step-group tr");
-
   rows.forEach(tr => {
     let tdDate;
     if (type === "standard") {
@@ -1622,7 +1621,7 @@ function buildAdministrationCalendars() {
     if (!tdDate) return;
 
     const dateText = (tdDate.textContent || "").trim();
-    if (!dateText) return; // skip blank or spacer rows
+    if (!dateText) return; // skip blank / spacer rows
 
     const dt = parseDMY(dateText);
     if (!dt) return;
@@ -1643,7 +1642,7 @@ function buildAdministrationCalendars() {
     return () => {};
   }
 
-  // Sort and deduplicate dates
+  // Sort and deduplicate taper step dates
   const uniqDates = Array.from(new Set(allDates.map(d => d.getTime())))
     .sort((a, b) => a - b)
     .map(ms => new Date(ms));
@@ -1659,7 +1658,9 @@ function buildAdministrationCalendars() {
   const isReviewDate = (d) =>
     reviewDates.some(r => sameYMD(r, d));
 
-  // Build wrapper block (goes inside #outputCard, print-only)
+  const isStepDate = (d) =>
+    uniqDates.some(dt => sameYMD(dt, d));
+
   const card = document.getElementById("outputCard");
   if (!card) return () => {};
 
@@ -1683,18 +1684,22 @@ function buildAdministrationCalendars() {
     const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
     const monthEnd   = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
 
-const monthWrapper = document.createElement("div");
-monthWrapper.className = "admin-month";
+    const monthWrapper = document.createElement("div");
+    monthWrapper.className = "admin-month";
 
-const title = document.createElement("h2");
-title.className = "admin-month-heading";
-title.textContent = `Administration record – ${monthNames[cursor.getMonth()]} ${cursor.getFullYear()}`;
-monthWrapper.appendChild(title);
+    const title = document.createElement("h2");
+    title.className = "admin-month-heading";
+    title.textContent =
+      `Administration record – ${monthNames[cursor.getMonth()]} ${cursor.getFullYear()}`;
+    monthWrapper.appendChild(title);
 
-const note = document.createElement("p");
-note.className = "admin-month-note";
-note.textContent = "Tick each box after a dose is taken.";
-monthWrapper.appendChild(note);
+    const note = document.createElement("p");
+    note.className = "admin-month-note";
+    note.innerHTML =
+      "Tick each box after a dose is taken.<br>" +
+      "Dates with a bold border and underlined number show dose change steps. " +
+      "Grey cells marked ‘Review’ show planned review dates.";
+    monthWrapper.appendChild(note);
 
     // Calendar table
     const tbl = document.createElement("table");
@@ -1710,7 +1715,7 @@ monthWrapper.appendChild(note);
     thead.appendChild(trHead);
     tbl.appendChild(thead);
 
-        const tbody = document.createElement("tbody");
+    const tbody = document.createElement("tbody");
 
     // Compute leading blanks (calendar starts Monday)
     const firstDay = (monthStart.getDay() + 6) % 7; // JS Sunday=0 → Monday=0
@@ -1738,18 +1743,20 @@ monthWrapper.appendChild(note);
       label.textContent = d.toString();
       td.appendChild(label);
 
-      // Overall taper window (used only for subtle styling, not for checkboxes)
-      const inRange =
+      const inWindow =
         cellDate >= startDate &&
         cellDate <= endDate;
 
-      // Optional: lightly grey days entirely outside the taper window
-      if (!inRange) {
+      // Light grey for days entirely outside the taper window
+      if (!inWindow) {
         td.classList.add("admin-day-outside");
       }
 
+      const stepDay   = isStepDate(cellDate);
+      const reviewDay = isReviewDate(cellDate);
+
       // Four tick boxes on EVERY day
-      const doses = ["Morning", "Midday", "Dinner", "Night"];
+      const doses = ["Morning","Midday","Dinner","Night"];
       doses.forEach(name => {
         const row = document.createElement("div");
         row.className = "dose-row";
@@ -1762,8 +1769,19 @@ monthWrapper.appendChild(note);
         td.appendChild(row);
       });
 
-      // Strong styling + label for review days
-      if (isReviewDate(cellDate)) {
+      // Step-down days: thicker border + underlined date + optional "Step" tag
+      if (stepDay) {
+        td.classList.add("admin-day-step");
+        if (!reviewDay) {
+          const stepTag = document.createElement("div");
+          stepTag.className = "step-label";
+          stepTag.textContent = "Step";
+          td.appendChild(stepTag);
+        }
+      }
+
+      // Review days: strong grey styling + "Review" tag (overrides step styling)
+      if (reviewDay) {
         td.classList.add("admin-day-review");
         const reviewTag = document.createElement("div");
         reviewTag.className = "review-label";
