@@ -929,23 +929,38 @@ function tightenStrengthUnits() {
 
 // 5) Add short weekday to the Date cell (print only), without bolding
 function addWeekdayToDates() {
-  const dateCells = document.querySelectorAll("#outputCard tbody.step-group tr:first-child td:first-child");
+  const dateCells = document.querySelectorAll(
+    "#outputCard tbody.step-group tr:first-child td:first-child"
+  );
   const originals = new Map();
   const weekday = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-  const parseDMY = (s) => {
-    // expects DD/MM/YYYY
-    const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  const monthShort = [
+    "Jan","Feb","Mar","Apr","May","Jun",
+    "Jul","Aug","Sep","Oct","Nov","Dec"
+  ];
+
+  // Parse "21 Nov 2025"
+  const parseDMYShort = (s) => {
+    const m = String(s || "").trim().match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/);
     if (!m) return null;
-    const [_, d, mo, y] = m.map(Number);
-    return new Date(y, mo - 1, d);
+    const day = Number(m[1]);
+    const monthIndex = monthShort.indexOf(m[2]);
+    const year = Number(m[3]);
+    if (!day || monthIndex === -1 || !year) return null;
+    return new Date(year, monthIndex, day);
   };
+
   dateCells.forEach(td => {
     const orig = td.textContent || "";
     originals.set(td, orig);
-    const dt = parseDMY(orig.trim());
+    const dt = parseDMYShort(orig);
     if (dt) td.textContent = `${weekday[dt.getDay()]} ${orig}`;
   });
-  return () => { originals.forEach((val, td) => { td.textContent = val; }); };
+
+  // cleanup: restore original cell text after printing
+  return () => {
+    originals.forEach((val, td) => { td.textContent = val; });
+  };
 }
 
 // Prepare all print-only decorations and return a cleanup function
@@ -1603,20 +1618,23 @@ function _printCSS(){
   </style>`;
 }
 // Build print-only Administration Record calendars (one month per page)
-// Build print-only Administration Record calendars (one month per page)
 function buildAdministrationCalendars() {
   const { table, type } = getPrintTableAndType();
   if (!table) return () => {};
 
-  // Helper: parse DD/MM/YYYY into Date
+  // Helper: parse "21 Nov 2025" into Date
   const parseDMY = (s) => {
-    const m = String(s || "").trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    const monthShort = [
+      "Jan","Feb","Mar","Apr","May","Jun",
+      "Jul","Aug","Sep","Oct","Nov","Dec"
+    ];
+    const m = String(s || "").trim().match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/);
     if (!m) return null;
-    const d  = Number(m[1]),
-          mo = Number(m[2]),
-          y  = Number(m[3]);
-    if (!d || !mo || !y) return null;
-    return new Date(y, mo - 1, d);
+    const day        = Number(m[1]);
+    const monthIndex = monthShort.indexOf(m[2]);
+    const year       = Number(m[3]);
+    if (!day || monthIndex === -1 || !year) return null;
+    return new Date(year, monthIndex, day);
   };
 
   // Scan table rows to find all taper dates + any review dates
