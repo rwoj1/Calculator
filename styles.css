@@ -338,6 +338,26 @@ button.ghost{
   .admin-empty {
     background: #fafafa;
   }
+  /* Step-down day: slightly stronger border + underlined date */
+  .admin-day-step {
+    border: 1.5pt solid #000;
+  }
+
+  .admin-day-step .day-number {
+    text-decoration: underline;
+  }
+
+  .step-label {
+    margin-top: 2pt;
+    font-size: 8pt;
+    font-style: italic;
+  }
+
+  .review-label {
+    margin-top: 2pt;
+    font-size: 8pt;
+    font-style: italic;
+  }
 
 /* ===== Disclaimer gate ===== */
 .hide-until-accept{ display:none !important; }
