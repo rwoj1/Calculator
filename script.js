@@ -1619,11 +1619,10 @@ function buildAdministrationCalendars() {
     return new Date(y, mo - 1, d);
   };
 
-  // Scan table rows to find start, end, and review dates
+  // Scan table rows to find all taper dates + any review dates
   const allDates = [];
   const reviewDates = [];
 
-  // NOTE: use different date column depending on table type
   const rows = table.querySelectorAll("tbody.step-group tr");
 
   rows.forEach(tr => {
@@ -1638,13 +1637,13 @@ function buildAdministrationCalendars() {
     if (!tdDate) return;
 
     const dateText = (tdDate.textContent || "").trim();
-    if (!dateText) return; // skip blank spacer rows
+    if (!dateText) return; // skip blank or spacer rows
 
     const dt = parseDMY(dateText);
     if (!dt) return;
     allDates.push(dt);
 
-    // Final / review cell is always marked with "final-cell" in both tables
+    // Final / review cell is marked with "final-cell"
     const finalCell = tr.querySelector("td.final-cell");
     if (finalCell) {
       const msg = (finalCell.textContent || "").toLowerCase();
@@ -1665,7 +1664,7 @@ function buildAdministrationCalendars() {
     .map(ms => new Date(ms));
 
   const startDate = uniqDates[0];
-  const endDate   = uniqDates[uniqDates.length - 1]; // ALWAYS include full taper period
+  const endDate   = uniqDates[uniqDates.length - 1]; // ALWAYS cover full taper
 
   // Helper to compare dates by Y/M/D only
   const sameYMD = (a, b) =>
@@ -1676,7 +1675,7 @@ function buildAdministrationCalendars() {
   const isReviewDate = (d) =>
     reviewDates.some(r => sameYMD(r, d));
 
-  // Build wrapper block (hidden on screen, shown in print)
+  // Build wrapper block (goes inside #outputCard, print-only)
   const card = document.getElementById("outputCard");
   if (!card) return () => {};
 
@@ -1689,7 +1688,7 @@ function buildAdministrationCalendars() {
     "July","August","September","October","November","December"
   ];
 
-  // Month iteration from startDate.month to endDate.month inclusive
+  // Month iteration: from startDate.month to endDate.month inclusive
   let cursor    = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
   const lastMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
 
@@ -1703,7 +1702,7 @@ function buildAdministrationCalendars() {
     // Title
     const heading = document.createElement("h3");
     heading.className = "admin-month-heading";
-    heading.textContent = "Administration record \u2013 " + monthNames[m] + " " + y;
+    heading.textContent = "Administration record – " + monthNames[m] + " " + y;
     monthDiv.appendChild(heading);
 
     // Single line under the title
@@ -1810,7 +1809,10 @@ function buildAdministrationCalendars() {
 // Second print flavour: chart + administration record calendars
 function printWithAdministrationRecord() {
   const tableExists = document.querySelector("#scheduleBlock table, #patchBlock table");
-  if (!tableExists) { alert("Please generate a chart first."); return; }
+  if (!tableExists) {
+    alert("Please generate a chart first.");
+    return;
+  }
 
   document.body.classList.add("printing");
 
@@ -1825,6 +1827,7 @@ function printWithAdministrationRecord() {
     try { cleanupAdmin(); } catch(e) {}
   }, 100);
 }
+
 function printOutputOnly() {
   const tableExists = document.querySelector("#scheduleBlock table, #patchBlock table");
   if (!tableExists) { alert("Please generate a chart first."); return; }
