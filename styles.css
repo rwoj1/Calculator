@@ -316,6 +316,11 @@ button.ghost{
     margin-bottom: 2pt;
     font-size: 8.5pt;
   }
+  .review-label {
+    margin-top: 2pt;
+    font-size: 8pt;
+    font-style: italic;
+  }
 
   .dose-row {
     font-size: 8pt;
