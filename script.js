@@ -929,38 +929,11 @@ function tightenStrengthUnits() {
 
 // 5) Add short weekday to the Date cell (print only), without bolding
 function addWeekdayToDates() {
-  const dateCells = document.querySelectorAll(
-    "#outputCard tbody.step-group tr:first-child td:first-child"
-  );
-  const originals = new Map();
-  const weekday = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-  const monthShort = [
-    "Jan","Feb","Mar","Apr","May","Jun",
-    "Jul","Aug","Sep","Oct","Nov","Dec"
-  ];
-
-  // Parse "21 Nov 2025"
-  const parseDMYShort = (s) => {
-    const m = String(s || "").trim().match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/);
-    if (!m) return null;
-    const day = Number(m[1]);
-    const monthIndex = monthShort.indexOf(m[2]);
-    const year = Number(m[3]);
-    if (!day || monthIndex === -1 || !year) return null;
-    return new Date(year, monthIndex, day);
-  };
-
-  dateCells.forEach(td => {
-    const orig = td.textContent || "";
-    originals.set(td, orig);
-    const dt = parseDMYShort(orig);
-    if (dt) td.textContent = `${weekday[dt.getDay()]} ${orig}`;
-  });
-
-  // cleanup: restore original cell text after printing
-  return () => {
-    originals.forEach((val, td) => { td.textContent = val; });
-  };
+  // Previous versions tried to reformat the date cells (e.g. add "Mon/Tue").
+  // That made the parsing for the administration calendars brittle.
+  // We now leave the table dates exactly as they are and just return
+  // a no-op cleanup function.
+  return () => {};
 }
 
 // Prepare all print-only decorations and return a cleanup function
@@ -1622,19 +1595,13 @@ function buildAdministrationCalendars() {
   const { table, type } = getPrintTableAndType();
   if (!table) return () => {};
 
-  // Helper: parse "21 Nov 2025" into Date
+  // Helper: parse whatever date text is in the table into a Date
   const parseDMY = (s) => {
-    const monthShort = [
-      "Jan","Feb","Mar","Apr","May","Jun",
-      "Jul","Aug","Sep","Oct","Nov","Dec"
-    ];
-    const m = String(s || "").trim().match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/);
-    if (!m) return null;
-    const day        = Number(m[1]);
-    const monthIndex = monthShort.indexOf(m[2]);
-    const year       = Number(m[3]);
-    if (!day || monthIndex === -1 || !year) return null;
-    return new Date(year, monthIndex, day);
+    const text = String(s || "").replace(/\s+/g, " ").trim();
+    if (!text) return null;
+    const dt = new Date(text);
+    if (!dt || isNaN(dt.getTime())) return null;
+    return dt;
   };
 
   // Scan table rows to find all taper dates + any review dates
@@ -1682,13 +1649,12 @@ function buildAdministrationCalendars() {
     .map(ms => new Date(ms));
 
   const startDate = uniqDates[0];
-  const endDate   = uniqDates[uniqDates.length - 1]; // ALWAYS cover full taper
+  const endDate   = uniqDates[uniqDates.length - 1];
 
-  // Helper to compare dates by Y/M/D only
   const sameYMD = (a, b) =>
     a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate();
+    a.getMonth()    === b.getMonth() &&
+    a.getDate()     === b.getDate();
 
   const isReviewDate = (d) =>
     reviewDates.some(r => sameYMD(r, d));
@@ -1707,128 +1673,165 @@ function buildAdministrationCalendars() {
   ];
 
   // Month iteration: from startDate.month to endDate.month inclusive
-  let cursor    = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-  const lastMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+  let cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
 
-  while (cursor.getTime() <= lastMonth.getTime()) {
-    const y = cursor.getFullYear();
-    const m = cursor.getMonth();
+  while (
+    cursor.getFullYear() < endDate.getFullYear() ||
+    (cursor.getFullYear() === endDate.getFullYear() &&
+     cursor.getMonth()    <= endDate.getMonth())
+  ) {
+    const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+    const monthEnd   = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
 
-    const monthDiv = document.createElement("div");
-    monthDiv.className = "admin-month";
+    const monthWrapper = document.createElement("div");
+    monthWrapper.className = "admin-month";
 
-    // Title
-    const heading = document.createElement("h3");
-    heading.className = "admin-month-heading";
-    heading.textContent = "Administration record – " + monthNames[m] + " " + y;
-    monthDiv.appendChild(heading);
+    const title = document.createElement("h2");
+    title.textContent = `Administration record – ${monthNames[cursor.getMonth()]} ${cursor.getFullYear()}`;
+    monthWrapper.appendChild(title);
 
-    // Single line under the title
     const note = document.createElement("p");
-    note.className = "admin-month-note";
-    note.textContent = "tick each box after a dose is taken.";
-    monthDiv.appendChild(note);
+    note.className = "admin-note";
+    note.textContent = "Tick each box after a dose is taken.";
+    monthWrapper.appendChild(note);
 
     // Calendar table
-    const tableCal = document.createElement("table");
-    tableCal.className = "admin-calendar";
+    const tbl = document.createElement("table");
+    tbl.className = "admin-calendar";
 
     const thead = document.createElement("thead");
     const trHead = document.createElement("tr");
-    ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].forEach(lbl => {
+    ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].forEach(dow => {
       const th = document.createElement("th");
-      th.textContent = lbl;
+      th.textContent = dow;
       trHead.appendChild(th);
     });
     thead.appendChild(trHead);
-    tableCal.appendChild(thead);
+    tbl.appendChild(thead);
 
     const tbody = document.createElement("tbody");
 
-    const firstOfMonth = new Date(y, m, 1);
-    const lastOfMonth  = new Date(y, m + 1, 0);
-    // JS getDay: 0=Sun..6=Sat; we want Mon=0..Sun=6
-    let dow      = firstOfMonth.getDay(); // 0..6
-    let colIndex = (dow + 6) % 7;         // shift so Mon=0
-
-    let tr = document.createElement("tr");
-    // leading blanks
-    for (let i = 0; i < colIndex; i++) {
+    // Compute leading blanks (calendar starts Monday)
+    const firstDay = (monthStart.getDay() + 6) % 7; // JS Sunday=0 → Monday=0
+    let currentRow = document.createElement("tr");
+    for (let i = 0; i < firstDay; i++) {
       const td = document.createElement("td");
-      td.className = "admin-empty";
-      tr.appendChild(td);
+      td.className = "empty";
+      currentRow.appendChild(td);
     }
 
-    for (let day = 1; day <= lastOfMonth.getDate(); day++) {
-      if (colIndex === 7) {
-        tbody.appendChild(tr);
-        tr = document.createElement("tr");
-        colIndex = 0;
+    // Build each day cell
+    for (let d = 1; d <= monthEnd.getDate(); d++) {
+      const cellDate = new Date(cursor.getFullYear(), cursor.getMonth(), d);
+
+      if (currentRow.children.length === 7) {
+        tbody.appendChild(currentRow);
+        currentRow = document.createElement("tr");
       }
+
       const td = document.createElement("td");
-      td.className = "admin-day";
+      td.className = "day-cell";
 
-      const thisDate = new Date(y, m, day);
+      const label = document.createElement("div");
+      label.className = "day-number";
+      label.textContent = d.toString();
+      td.appendChild(label);
 
-      // classify day relative to taper window
-      if (thisDate < startDate || thisDate > endDate) {
-        td.classList.add("admin-day-outside");
+      const inRange =
+        cellDate >= startDate &&
+        cellDate <= endDate &&
+        uniqDates.some(dt => sameYMD(dt, cellDate));
+
+      if (inRange) {
+        // Four tick boxes: morning / midday / dinner / night
+        const doses = ["Morning","Midday","Dinner","Night"];
+        doses.forEach(name => {
+          const row = document.createElement("div");
+          row.className = "dose-row";
+          const box = document.createElement("span");
+          box.className = "tick-box";
+          box.textContent = "☐";
+          const text = document.createElement("span");
+          text.textContent = ` ${name}`;
+          row.appendChild(box);
+          row.appendChild(text);
+          td.appendChild(row);
+        });
+      } else {
+        td.classList.add("no-taper-day");
       }
-      if (isReviewDate(thisDate)) {
-        td.classList.add("admin-day-review");
+
+      if (isReviewDate(cellDate)) {
+        td.classList.add("review-day");
       }
 
-      const dayNum = document.createElement("div");
-      dayNum.className = "day-number";
-      dayNum.textContent = String(day);
-      td.appendChild(dayNum);
-
-      const labels = ["Morning","Midday","Dinner","Night"];
-      labels.forEach(label => {
-        const row = document.createElement("div");
-        row.className = "dose-row";
-        const box = document.createElement("span");
-        box.className = "admin-checkbox";
-        row.appendChild(box);
-        row.appendChild(document.createTextNode(" " + label));
-        td.appendChild(row);
-      });
-
-      tr.appendChild(td);
-      colIndex++;
+      currentRow.appendChild(td);
     }
 
-    // trailing blanks
-    if (tr.children.length) {
-      while (tr.children.length < 7) {
-        const td = document.createElement("td");
-        td.className = "admin-empty";
-        tr.appendChild(td);
-      }
-      tbody.appendChild(tr);
+    // Trailing blanks to complete the last week row
+    while (currentRow.children.length && currentRow.children.length < 7) {
+      const td = document.createElement("td");
+      td.className = "empty";
+      currentRow.appendChild(td);
+    }
+    if (currentRow.children.length) {
+      tbody.appendChild(currentRow);
     }
 
-    tableCal.appendChild(tbody);
-    monthDiv.appendChild(tableCal);
-    block.appendChild(monthDiv);
+    tbl.appendChild(tbody);
+    monthWrapper.appendChild(tbl);
 
-    // next month
-    cursor = new Date(y, m + 1, 1);
+    // Page break after each month
+    const pb = document.createElement("div");
+    pb.className = "page-break";
+    monthWrapper.appendChild(pb);
+
+    block.appendChild(monthWrapper);
+
+    // Move to next month
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
   }
 
   card.appendChild(block);
 
-  // cleanup removes the block after printing
+  // Cleanup: remove block after printing
   return () => {
     block.remove();
   };
 }
 
-// Second print flavour: chart + administration record calendars
-function printWithAdministrationRecord() {
-  const tableExists = document.querySelector("#scheduleBlock table, #patchBlock table");
-  if (!tableExists) {
-    alert("Please generate a chart first.");
+// ---- Print functions ----
+
+function printOutputOnly(){
+  if (_dirtySinceGenerate) {
+    alert("Please re-generate the chart before printing.");
+    return;
+  }
+  const anyTable = document.querySelector("#scheduleBlock table, #patchBlock table");
+  if (!anyTable) {
+    alert("There is no taper chart to print.");
+    return;
+  }
+
+  document.body.classList.add("printing");
+  const cleanupDecor = preparePrintDecorations();
+
+  window.print();
+
+  setTimeout(() => {
+    document.body.classList.remove("printing");
+    try { cleanupDecor(); } catch(e) {}
+  }, 100);
+}
+
+function printWithAdministrationRecord(){
+  if (_dirtySinceGenerate) {
+    alert("Please re-generate the chart before printing.");
+    return;
+  }
+  const anyTable = document.querySelector("#scheduleBlock table, #patchBlock table");
+  if (!anyTable) {
+    alert("There is no taper chart to print.");
     return;
   }
 
@@ -1845,7 +1848,6 @@ function printWithAdministrationRecord() {
     try { cleanupAdmin(); } catch(e) {}
   }, 100);
 }
-
 function printOutputOnly() {
   const tableExists = document.querySelector("#scheduleBlock table, #patchBlock table");
   if (!tableExists) { alert("Please generate a chart first."); return; }
