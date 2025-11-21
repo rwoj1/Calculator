@@ -1696,9 +1696,7 @@ function buildAdministrationCalendars() {
     const note = document.createElement("p");
     note.className = "admin-month-note";
     note.innerHTML =
-      "Tick each box after a dose is taken.<br>" +
-      "Dates with a bold border and underlined number show dose change steps. " +
-      "Grey cells marked ‘Review’ show planned review dates.";
+      "Tick each box after a dose is taken.<br>";
     monthWrapper.appendChild(note);
 
     // Calendar table
@@ -1775,7 +1773,7 @@ function buildAdministrationCalendars() {
         if (!reviewDay) {
           const stepTag = document.createElement("div");
           stepTag.className = "step-label";
-          stepTag.textContent = "Step";
+          stepTag.textContent = "Dose Reduction";
           td.appendChild(stepTag);
         }
       }
