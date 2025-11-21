@@ -1683,17 +1683,18 @@ function buildAdministrationCalendars() {
     const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
     const monthEnd   = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
 
-    const monthWrapper = document.createElement("div");
-    monthWrapper.className = "admin-month";
+const monthWrapper = document.createElement("div");
+monthWrapper.className = "admin-month";
 
-    const title = document.createElement("h2");
-    title.textContent = `Administration record – ${monthNames[cursor.getMonth()]} ${cursor.getFullYear()}`;
-    monthWrapper.appendChild(title);
+const title = document.createElement("h2");
+title.className = "admin-month-heading";
+title.textContent = `Administration record – ${monthNames[cursor.getMonth()]} ${cursor.getFullYear()}`;
+monthWrapper.appendChild(title);
 
-    const note = document.createElement("p");
-    note.className = "admin-note";
-    note.textContent = "Tick each box after a dose is taken.";
-    monthWrapper.appendChild(note);
+const note = document.createElement("p");
+note.className = "admin-month-note";
+note.textContent = "Tick each box after a dose is taken.";
+monthWrapper.appendChild(note);
 
     // Calendar table
     const tbl = document.createElement("table");
@@ -1709,14 +1710,14 @@ function buildAdministrationCalendars() {
     thead.appendChild(trHead);
     tbl.appendChild(thead);
 
-    const tbody = document.createElement("tbody");
+        const tbody = document.createElement("tbody");
 
     // Compute leading blanks (calendar starts Monday)
     const firstDay = (monthStart.getDay() + 6) % 7; // JS Sunday=0 → Monday=0
     let currentRow = document.createElement("tr");
     for (let i = 0; i < firstDay; i++) {
       const td = document.createElement("td");
-      td.className = "empty";
+      td.className = "admin-empty";
       currentRow.appendChild(td);
     }
 
@@ -1730,39 +1731,44 @@ function buildAdministrationCalendars() {
       }
 
       const td = document.createElement("td");
-      td.className = "day-cell";
+      td.className = "admin-day";
 
       const label = document.createElement("div");
       label.className = "day-number";
       label.textContent = d.toString();
       td.appendChild(label);
 
+      // Overall taper window (used only for subtle styling, not for checkboxes)
       const inRange =
         cellDate >= startDate &&
-        cellDate <= endDate &&
-        uniqDates.some(dt => sameYMD(dt, cellDate));
+        cellDate <= endDate;
 
-      if (inRange) {
-        // Four tick boxes: morning / midday / dinner / night
-        const doses = ["Morning","Midday","Dinner","Night"];
-        doses.forEach(name => {
-          const row = document.createElement("div");
-          row.className = "dose-row";
-          const box = document.createElement("span");
-          box.className = "tick-box";
-          box.textContent = "☐";
-          const text = document.createElement("span");
-          text.textContent = ` ${name}`;
-          row.appendChild(box);
-          row.appendChild(text);
-          td.appendChild(row);
-        });
-      } else {
-        td.classList.add("no-taper-day");
+      // Optional: lightly grey days entirely outside the taper window
+      if (!inRange) {
+        td.classList.add("admin-day-outside");
       }
 
+      // Four tick boxes on EVERY day
+      const doses = ["Morning", "Midday", "Dinner", "Night"];
+      doses.forEach(name => {
+        const row = document.createElement("div");
+        row.className = "dose-row";
+        const box = document.createElement("span");
+        box.className = "admin-checkbox";
+        const text = document.createElement("span");
+        text.textContent = ` ${name}`;
+        row.appendChild(box);
+        row.appendChild(text);
+        td.appendChild(row);
+      });
+
+      // Strong styling + label for review days
       if (isReviewDate(cellDate)) {
-        td.classList.add("review-day");
+        td.classList.add("admin-day-review");
+        const reviewTag = document.createElement("div");
+        reviewTag.className = "review-label";
+        reviewTag.textContent = "Review";
+        td.appendChild(reviewTag);
       }
 
       currentRow.appendChild(td);
@@ -1771,7 +1777,7 @@ function buildAdministrationCalendars() {
     // Trailing blanks to complete the last week row
     while (currentRow.children.length && currentRow.children.length < 7) {
       const td = document.createElement("td");
-      td.className = "empty";
+      td.className = "admin-empty";
       currentRow.appendChild(td);
     }
     if (currentRow.children.length) {
