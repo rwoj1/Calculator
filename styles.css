@@ -338,10 +338,11 @@ button.ghost{
   .admin-empty {
     background: #fafafa;
   }
-  /* Step-down day: slightly stronger border + underlined date */
-  .admin-day-step {
-    border: 1.5pt solid #000;
-  }
+/* Step-down day: slightly stronger border + underlined date + light shading */
+.admin-day-step {
+  border: 1.5pt solid #000;
+  background-color: #e6e6e6;   /* light grey so it prints fine in B&W */
+}
 
   .admin-day-step .day-number {
     text-decoration: underline;
