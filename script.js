@@ -1773,7 +1773,7 @@ function buildAdministrationCalendars() {
         if (!reviewDay) {
           const stepTag = document.createElement("div");
           stepTag.className = "step-label";
-          stepTag.textContent = "<strong>Dose Reduction<strong>";
+          stepTag.textContent = "<strong>Dose Reduction</strong>";
           td.appendChild(stepTag);
         }
       }
@@ -1783,7 +1783,7 @@ function buildAdministrationCalendars() {
         td.classList.add("admin-day-review");
         const reviewTag = document.createElement("div");
         reviewTag.className = "review-label";
-        reviewTag.textContent = "<strong>See prescriber<strong>";
+        reviewTag.textContent = "<strong>See prescriber</strong>";
         td.appendChild(reviewTag);
       }
 
