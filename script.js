@@ -1773,7 +1773,7 @@ function buildAdministrationCalendars() {
         if (!reviewDay) {
           const stepTag = document.createElement("div");
           stepTag.className = "step-label";
-          stepTag.textContent = "Dose Reduction";
+          stepTag.textContent = "Dose reduction";
           td.appendChild(stepTag);
         }
       }
