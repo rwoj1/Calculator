@@ -1696,7 +1696,7 @@ function buildAdministrationCalendars() {
     const note = document.createElement("p");
     note.className = "admin-month-note";
     note.innerHTML =
-      "Tick each box after a dose is taken.<br>";
+      "Tick the box after you have taken your dose.<br>";
     monthWrapper.appendChild(note);
 
     // Calendar table
@@ -1773,7 +1773,7 @@ function buildAdministrationCalendars() {
         if (!reviewDay) {
           const stepTag = document.createElement("div");
           stepTag.className = "step-label";
-          stepTag.textContent = "Dose Reduction";
+          stepTag.textContent = "<strong>Dose Reduction<strong>";
           td.appendChild(stepTag);
         }
       }
@@ -1783,7 +1783,7 @@ function buildAdministrationCalendars() {
         td.classList.add("admin-day-review");
         const reviewTag = document.createElement("div");
         reviewTag.className = "review-label";
-        reviewTag.textContent = "Review";
+        reviewTag.textContent = "<strong>See prescriber<strong>";
         td.appendChild(reviewTag);
       }
 
