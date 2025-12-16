@@ -31,7 +31,7 @@ const clamp   = (n, a, b) => Math.max(a, Math.min(b, n));
 const roundTo = (x, step) => Math.round(x / step) * step;
 const floorTo = (x, step) => Math.floor(x / step) * step;
 const ceilTo  = (x, step) => Math.ceil (x / step) * step;
-const MAX_WEEKS = 60;
+const MAX_WEEKS = 5200;
 const DAYS_PER_MONTH = 28; // change to 30 if you prefer 30-day "months"
 const MS_PER_DAY = 24 * 3600 * 1000;
 const THREE_MONTHS_MS = 3 * DAYS_PER_MONTH * MS_PER_DAY; // only used as a fallback
@@ -59,7 +59,7 @@ function getChartCapDate(startDate){
 
     // "Until complete" → effectively uncapped, but with a generous safety ceiling
     if (raw === "complete") {
-      const months = 24; // ≈ 2 years; adjust if you ever want a longer/shorter "complete"
+      const months = 600;
       return addDays(base, months * DAYS_PER_MONTH);
     }
 
@@ -73,12 +73,23 @@ function getChartCapDate(startDate){
   }
 
   // ----- Option B: explicit end date -----
-  if (endRadio && endRadio.checked && endInput && endInput.value) {
-    const d = new Date(endInput.value);
-    if (!isNaN(+d) && +d >= +base) {
+  if (endRadio && endRadio.checked && endInput) {
+    // Prefer Flatpickr's parsed Date (endInput._flatpickr.selectedDates[0])
+    let d = null;
+    if (endInput._flatpickr && Array.isArray(endInput._flatpickr.selectedDates) && endInput._flatpickr.selectedDates[0]) {
+      d = endInput._flatpickr.selectedDates[0];
+    } else if (endInput.value) {
+      // Fallback: parse "d/m/Y" (e.g. 15/12/2025) safely
+      const parts = endInput.value.split("/").map(s => parseInt(s, 10));
+      if (parts.length === 3 && parts.every(n => Number.isFinite(n))) {
+        const [dd, mm, yyyy] = parts;
+        d = new Date(yyyy, mm - 1, dd);
+      }
+    }
+    if (d instanceof Date && !isNaN(+d) && +d >= +base) {
       return d; // respect the user’s chosen end date
     }
-    // If the chosen end date is invalid or earlier than the start date, fall back
+// If the chosen end date is invalid or earlier than the start date, fall back
     return fallbackCap();
   }
 
@@ -276,6 +287,7 @@ function nounForGabapentinByStrength(form, med, strengthStr){
 
 // Selected formulations (by mg base). Empty Set => "use all".
 let SelectedFormulations = new Set();
+let _lastProductPickerKey = "";   // prevents cross-medicine selection carryover
 
 function shouldShowProductPicker(cls, med, form){
   // Limit to the medicines you specified
@@ -287,18 +299,20 @@ function shouldShowProductPicker(cls, med, form){
     ["Opioid","Oxycodone \/ Naloxone",/SR/i],
     ["Opioid","Tapentadol",/SR/i],
     ["Opioid","Tramadol",/SR/i],
+    ["Opioid","Fentanyl",/Patch/i],
+    ["Opioid","Buprenorphine",/Patch/i],
 
-    // ===== Gabapentinoids (existing) =====
-    ["Gabapentinoids","Gabapentin",/.*/],
-    ["Gabapentinoids","Pregabalin",/Capsule/i],
+    // ===== Gabapentinoid (existing) =====
+    ["Gabapentinoid","Gabapentin",/.*/],
+    ["Gabapentinoid","Pregabalin",/Capsule/i],
 
     // ===== Benzodiazepines / Z-drugs (under your BZRA umbrella) =====
-    ["Benzodiazepines / Z-Drug (BZRA)","Oxazepam",/(Tablet|Tab|Capsule|Cap)/i],
-    ["Benzodiazepines / Z-Drug (BZRA)","Diazepam",/(Tablet|Tab|Capsule|Cap)/i],
-    ["Benzodiazepines / Z-Drug (BZRA)","Alprazolam",/(Tablet|Tab|Capsule|Cap)/i],
-    ["Benzodiazepines / Z-Drug (BZRA)","Clonazepam",/(Tablet|Tab|Capsule|Cap|ODT|Wafer)/i],
-    ["Benzodiazepines / Z-Drug (BZRA)","Lorazepam",/(Tablet|Tab|Capsule|Cap|ODT|Wafer)/i],
-    ["Benzodiazepines / Z-Drug (BZRA)", "Zolpidem", /^Slow Release Tablet$/i],
+    ["Benzodiazepine / Z-Drug (BZRA)","Oxazepam",/(Tablet|Tab|Capsule|Cap)/i],
+    ["Benzodiazepine / Z-Drug (BZRA)","Diazepam",/(Tablet|Tab|Capsule|Cap)/i],
+    ["Benzodiazepine / Z-Drug (BZRA)","Alprazolam",/(Tablet|Tab|Capsule|Cap)/i],
+    ["Benzodiazepine / Z-Drug (BZRA)","Clonazepam",/(Tablet|Tab|Capsule|Cap|ODT|Wafer)/i],
+    ["Benzodiazepine / Z-Drug (BZRA)","Lorazepam",/(Tablet|Tab|Capsule|Cap|ODT|Wafer)/i],
+    ["Benzodiazepine / Z-Drug (BZRA)", "Zolpidem", /^Slow Release Tablet$/i],
 
     // ===== Proton Pump Inhibitors (PPIs) =====
     ["Proton Pump Inhibitor","Pantoprazole",/(Tablet|Tab|Capsule|Cap)/i],
@@ -321,27 +335,41 @@ function shouldShowProductPicker(cls, med, form){
 
 // Build a nice per-product label
 function strengthToProductLabel(cls, med, form, strengthStr){
+  // PATCH: label patch strengths as mcg/hr
+  if (/Patch/i.test(form)) {
+    const rate = (typeof parsePatchRate === "function")
+      ? parsePatchRate(strengthStr)
+      : (parseFloat(String(strengthStr).replace(/[^\d.]/g,"")) || 0);
+
+    return `${med} ${stripZeros(rate)} mcg/hr patch`;
+  }
+
+  // tablets/capsules (mg)
   const mg = parseMgFromStrength(strengthStr);
 
-  // ✅ Special case: Gabapentin shows simplified labels and uses true form by strength
   if (/^Gabapentin$/i.test(med)) {
-    const f = gabapentinFormForMg(mg).toLowerCase(); // "tablet" / "capsule"
+    const f = gabapentinFormForMg(mg).toLowerCase();
     return `${stripZeros(mg)} mg ${f}`;
   }
 
-  // Oxycodone/naloxone pair label stays as-is
   if (/Oxycodone\s*\/\s*Naloxone/i.test(med)) {
-    return oxyNxPairLabel(mg); // e.g., "Oxycodone 20 mg + naloxone 10 mg SR tablet"
+    return oxyNxPairLabel(mg);
   }
 
-  // Everyone else uses your normal suffix logic
   return `${med} ${stripZeros(mg)} mg ${formSuffixWithSR(form)}`;
 }
+
 
 // Which strengths are available for the picker (we use whatever the current Form provides)
 // For Gabapentin you already expose both tablet & capsule strengths via “Tablet/Capsule”.
 function strengthsForPicker(){
-  return strengthsForSelected().slice().sort((a,b)=>parseMgFromStrength(a)-parseMgFromStrength(b));
+  const form = document.getElementById("formSelect")?.value || "";
+  const arr = strengthsForSelected().slice();
+
+  if (/Patch/i.test(form)) {
+    return arr.sort((a,b)=>parsePatchRate(a)-parsePatchRate(b));
+  }
+  return arr.sort((a,b)=>parseMgFromStrength(a)-parseMgFromStrength(b));
 }
 
 // Filtered bases depending on checkbox selection (empty => all)
@@ -473,6 +501,32 @@ function snapTargetToSelection(totalMg, percent, cls, med, form){
   return { target, step: stepMin, quantum: q };
 }
 
+function bzraVisibilityTick() {
+  const box = document.getElementById("bzraSplitOptions");
+  if (!box) return;
+
+  const cls = document.getElementById("classSelect")?.value || "";
+  const isBZRA = (cls === "Benzodiazepine / Z-Drug (BZRA)");
+
+  box.style.display = isBZRA ? "block" : "none";
+}
+function bidPrefVisibilityTick(){
+  const box = document.getElementById("bidPrefCard");
+  if (!box) return;
+
+  const cls  = document.getElementById("classSelect")?.value || "";
+  const med  = document.getElementById("medicineSelect")?.value || "";
+  const form = document.getElementById("formSelect")?.value || "";
+
+  const isOpioidSrTablet =
+    (cls === "Opioid") && (/SR/i.test(form)) && (/Tablet/i.test(form));
+
+  const isPregabalin =
+    (cls === "Gabapentinoid") && (/^Pregabalin$/i.test(med));
+
+  box.style.display = (isOpioidSrTablet || isPregabalin) ? "" : "none";
+}
+
 /* ===== Antipsychotic UI wiring (layout only) ===== */
 ;(() => {
   const $id = (s) => document.getElementById(s);
@@ -499,7 +553,7 @@ function snapTargetToSelection(totalMg, percent, cls, med, form){
   if (andUpdate && typeof apUpdateTotal === "function") apUpdateTotal();
   }
   // Show/hide panel & order row; fill the brief; update total
-
+ 
 function apVisibilityTick(){
   const cls = document.getElementById("classSelect")?.value || "";
   const med = document.getElementById("medicineSelect")?.value || "";
@@ -1506,77 +1560,6 @@ function hasSelectedCommercialLowest(cls, med, form) {
   return selectedMg.some((mg) => Math.abs(mg - lowestCommercial) < 1e-9);
 }
 
-function renderProductPicker(){
-  const clsEl  = document.getElementById("classSelect");
-  const medEl  = document.getElementById("medicineSelect");
-  const formEl = document.getElementById("formSelect");
-  const cls  = (clsEl && clsEl.value)  || "";
-  const med  = (medEl && medEl.value)  || "";
-  const form = (formEl && formEl.value) || "";
-
-  const card = document.getElementById("productPickerCard");
-  const host = document.getElementById("productPicker");
-  if (!card || !host) return;
-
-  // Show/hide picker based on allowed medicines/forms
-  if (typeof shouldShowProductPicker === "function" && !shouldShowProductPicker(cls, med, form)) {
-    card.style.display = "none";
-    if (window.SelectedFormulations && typeof SelectedFormulations.clear === "function") SelectedFormulations.clear();
-    host.innerHTML = "";
-    return;
-  }
-  card.style.display = "";
-
-  // Build checkbox list
-  host.innerHTML = "";
-  const strengths = (typeof strengthsForPicker === "function" ? strengthsForPicker() : []);
-  strengths.forEach(s => {
-    const mg = (typeof parseMgFromStrength === "function") ? parseMgFromStrength(s) : parseFloat(String(s).replace(/[^\d.]/g,"")) || 0;
-    if (!Number.isFinite(mg) || mg <= 0) return;
-
-    const id = `prod_${String(med).replace(/\W+/g,'_')}_${mg}`;
-    const wrap = document.createElement("label");
-    wrap.className = "checkbox";
-    wrap.setAttribute("for", id);
-
-    const cb = document.createElement("input");
-    cb.type = "checkbox";
-    cb.id = id;
-
-    // If user has made any selection, reflect it; otherwise show unchecked (using all products by default)
-    const isChecked = (window.SelectedFormulations && SelectedFormulations.size > 0) ? SelectedFormulations.has(mg) : false;
-    cb.checked = isChecked;
-
-    cb.addEventListener("change", () => {
-      if (!window.SelectedFormulations) window.SelectedFormulations = new Set();
-      if (cb.checked) SelectedFormulations.add(mg);
-      else SelectedFormulations.delete(mg);
-      if (typeof setDirty === "function") setDirty(true);
-    });
-
-    const span = document.createElement("span");
-    const title = (typeof strengthToProductLabel === "function")
-      ? strengthToProductLabel(cls, med, form, s)
-      : `${mg} mg`;
-    span.textContent = title; // e.g., "600 mg tablet" / "25 mg capsule"
-
-    wrap.appendChild(cb);
-    wrap.appendChild(span);
-    host.appendChild(wrap);
-  });
-
-  // Wire "Clear selection" button
-  const clearBtn = document.getElementById("clearProductSelection");
-  if (clearBtn && !clearBtn._wired) {
-    clearBtn._wired = true;
-    clearBtn.addEventListener("click", () => {
-      if (window.SelectedFormulations && typeof SelectedFormulations.clear === "function") SelectedFormulations.clear();
-      host.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
-      if (typeof setDirty === "function") setDirty(true);
-    });
-  }
-}
-
 /* ===== Minimal print / save helpers (do NOT duplicate elsewhere) ===== */
 
 // PRINT: use your existing print CSS and guard against stale charts
@@ -1901,13 +1884,16 @@ function saveOutputAsPdf() {
 const SUGGESTED_PRACTICE = {
   opioids: `
   <p>
-    Tapering should be gradual and individualised to the person’s clinical characteristics, treatment goals and preferences. 
-    A variety of tapering regimens have been recommended in guidelines – summarised here [LINK].
+    Tapering should be <strong>gradual</strong> and <strong>individualised</strong> to the person’s current opioid regimen, clinical characteristics, treatment goals and preferences.
+    A variety of tapering regimens have been recommended in guidelines – summarised here [LINK]
   </p>
-
+  <p>
+  The following approach may be considered as a general guide:
+  <p>
+  
   <ul>
-    <li>Short-term use (less than 3 months): slow dose reduction (e.g. 10 to 25 % every week).</li>
-    <li>Longer-term use (more than 3 months): slower dose reduction (e.g. 10 to 25 % every 4 weeks). Some patients (e.g. those taking higher doses or for long periods) may need slower reductions.</li>
+    <li><strong>Short-term use</strong> (less than 3 months): slow dose reduction (eg 10 to 25% every week).</li>
+    <li><strong>Longer-term use</strong> (more than 3 months): slower dose reduction (eg by 10 to 25% every 4 weeks). Some patients (eg those taking higher doses or for long periods of time) may need slower reductions.</li>
   </ul>
 
   <p>
@@ -1915,14 +1901,12 @@ const SUGGESTED_PRACTICE = {
   </p>
 
   <p>
-    This calculator is designed to use whole slow-release dose forms (which cannot be cut). 
-    It is not designed for reducing immediate-release formulations, or for patients with severe substance use disorder, high risk of withdrawal, 
-    or symptom recurrence – seek specialist advice for tailored tapering plans for these patients.
+    <strong>This calculator is designed to use whole slow-release dose forms (which cannot be cut).</strong> 
+    It is not designed for reducing immediate-release formulations or for complex patients (eg those with severe substance use disorder, high risk of withdrawal or symptom recurrence) – seek specialist advice for tailored tapering plans for these patients.
   </p>
 
   <p>
-    At the later stages of a taper, the desired dose reduction may not be possible with a slow-release formulation; 
-    a short-acting opioid may be required to complete the taper or to manage withdrawal symptoms.
+   At the later stages of a taper, the desired dose reduction may not be possible with a slow-release formulation; a short-acting opioid may be required to complete the taper or to manage withdrawal symptoms.
   </p>
 
   <p>
@@ -1932,8 +1916,8 @@ const SUGGESTED_PRACTICE = {
 
   bzra: `
   <p>
-    Tapering should occur gradually and be individualised to the person’s clinical characteristics, treatment goals and preferences. 
-    Tapering recommendations in guidelines vary from 5 to 25% reductions every 1 to 4 weeks, with slower or faster tapers depending on dose and duration of use – summarised here [LINK].
+    Tapering should occur <strong>gradually</strong> and be <strong>individualised</strong> to the person’s clinical characteristics, treatment goals and preferences. 
+    Tapering recommendations in guidelines vary from 5 to 25% reductions every 1 to 4 weeks, with slower or faster tapers depending on dose and duration of use – summarised here [LINK]. 
   </p>
 
   <p>
@@ -1941,16 +1925,16 @@ const SUGGESTED_PRACTICE = {
   <p>
 
   <p>
-    This calculator is designed to use commercially available formulations in whole or half dose forms. 
-    It is not designed to calculate a slower taper using quarter-tablet doses or compounded formulations; 
-    such approaches may be required for patients with severe substance use disorder, high risk of withdrawal, or symptom recurrence.
+    <strong>This calculator is designed to use commercially available formulations in whole, half or quarter dose forms.</strong> 
+    It is not designed to calculate a slower taper using compounded formulations; 
+    such approaches may be required for complex patients (eg those with severe substance use disorder, high risk of withdrawal or symptom recurrence).
   </p>
   `,
   antipsychotic: `• Reduce ~25–50% every 1–2 weeks with close monitoring.
 • Slower taper may be appropriate depending on symptoms.
 [INSERT ALGORITHM]  [INSERT SUMMARY OF EVIDENCE] [INSERT GUIDE TO RULESET]`,
 
-  gabapentinoids: `• Reduce X% every Y weeks with close monitoring 
+  gabapentinoid: `• Reduce X% every Y weeks with close monitoring 
 [INSERT ALGORITHM]  [INSERT SUMMARY OF EVIDENCE] [INSERT GUIDE TO RULESET]`,
   
   ppi: `•	Reduce dose by 50% every 1-2 weeks 
@@ -1993,7 +1977,7 @@ They can help you plan and monitor your dose reduction safely.
 `,
   antipsychotic: "Insert specific footer + disclaimer for Antipsychotics",
   ppi:           "Insert specific footer + disclaimer for Proton Pump Inhibitors",
-  gabapentinoids:"Insert specific footer + disclaimer for Gabapentinoids",
+  gabapentinoid:"Insert specific footer + disclaimer for Gabapentinoid",
   _default:      ""
 };
 
@@ -2006,7 +1990,7 @@ function mapClassToKey(label){
   if (s.includes("antipsych")) return "antipsychotic";
   if (s.includes("proton") || s.includes("ppi")) return "ppi";
   if (s.includes("opioid") || s.includes("fentanyl") || s.includes("buprenorphine")) return "opioids";
-  if (s.includes("gaba") || s.includes("gabapentin") || s.includes("pregabalin")) return "gabapentinoids";
+  if (s.includes("gaba") || s.includes("gabapentin") || s.includes("pregabalin")) return "gabapentinoid";
   return null;
 }
 
@@ -2017,7 +2001,7 @@ function footerKeyFromLabel(label) {
   if (s.includes("benzodiazep") || s.includes("z-drug") || s.includes("z drug")) return "bzra";
   if (s.includes("antipsych")) return "antipsychotic";
   if (s.includes("proton") || s.includes("ppi")) return "ppi";
-  if (s.includes("gaba") || s.includes("gabapentin") || s.includes("pregabalin")) return "gabapentinoids";
+  if (s.includes("gaba") || s.includes("gabapentin") || s.includes("pregabalin")) return "gabapentinoid";
   return null;
 }
 
@@ -2049,7 +2033,7 @@ function updateBestPracticeBox() {
   bzra: "Benzodiazepines and Z-drugs for insomnia in older adults",
   antipsychotic: "Antipsychotics",
   ppi: "Proton Pump Inhibitors",
-  gabapentinoids: "Gabapentinoids"
+  gabapentinoid: "Gabapentinoid"
 };
   
   const text = SUGGESTED_PRACTICE[key] || "";
@@ -2136,6 +2120,19 @@ function tabletsPhraseDigits(q){ // instruction lines
   if (frac === 0.25) return whole ? `${_smallIntToWords(whole)} and a quarter of a tablet` : "a quarter of a tablet";
   if (frac === 0.75) return whole ? `${_smallIntToWords(whole)} and three quarters of a tablet` : "three quarters of a tablet";
   return `${_smallIntToWords(whole)} and ${String(frac)} of a tablet`;
+}
+function unitsPhraseDigits(q, unit){
+  // Reuse tabletsPhraseDigits wording, but swap "tablet(s)" for the requested unit
+  const base = tabletsPhraseDigits(q);
+  const u = String(unit || "tablet").toLowerCase();
+  if (u === "tablet") return base;
+
+  const plural = u.endsWith("s") ? u : u + "s";
+
+  // Replace plurals first, then singular to avoid "capsuless"
+  return base
+    .replace(/tablets/gi, plural)
+    .replace(/tablet/gi, u);
 }
 // Collapse pairs of 12/12.5 to 25 (repeat until no pairs remain)
 function collapseFentanylTwelves(patches){
@@ -2544,7 +2541,7 @@ function renderPatchTable(stepRows) {
 
 //#endregion
 //#region 6. Catalogue (commercial strengths) & Label Helpers
-const CLASS_ORDER = ["Opioid","Benzodiazepines / Z-Drug (BZRA)","Antipsychotic","Proton Pump Inhibitor","Gabapentinoids"];
+const CLASS_ORDER = ["Opioid","Benzodiazepine / Z-Drug (BZRA)","Antipsychotic","Proton Pump Inhibitor","Gabapentinoid"];
 
 const CATALOG = {
   Opioid: {
@@ -2556,7 +2553,7 @@ const CATALOG = {
     Buprenorphine: { Patch: ["5 mcg/hr","10 mcg/hr","15 mcg/hr","20 mcg/hr","25 mcg/hr","30 mcg/hr","40 mcg/hr"] },
     Fentanyl: { Patch: ["12 mcg/hr","25 mcg/hr","50 mcg/hr","75 mcg/hr","100 mcg/hr"] },
   },
-  "Benzodiazepines / Z-Drug (BZRA)": {
+  "Benzodiazepine / Z-Drug (BZRA)": {
     Alprazolam: { Tablet: ["0.25 mg","0.5 mg","1 mg","2 mg"] },
     Clonazepam: { Tablet: ["0.5 mg","2 mg"] },
     Diazepam: { Tablet: ["2 mg","5 mg"] },
@@ -2580,7 +2577,7 @@ const CATALOG = {
     Pantoprazole: { Tablet: ["20 mg","40 mg"] },
     Rabeprazole: { Tablet: ["10 mg","20 mg"] },
   },
-  "Gabapentinoids": {
+  "Gabapentinoid": {
     Pregabalin: {"Capsule": [25, 75, 150, 300] },
     Gabapentin: {"Tablet/Capsule": [100, 300, 400, 600, 800]},
   }
@@ -2601,7 +2598,7 @@ const AP_ROUND = { Haloperidol: 0.5, Risperidone: 0.25, Quetiapine: 12.5, Olanza
 function isMR(form){ return /slow\s*release|modified|controlled|sustained/i.test(form) || /\b(SR|MR|CR|ER|XR|PR|CD)\b/i.test(form); }
 function formLabelCapsSR(form){ return String(form||"").replace(/\bsr\b/ig,"SR"); }
 function parseMgFromStrength(s){ const m = String(s||"").match(/^\s*([\d.]+)\s*(?:mg)?(?:\s*\/|$)/i); return m ? parseFloat(m[1]) : 0; }
-function parsePatchRate(s){ const m=String(s||"").match(/([\d.]+)\s*mcg\/hr/i); return m?parseFloat(m[1]):0; }
+function parsePatchRate(s){const str = String(s || "");const m = str.match(/([\d.]+)\s*mcg\s*\/\s*h(?:r)?/i);if (m) return parseFloat(m[1]);const n = parseFloat(str.replace(/[^\d.]/g, ""));return Number.isFinite(n) ? n : 0;}
 function stripZeros(n) {
   return Number.isInteger(n) ? String(n) : String(n).replace(/\.0+$/,"");
 }
@@ -2690,11 +2687,11 @@ function canSplitTablets(cls, form, med){
     return { half:false, quarter:false };
   }
   // Classes that never split
-  if (cls === "Opioid" || cls === "Proton Pump Inhibitor" || cls === "Gabapentinoids") {
+  if (cls === "Opioid" || cls === "Proton Pump Inhibitor" || cls === "Gabapentinoid") {
     return { half:false, quarter:false };
   }
   // BZRA: plain tablets can be split; quartering depends on the toggle
-  if (cls === "Benzodiazepines / Z-Drug (BZRA)") {
+  if (cls === "Benzodiazepine / Z-Drug (BZRA)") {
     const nonSplittable = /odt|wafer|dispers/i.test(f); // extra guard, though blocked above
     if (nonSplittable) return { half:false, quarter:false };
     const allowQuarter = (typeof isBzraQuarterAllowed === "function" && isBzraQuarterAllowed());
@@ -2716,9 +2713,9 @@ function defaultFreq(){
   const med = $("medicineSelect")?.value;
 
   if (form === "Patch") return "PATCH";
-  if (cls === "Benzodiazepines / Z-Drug (BZRA)") return "PM";
+  if (cls === "Benzodiazepine / Z-Drug (BZRA)") return "PM";
   if (cls === "Proton Pump Inhibitor") return "DIN";
-  if (cls === "Gabapentinoids") {
+  if (cls === "Gabapentinoid") {
     if (med === "Gabapentin")  return "TID";
     if (med === "Pregabalin")  return "BID";
     return "BID";
@@ -2782,10 +2779,10 @@ sSel.onchange = (e) => {
     if(/Patch/i.test(form)){
       const o=document.createElement("option"); o.value="PATCH"; o.textContent=($("medicineSelect").value==="Fentanyl")?"Every 3 days":"Every 7 days";
       fSel.appendChild(o); fSel.disabled=true;
-    } else if(cls==="Benzodiazepines / Z-Drug (BZRA)"){
+    } else if(cls==="Benzodiazepine / Z-Drug (BZRA)"){
       const o=document.createElement("option"); o.value="PM"; o.textContent="Daily at night";
       fSel.appendChild(o); fSel.disabled=true;
-    } else if(cls==="Opioid" || cls==="Antipsychotic" || cls==="Proton Pump Inhibitor" || cls==="Gabapentinoids"){
+    } else if(cls==="Opioid" || cls==="Antipsychotic" || cls==="Proton Pump Inhibitor" || cls==="Gabapentinoid"){
       [
         ["AM","In the morning"],["MID","At midday"],["DIN","At dinner"],["PM","At night"],
         ["BID","Twice a day (morning & night)"],["TID","Three times a day"],["QID","Four times a day"]
@@ -2872,7 +2869,7 @@ function specialInstructionFor(){
   const med=$("medicineSelect")?.value || "";
   const form=$("formSelect")?.value || "";
 
-  if(cls==="Benzodiazepines / Z-Drug (BZRA)" || cls==="Antipsychotic") return "";
+  if(cls==="Benzodiazepine / Z-Drug (BZRA)" || cls==="Antipsychotic") return "";
 
   if (/Patch/i.test(form)) return "Special instruction: apply to intact skin as directed. Do not cut patches.";
 
@@ -2910,7 +2907,7 @@ function allowedPiecesMg(cls, med, form){
 function lowestStepMg(cls, med, form){
   // BZRA: align with the BZRA-specific grid logic so step size and composition
   // use the same smallest piece (LCS + quarter toggle).
-  if (cls === "Benzodiazepines / Z-Drug (BZRA)") {
+  if (cls === "Benzodiazepins / Z-Drug (BZRA)") {
     // Zolpidem MR stays on its fixed 6.25 mg grid
     if (/Zolpidem/i.test(med) && isMR(form)) return 6.25;
 
@@ -2986,7 +2983,7 @@ const slots =
     });
   });
 
-  if($("classSelect").value==="Benzodiazepines / Z-Drug (BZRA)"){ packs.AM={}; packs.MID={}; packs.DIN={}; }
+  if($("classSelect").value==="Benzodiazepine / Z-Drug (BZRA)"){ packs.AM={}; packs.MID={}; packs.DIN={}; }
   return packs;
 }
 
@@ -3212,18 +3209,15 @@ function preferredBidTargets(total, cls, med, form){
   return { AM: am, PM: pm };
 }
 
-/* ===== Opioids (tablets/capsules) — shave DIN→MID, then rebalance BID ===== */
+/* ===== Opioids (tablets/capsules) — BID grid search + shave fallback ===== */
 function stepOpioid_Shave(packs, percent, cls, med, form){
   const tot = packsTotalMg(packs);
   if (tot <= EPS) return packs;
 
-  // Respect selected products for rounding granularity
-  const step = lowestStepMg(cls, med, form) || 1;
-
-  // ----- tiny utilities (local, de-duplicated) -----
+  // ----- tiny utilities -----
   const toMg = (v) => {
-    if (typeof v === 'number') return v;
-    if (typeof parseMgFromStrength === 'function') {
+    if (typeof v === "number") return v;
+    if (typeof parseMgFromStrength === "function") {
       const x = parseMgFromStrength(v);
       if (Number.isFinite(x)) return x;
     }
@@ -3235,36 +3229,41 @@ function stepOpioid_Shave(packs, percent, cls, med, form){
     try {
       if (typeof strengthsForPicker === "function") {
         const arr = strengthsForPicker(cls, med, form) || [];
-        const mg = arr.map(toMg).filter(n => Number.isFinite(n) && n > 0)
-                     .sort((a,b)=>a-b);
+        const mg = arr
+          .map(toMg)
+          .filter((n) => Number.isFinite(n) && n > 0)
+          .sort((a, b) => a - b);
         return Array.from(new Set(mg));
       }
-    } catch(_) {}
+    } catch (_) {}
     try {
       const cat  = (window.CATALOG?.[cls]?.[med]) || {};
       const pool = (form && cat[form]) ? cat[form] : Object.values(cat).flat();
-      const mg   = (pool || []).map(toMg).filter(n => Number.isFinite(n) && n > 0)
-                         .sort((a,b)=>a-b);
+      const mg   = (pool || [])
+        .map(toMg)
+        .filter((n) => Number.isFinite(n) && n > 0)
+        .sort((a, b) => a - b);
       return Array.from(new Set(mg));
-    } catch(_) {}
+    } catch (_) {}
     return [];
   }
 
   function selectedStrengthsMg(){
     try {
-      // Prefer live UI selection set
       if (window.SelectedFormulations && SelectedFormulations.size > 0) {
         return Array.from(SelectedFormulations)
-          .map(toMg).filter(n => Number.isFinite(n) && n > 0)
-          .sort((a,b)=>a-b);
+          .map(toMg)
+          .filter((n) => Number.isFinite(n) && n > 0)
+          .sort((a, b) => a - b);
       }
-      // Fallback to picker helper
       if (typeof selectedProductMgs === "function") {
         const arr = selectedProductMgs() || [];
-        return arr.map(toMg).filter(n => Number.isFinite(n) && n > 0)
-                  .sort((a,b)=>a-b);
+        return arr
+          .map(toMg)
+          .filter((n) => Number.isFinite(n) && n > 0)
+          .sort((a, b) => a - b);
       }
-    } catch(_) {}
+    } catch (_) {}
     return [];
   }
 
@@ -3272,58 +3271,174 @@ function stepOpioid_Shave(packs, percent, cls, med, form){
   const lcs     = catalog.length ? catalog[0] : NaN;            // lowest commercial strength
   const selList = selectedStrengthsMg();
   const pickedAny      = selList.length > 0;
-  const lcsSelected    = pickedAny ? selList.some(mg => Math.abs(mg - lcs) < 1e-9) : true; // none selected ⇒ treat as all
+  const lcsSelected    = pickedAny ? selList.some((mg) => Math.abs(mg - lcs) < 1e-9) : true; // none selected ⇒ treat as all
   const selectedMinMg  = pickedAny ? selList[0] : lcs;          // selected minimum (or lcs if none selected)
   const thresholdMg    = lcsSelected ? lcs : selectedMinMg;     // endpoint threshold we test against
 
-  const AM  = slotTotalMg(packs,"AM");
-  const MID = slotTotalMg(packs,"MID");
-  const DIN = slotTotalMg(packs,"DIN");
-  const PM  = slotTotalMg(packs,"PM");
+  const AM  = slotTotalMg(packs, "AM");
+  const MID = slotTotalMg(packs, "MID");
+  const DIN = slotTotalMg(packs, "DIN");
+  const PM  = slotTotalMg(packs, "PM");
 
   const isExactBIDAt = (mg) =>
     Number.isFinite(mg) &&
-    Math.abs(AM - mg) < EPS && Math.abs(PM - mg) < EPS && MID < EPS && DIN < EPS;
+    Math.abs(AM - mg) < EPS &&
+    Math.abs(PM - mg) < EPS &&
+    MID < EPS &&
+    DIN < EPS;
 
-function isExactSingleOnlyAt(mg){
-  const pref = (typeof getBidHeavierPreference === "function" && getBidHeavierPreference() === "AM") ? "AM" : "PM";
-  const amOk = (pref === "AM") ? Math.abs(AM - mg) < EPS : AM < EPS;
-  const pmOk = (pref === "PM") ? Math.abs(PM - mg) < EPS : PM < EPS;
-  return Number.isFinite(mg) && amOk && pmOk && MID < EPS && DIN < EPS;
-}
-
-// ----- BID end-sequence gate (preference-aware) -----
-if (Number.isFinite(thresholdMg)) {
-  // Already at single-dose (AM-only or PM-only by preference) ⇒ STOP
-  if (isExactSingleOnlyAt(thresholdMg)) {
-    if (window._forceReviewNext) window._forceReviewNext = false;
-    return {}; // empty packs ⇒ buildPlanTablets() prints STOP row
+  function isExactSingleOnlyAt(mg){
+    const pref = (typeof getBidHeavierPreference === "function" && getBidHeavierPreference() === "AM") ? "AM" : "PM";
+    const amOk = (pref === "AM") ? Math.abs(AM - mg) < EPS : AM < EPS;
+    const pmOk = (pref === "PM") ? Math.abs(PM - mg) < EPS : PM < EPS;
+    return Number.isFinite(mg) && amOk && pmOk && MID < EPS && DIN < EPS;
   }
 
-  // First time we hit exact BID at threshold
-  if (isExactBIDAt(thresholdMg)) {
-    if (lcsSelected) {
-   // LCS among selected ⇒ emit single-dose at threshold per preference (no rebalancing)
-if (window._forceReviewNext) window._forceReviewNext = false;
-const pref = (typeof getBidHeavierPreference === "function" && getBidHeavierPreference() === "AM") ? "AM" : "PM";
-const cur = { AM:0, MID:0, DIN:0, PM:0 };
-cur[pref] = thresholdMg;
-return recomposeSlots(cur, cls, med, form);
-    } else {
-      // LCS not selected ⇒ Review next boundary
-      window._forceReviewNext = true;
-      return packs; // unchanged; loop will schedule Review
+  // ----- BID end-sequence gate (preference-aware) -----
+  if (Number.isFinite(thresholdMg)) {
+    // Already at single-dose (AM-only or PM-only by preference) ⇒ STOP
+    if (isExactSingleOnlyAt(thresholdMg)) {
+      if (window._forceReviewNext) window._forceReviewNext = false;
+      return {}; // empty packs ⇒ buildPlanTablets() prints STOP row
+    }
+
+    // First time we hit exact BID at threshold
+    if (isExactBIDAt(thresholdMg)) {
+      if (lcsSelected) {
+        // LCS among selected ⇒ emit single-dose at threshold per preference (no rebalancing)
+        if (window._forceReviewNext) window._forceReviewNext = false;
+        const pref = (typeof getBidHeavierPreference === "function" && getBidHeavierPreference() === "AM") ? "AM" : "PM";
+        const cur = { AM: 0, MID: 0, DIN: 0, PM: 0 };
+        cur[pref] = thresholdMg;
+        return recomposeSlots(cur, cls, med, form);
+      } else {
+        // LCS not selected ⇒ Review next boundary
+        window._forceReviewNext = true;
+        return packs; // unchanged; loop will schedule Review
+      }
     }
   }
-}
 
+  const isPureBID = MID < EPS && DIN < EPS;
+
+  // ===== NEW: pure BID taper logic for opioids (AM + PM only) =====
+  if (isPureBID) {
+    const EPS_LOCAL = 1e-9;
+
+    function baseQuantumMg(){
+      // Per-medicine base quantum (LCS) as agreed
+      if (cls === "Opioid") {
+        if (/Morphine/i.test(med)) return 5;
+        if (/Oxycodone\s*\/\s*Naloxone/i.test(med)) return 2.5;
+        if (/Oxycodone/i.test(med)) return 5;
+        if (/Tapentadol/i.test(med)) return 50;
+        if (/Tramadol/i.test(med)) return 50;
+      }
+      if (/Pregabalin/i.test(med) || cls === "Gabapentinoid") return 25;
+      if (Number.isFinite(lcs) && lcs > 0) return lcs;
+      const fallback = (typeof lowestStepMg === "function" ? lowestStepMg(cls, med, form) : 1);
+      return fallback || 1;
+    }
+
+    const q = baseQuantumMg();
+    const raw = tot * (1 - percent / 100);
+
+    if (!Number.isFinite(raw) || raw <= 0) {
+      if (typeof window !== "undefined") window._forceReviewNext = true;
+      return packs;
+    }
+
+    const snapUp = (x) => Math.max(0, Math.ceil(x / q) * q);
+
+    // Helper: test whether a total is exactly buildable as BID using selected products
+    function tryBuildTotal(targetTotal){
+      if (!Number.isFinite(targetTotal) || targetTotal <= 0) return null;
+      if (typeof recomposeSlots !== "function" || typeof packsTotalMg !== "function") return null;
+
+      const pref = (typeof getBidHeavierPreference === "function" ? getBidHeavierPreference() : "PM");
+
+      // Generate all AM/PM splits on the quantum grid with both sides > 0
+      const splits = [];
+      for (let am = q; am <= targetTotal - q; am += q) {
+        const pmSplit = targetTotal - am;
+        if (pmSplit <= 0) continue;
+        splits.push({ AM: am, PM: pmSplit });
+      }
+      if (!splits.length) return null;
+
+      // Sort by closeness (|AM-PM|), then by heavier side preference
+      splits.sort((a, b) => {
+        const da = Math.abs(a.AM - a.PM);
+        const db = Math.abs(b.AM - b.PM);
+        if (da !== db) return da - db;
+
+        if (pref === "PM") {
+          const aGood = a.PM >= a.AM;
+          const bGood = b.PM >= b.AM;
+          if (aGood !== bGood) return aGood ? -1 : 1;
+        } else if (pref === "AM") {
+          const aGood = a.AM >= a.PM;
+          const bGood = b.AM >= b.PM;
+          if (aGood !== bGood) return aGood ? -1 : 1;
+        }
+        return 0;
+      });
+
+      for (const split of splits) {
+        const slots = { AM: split.AM, MID: 0, DIN: 0, PM: split.PM };
+        const rec = recomposeSlots(slots, cls, med, form);
+        const achieved = packsTotalMg(rec);
+        // must be an exact match AND a true reduction
+        if (Math.abs(achieved - targetTotal) < EPS_LOCAL && achieved < tot - EPS_LOCAL) {
+          return rec;
+        }
+      }
+      return null;
+    }
+
+    let nextPacks = null;
+
+    // 1) Search UPWARDS from the snapped-up target, staying below the current dose
+    let candidate = snapUp(raw);
+    if (candidate >= tot - EPS_LOCAL) {
+      candidate = Math.max(0, tot - q);
+    }
+
+    for (let t = candidate; t < tot - EPS_LOCAL; t += q) {
+      nextPacks = tryBuildTotal(t);
+      if (nextPacks) break;
+    }
+
+    // 2) If no upward candidate is reachable, search DOWNWARDS (1A + 2A behaviour)
+    if (!nextPacks) {
+      for (let t = tot - q; t > 0; t -= q) {
+        nextPacks = tryBuildTotal(t);
+        if (nextPacks) break;
+      }
+    }
+
+    if (nextPacks) {
+      if (typeof window !== "undefined" && window._forceReviewNext) window._forceReviewNext = false;
+      return nextPacks;
+    }
+
+    // 3) No reachable lower total with the selected products:
+    // flag a Review rather than inventing a ghost dose step.
+    if (typeof window !== "undefined") {
+      window._forceReviewNext = true;
+    }
+    return packs;
+  }
+
+  // ===== Non-BID fallback: original shave logic for patterns with MID / DIN =====
+  const step = lowestStepMg(cls, med, form) || 1;
   const q = (typeof effectiveQuantumMg === "function" ? effectiveQuantumMg(cls, med, form) : step) || step;
 
   // ALWAYS ROUND UP to the quantum
-  let target = Math.ceil((tot * (1 - percent/100)) / q) * q;
+  let target = Math.ceil((tot * (1 - percent / 100)) / q) * q;
 
-  // Anti-stall: if "up" keeps us at the same dose, step down one quantum
-  if (target === tot && tot > 0) {
+  // Anti-stall: if "up" keeps us at the same dose or above, step down one quantum
+  if (target >= tot - EPS && tot > 0) {
     target = Math.max(0, tot - q);
   }
 
@@ -3333,30 +3448,37 @@ return recomposeSlots(cur, cls, med, form);
   const shave = (slot) => {
     if (reduce <= EPS || cur[slot] <= EPS) return;
     const can = cur[slot];
-    const dec = Math.min(can, roundTo(reduce, step));
+    const dec = Math.min(can, floorTo(reduce, step));  // never remove more than 'reduce'
+    if (dec <= 0) return;
     cur[slot] = +(cur[slot] - dec).toFixed(3);
     reduce    = +(reduce    - dec).toFixed(3);
   };
 
   // SR-style: reduce DIN first; then MID
-  if (cur.DIN > EPS) { shave("DIN"); shave("MID"); }
-  else               { shave("MID"); }
+  if (cur.DIN > EPS) {
+    shave("DIN");
+    shave("MID");
+  } else {
+    shave("MID");
+  }
 
-// Rebalance across AM/PM if reduction remains
-if (reduce > EPS) {
-  const bidTarget = Math.max(0, +(cur.AM + cur.PM - reduce).toFixed(3));
-  const bid = preferredBidTargets(bidTarget, cls, med, form);
-  cur.AM = bid.AM; cur.PM = bid.PM;
-  reduce = 0;
-}
+  // Rebalance across AM/PM if reduction remains
+  if (reduce > EPS) {
+    const bidTarget = Math.max(0, +(cur.AM + cur.PM - reduce).toFixed(3));
+    const bid = preferredBidTargets(bidTarget, cls, med, form);
+    cur.AM = bid.AM;
+    cur.PM = bid.PM;
+    reduce = 0;
+  }
 
   // tidy negatives to zero
-  for (const k of ["AM","MID","DIN","PM"]) if (cur[k] < EPS) cur[k] = 0;
+  for (const k of ["AM", "MID", "DIN", "PM"]) {
+    if (cur[k] < EPS) cur[k] = 0;
+  }
 
-  // Compose using selected products (keeps “fewest units” rules etc.)
+  // Compose using selected products (keeps "fewest units" rules etc.)
   return recomposeSlots(cur, cls, med, form);
 }
-
 
 /* ===== Proton Pump Inhibitor — reduce MID → PM → AM → DIN ===== */
 function stepPPI(packs, percent, cls, med, form){
@@ -3521,7 +3643,7 @@ return (function recomposeSlots_AP(slots){
 }
 
 
-/* ===== Gabapentinoids
+/* ===== Gabapentinoid
    Gabapentin:
      • Modes:
        (a) TID: AM+MID+PM
@@ -3582,11 +3704,18 @@ function stepGabapentinoid(packs, percent, med, form){
 
 // ---- Compute this step's target from PREVIOUS ACHIEVED total, then quantise ----
 const rawTarget = tot * (1 - percent/100);
-let targetRounded = nearestStep(rawTarget, stepMg);     // ties → round up
-// ✅ Anti-stall: if rounding returns the SAME total (e.g., 500 → 450 → ⤴︎ 500), force a one-step drop
-if (Math.abs(targetRounded - tot) < EPS && tot > 0) {
-  targetRounded = Math.max(0, tot - stepMg);           // e.g., 500 → 400
+
+// ✅ Always round UP to the next grid step (stepMg),
+//    so we don't randomly round doses down (e.g., 1417 → 1400)
+let targetRounded = ceilTo(rawTarget, stepMg);
+
+// ✅ Anti-stall: if rounding up keeps us at (or above) the current total,
+//    force at least one grid-step reduction
+if (targetRounded >= tot - EPS && tot > 0) {
+  targetRounded = Math.max(0, tot - stepMg);
 }
+
+// How much total reduction (in mg) we still need to achieve for this step
 let reductionNeeded = Math.max(0, +(tot - targetRounded).toFixed(3));
 if (reductionNeeded <= EPS) reductionNeeded = stepMg;   // safety: still ensure progress
 
@@ -3608,11 +3737,13 @@ if (reductionNeeded <= EPS) reductionNeeded = stepMg;   // safety: still ensure 
     }
   }
 
-  // ---- TID planning (covers normal TID and AM–DIN–PM variant) ----
-  const candidateSums = (() => {
-    const down = floorTo(targetRounded, stepMg), up = ceilTo(targetRounded, stepMg);
-    return (down === up) ? [down] : [down, up];
-  })();
+// ---- TID planning (covers normal TID and AM–DIN–PM variant) ----
+// Prefer the UPWARD grid point first, only consider the lower one as a fallback
+const candidateSums = (() => {
+  const up   = ceilTo(targetRounded, stepMg);
+  const down = floorTo(targetRounded, stepMg);
+  return (down === up) ? [up] : [up, down];
+})();
 
   let best = null;
   for (const S of candidateSums) {
@@ -3647,7 +3778,7 @@ if (reductionNeeded <= EPS) reductionNeeded = stepMg;   // safety: still ensure 
     try { if (typeof strengthsForSelected === 'function') arr = strengthsForSelected() || []; } catch(_){}
     try { if (!arr.length && typeof allowedStrengthsFilteredBySelection === 'function') arr = allowedStrengthsFilteredBySelection() || []; } catch(_){}
     if (!arr.length) {
-      try { if (typeof strengthsForPicker === "function") arr = strengthsForPicker("Gabapentinoids", med, form) || []; } catch(_){}
+      try { if (typeof strengthsForPicker === "function") arr = strengthsForPicker("Gabapentinoid", med, form) || []; } catch(_){}
     }
     return arr.map(toMgLoose).filter(n=>n>0).sort((a,b)=>a-b);
   }
@@ -3783,9 +3914,9 @@ if (reductionNeeded <= EPS) reductionNeeded = stepMg;   // safety: still ensure 
     return out;
   }
 }
-/* ===== Benzodiazepines / Z-Drug (BZRA) — PM-only daily taper with selection & split rules ===== */
+/* ===== Benzodiazepine / Z-Drug (BZRA) — PM-only daily taper with selection & split rules ===== */
 function stepBZRA(packs, percent, med, form){
-  const cls = "Benzodiazepines / Z-Drug (BZRA)";
+  const cls = "Benzodiazepine / Z-Drug (BZRA)";
   const tot = packsTotalMg(packs);
   if (tot <= EPS) return packs;
 
@@ -3929,7 +4060,7 @@ function selectionGridStepBZRA(med, form, selectedMg){
     return 6.25;
   }
 
-  const cls = "Benzodiazepines / Z-Drug (BZRA)";
+  const cls = "Benzodiazepine / Z-Drug (BZRA)";
 
   if ((!mgList || !mgList.length) && typeof strengthsForPicker === "function") {
     const all = strengthsForPicker(cls, med, form) || [];
@@ -4078,8 +4209,8 @@ if (cls === "Antipsychotic") {
 const doStep = (phasePct) => {
   if (cls === "Opioid") packs = stepOpioid_Shave(packs, phasePct, cls, med, form);
   else if (cls === "Proton Pump Inhibitor") packs = stepPPI(packs, phasePct, cls, med, form);
-  else if (cls === "Benzodiazepines / Z-Drug (BZRA)") packs = stepBZRA(packs, phasePct, med, form);
-  else if (cls === "Gabapentinoids") packs = stepGabapentinoid(packs, phasePct, med, form);
+  else if (cls === "Benzodiazepine / Z-Drug (BZRA)") packs = stepBZRA(packs, phasePct, med, form);
+  else if (cls === "Gabapentinoid") packs = stepGabapentinoid(packs, phasePct, med, form);
   else packs = stepAP(packs, phasePct, med, form);
 };
 
@@ -4112,7 +4243,7 @@ if (packsTotalMg(packs) > EPS) {
 
 // If a BID class has reached selected-min BID and the class-lowest is among selections,
 // schedule PM-only at next boundary, then Stop at the following boundary.
-if (packsTotalMg(packs) > EPS && (cls === "Opioid" || cls === "Gabapentinoids")) {
+if (packsTotalMg(packs) > EPS && (cls === "Opioid" || cls === "Gabapentinoid")) {
   const selMin = selectedMinMg(cls, med, form);
   if (isAtSelectedBID(packs, selMin) && lowestSelectedForClassIsPresent(cls, med, form)) {
   window._pmOnlySnapshot = singleDoseFrom(packs);
@@ -4153,8 +4284,8 @@ if (p2Start && +date < +p2Start) {
   nextDate = nextByP1;
 }
 
-    if (reviewDate && +nextDate >= +reviewDate) { rows.push({ week: week+1, date: fmtDate(reviewDate), packs:{}, med, form, cls, review:true }); break; }
-    if (+nextDate >= +capDate) { rows.push({ date: fmtDate(nextDate), packs:{}, med, form, cls, review:true }); break; }
+    if (reviewDate && +nextDate >= +reviewDate) {rows.push({ week: week+1, date: fmtDate(reviewDate), packs:{}, med, form, cls, review:true });break;}
+    if (+nextDate >= +capDate) {  rows.push({ date: fmtDate(capDate), packs:{}, med, form, cls, review:true }); break;}
 
 // NEW: end-sequence Case B (LCS not selected) → force Review on the next boundary
 if (window._forceReviewNext) {
@@ -4205,7 +4336,7 @@ if (typeof window !== "undefined" && window._forceReviewNext){
   }
 
   // Re-check: if we just landed at selected-min BID with lowest selected, schedule PM-only next
-if (packsTotalMg(packs) > EPS && (cls === "Opioid" || cls === "Gabapentinoids")) {
+if (packsTotalMg(packs) > EPS && (cls === "Opioid" || cls === "Gabapentinoid")) {
   const selMin = selectedMinMg(cls, med, form);
   if (isAtSelectedBID(packs, selMin) && lowestSelectedForClassIsPresent(cls, med, form)) {
   window._pmOnlySnapshot = singleDoseFrom(packs);
@@ -4222,7 +4353,10 @@ function renderProductPicker(){
   const card = document.getElementById("productPickerCard");
   const host = document.getElementById("productPicker");
   if (!card || !host) return;
-
+  const wrap = card.closest(".sub-card") || card;
+  wrap.style.display = "";
+  card.style.display = "";
+  
   // current selection in the controls
   const clsEl  = document.getElementById("classSelect");
   const medEl  = document.getElementById("medicineSelect");
@@ -4240,26 +4374,40 @@ function renderProductPicker(){
     : true;
 
   // figure out strengths we can list
-  const strengths = (typeof strengthsForPicker === "function") ? strengthsForPicker() : [];
-  const hasAny = Array.isArray(strengths) && strengths.length > 0;
+const strengths = (typeof strengthsForPicker === "function") ? strengthsForPicker() : [];
 
-  if (!canShow || !hasAny){
-    card.style.display = "none";
-    host.innerHTML = "";
-    return;
-  }
+const isPatch = /Patch/i.test(form);
 
+// treat as “empty” unless at least one strength parses to a usable number
+const bases = (strengths || [])
+  .map(s => {
+    if (isPatch) return (typeof parsePatchRate === "function") ? parsePatchRate(s) : 0;
+    return (typeof parseMgFromStrength === "function") ? parseMgFromStrength(s) : 0;
+  })
+  .filter(v => Number.isFinite(v) && v > 0);
+
+const hasRenderable = bases.length > 0;
+
+if (!canShow || !hasRenderable){
+  wrap.style.display = "none";
+  card.style.display = "none";
+  host.innerHTML = "";
+  return;
+}
+  wrap.style.display = "";
   card.style.display = "";
   host.innerHTML = "";
 
   // build the checkbox list
   strengths.forEach(s => {
-    const mg = (typeof parseMgFromStrength === "function")
-      ? parseMgFromStrength(s)
-      : (parseFloat(String(s).replace(/[^\d.]/g,"")) || 0);
-    if (!Number.isFinite(mg) || mg <= 0) return;
+const base = isPatch
+  ? ((typeof parsePatchRate === "function") ? parsePatchRate(s) : (parseFloat(String(s).replace(/[^\d.]/g,"")) || 0))
+  : ((typeof parseMgFromStrength === "function") ? parseMgFromStrength(s) : (parseFloat(String(s).replace(/[^\d.]/g,"")) || 0));
 
-    const id = `prod_${String(med).replace(/\W+/g,'_')}_${mg}`;
+if (!Number.isFinite(base) || base <= 0) return;
+
+
+    const id = `prod_${String(med).replace(/\W+/g,'_')}_${base}`;
 
     const label = document.createElement("label");
     label.className = "checkbox";
@@ -4268,27 +4416,36 @@ function renderProductPicker(){
     const cb = document.createElement("input");
     cb.type = "checkbox";
     cb.id = id;
-    cb.dataset.mg = String(mg);
+    cb.dataset.base = String(base);
 
     // if user has any selection, reflect it; otherwise leave unchecked (meaning "use all")
-    cb.checked = (SelectedFormulations.size > 0) ? SelectedFormulations.has(mg) : false;
+    cb.checked = (SelectedFormulations.size > 0) ? SelectedFormulations.has(Number(base)) : false;
 
-    cb.addEventListener("change", () => {
-      if (cb.checked) SelectedFormulations.add(mg);
-      else SelectedFormulations.delete(mg);
-      if (typeof setDirty === "function") setDirty(true);
-    });
+cb.addEventListener("change", () => {
+  const n = Number(base);
+  if (cb.checked) SelectedFormulations.add(n);
+  else SelectedFormulations.delete(n);
 
+  if (typeof setDirty === "function") setDirty(true);
+  if (typeof setGenerateEnabled === "function") setGenerateEnabled();
+});
     const span = document.createElement("span");
-    const title = (typeof strengthToProductLabel === "function")
-      ? strengthToProductLabel(cls, med, form, s)   // e.g., "600 mg tablet"
-      : `${mg} mg`;
+  const title = (typeof strengthToProductLabel === "function")
+  ? strengthToProductLabel(cls, med, form, s)
+  : (isPatch ? `${base} mcg/hr` : `${base} mg`);
     span.textContent = title;
 
     label.appendChild(cb);
     label.appendChild(span);
     host.appendChild(label);
   });
+    // If nothing rendered, hide the whole card (prevents empty card UI)
+  if (!host.children || host.children.length === 0) {
+    wrap.style.display = "none";
+    card.style.display = "none";
+    host.innerHTML = "";
+    return;
+  }
 
   // wire buttons (rebind on every render so they're always current)
   const btnSelectAll = document.getElementById("selectAllProductSelection");
@@ -4300,10 +4457,11 @@ function renderProductPicker(){
       // tick everything currently shown
       host.querySelectorAll('input[type="checkbox"]').forEach(cb => {
         cb.checked = true;
-        const mg = parseFloat(cb.dataset.mg);
-        if (Number.isFinite(mg) && mg > 0) SelectedFormulations.add(mg);
+        const base = parseFloat(cb.dataset.base);
+           if (Number.isFinite(base) && base > 0) SelectedFormulations.add(Number(base));
       });
       if (typeof setDirty === "function") setDirty(true);
+      if (typeof setGenerateEnabled === "function") setGenerateEnabled();
     };
   }
 
@@ -4312,6 +4470,7 @@ function renderProductPicker(){
       SelectedFormulations.clear();
       host.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
       if (typeof setDirty === "function") setDirty(true);
+      if (typeof setGenerateEnabled === "function") setGenerateEnabled();
     };
   }
 }
@@ -4323,7 +4482,11 @@ function renderProductPicker(){
     if (!window.SelectedFormulations) window.SelectedFormulations = new Set();
     SelectedFormulations.clear();
     renderProductPicker();
+     setTimeout(() => {
+    renderProductPicker();
+    }, 0);
     if (typeof setDirty === "function") setDirty(true);
+    if (typeof setGenerateEnabled === "function") setGenerateEnabled();
   };
   if (med  && !med._ppReset)  { med._ppReset  = true; med.addEventListener("change", reset); }
   if (form && !form._ppReset) { form._ppReset = true; form.addEventListener("change", reset); }
@@ -4605,35 +4768,85 @@ function perStrengthRowsFractional(r){
   });
 
   const medName = String(r.med || '');
-  const suffix  = formSuffixWithSR(r.form);
+const suffix  = formSuffixWithSR(r.form);
 
-  bases.forEach(b=>{
-    const q=byBase[b], lines=[];
-    if(q.AM)  lines.push(`Take ${tabletsPhraseDigits(q.AM)} in the morning`);
-    if(q.MID) lines.push(`Take ${tabletsPhraseDigits(q.MID)} at midday`);
-    if(q.DIN) lines.push(`Take ${tabletsPhraseDigits(q.DIN)} at dinner`);
-    if(q.PM)  lines.push(`Take ${tabletsPhraseDigits(q.PM)} at night`);
+bases.forEach(b => {
+  const q = byBase[b];
+  if (!q) return;
 
-    // Build the Strength label
-// Build the strength label correctly (SR preserved; Oxy/Nx paired)
-let strengthLabel;
-if (/Oxycodone\s*\/\s*Naloxone/i.test(r.med)) {
-  strengthLabel = oxyNxPairLabel(b); // e.g., "Oxycodone 20 mg + naloxone 10 mg SR tablet"
-} else if (r.med === "Gabapentin" && r.form === "Tablet/Capsule") {
-  const df = GABA_FORM_BY_STRENGTH[b] || "Capsule";
-  strengthLabel = `${r.med} ${stripZeros(b)} mg ${df}`;
-} else {
-  strengthLabel = `${r.med} ${stripZeros(b)} mg ${formSuffixWithSR(r.form)}`;
-}
-   strengthLabel = prettySelectedLabelOrSame(r.cls, r.med, r.form, strengthLabel);
-   rows.push({
-  strengthLabel: strengthLabel,
-  instructions: lines.join("\n"),
-  am: mkCell(q.AM), mid: mkCell(q.MID), din: mkCell(q.DIN), pm: mkCell(q.PM)
-});
+  const lines = [];
+
+  // --- 1. Choose the wording unit ("tablet" vs "capsule") ---
+  let doseUnit = "tablet";
+
+  if (r.cls === "Gabapentinoid" && r.med === "Gabapentin") {
+    // Use the same strength→form mapping we used for the instructions:
+    const formForStrength =
+      (typeof GABA_FORM_BY_STRENGTH !== "undefined" && GABA_FORM_BY_STRENGTH)
+        ? (GABA_FORM_BY_STRENGTH[b] || "Capsule")
+        : "Capsule";
+
+    doseUnit = /Capsule/i.test(formForStrength) ? "capsule" : "tablet";
+  }
+
+  if (q.AM)  lines.push(`Take ${unitsPhraseDigits(q.AM, doseUnit)} in the morning`);
+  if (q.MID) lines.push(`Take ${unitsPhraseDigits(q.MID, doseUnit)} at midday`);
+  if (q.DIN) lines.push(`Take ${unitsPhraseDigits(q.DIN, doseUnit)} at dinner`);
+  if (q.PM)  lines.push(`Take ${unitsPhraseDigits(q.PM, doseUnit)} at night`);
+
+  if (!lines.length) return;
+
+  // --- 2. Build the Strength label ---
+  let strengthLabel;
+
+  if (/Oxycodone\s*\/\s*Naloxone/i.test(r.med)) {
+    // Special paired label for oxycodone/naloxone
+    strengthLabel = oxyNxPairLabel(b);
+  } else if (r.cls === "Gabapentinoid" && r.med === "Gabapentin") {
+    // Gabapentin: use the same Capsule/Tablet mapping per strength
+    const formForStrength =
+      (typeof GABA_FORM_BY_STRENGTH !== "undefined" && GABA_FORM_BY_STRENGTH)
+        ? (GABA_FORM_BY_STRENGTH[b] || "Capsule")
+        : "Capsule";
+
+    strengthLabel = `${r.med} ${stripZeros(b)} mg ${formForStrength}`;
+  } else {
+    // Everyone else: use the generic suffix (Tablet, SR Tablet, Capsule, etc.)
+    strengthLabel = `${medName} ${stripZeros(b)} mg ${suffix}`;
+  }
+
+  strengthLabel = prettySelectedLabelOrSame(r.cls, r.med, r.form, strengthLabel);
+
+  rows.push({
+    strengthLabel,
+    instructions: lines.join("\n"),
+    am: mkCell(q.AM),
+    mid: mkCell(q.MID),
+    din: mkCell(q.DIN),
+    pm: mkCell(q.PM)
   });
+});
 
   return rows;
+}
+function patchTotalFromRow(row){
+  // 1) Direct numeric totals (if present)
+  if (Number.isFinite(row?.totalRate)) return row.totalRate;
+  if (Number.isFinite(row?.total)) return row.total;
+  // 2) Preferred: patch rows store an array like [5, 30, 5]
+  if (Array.isArray(row?.patches)) {
+    return row.patches.reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
+  }
+  // 3) Fallback: object like { "25 mcg/hr": 1, "12.5 mcg/hr": 1 }
+  if (row && row.packs && typeof row.packs === "object") {
+    let total = 0;
+    for (const k of Object.keys(row.packs)) {
+      const qty = parseFloat(row.packs[k]) || 0;
+      total += parsePatchRate(k) * qty;
+    }
+    return total;
+  }
+  return 0;
 }
 /* =============================================================
 SHOW CALCULATIONS — logger + renderer (no recalculation)
@@ -4646,13 +4859,19 @@ Hooks into renderStandardTable/renderPatchTable
     rows: [],
     clear(){ this.rows = []; },
 
-    // Build from the same rows that renderers use (no new math)
+    updateVarianceNotice(){
+      const host = document.getElementById("varianceNotice");
+      if (!host) return;
+      const hasVariance = this.rows.some(r => (r.actualPct - r.cfgPct) > EPS);
+      host.style.display = hasVariance ? "" : "none";
+    },
+
     buildFromRows(stepRows){
       this.clear();
 
       const cls  = document.getElementById("classSelect")?.value || "";
-      const med  = document.getElementById("medicineSelect")?.value || "";
       const form = document.getElementById("formSelect")?.value || "";
+      const isPatch = /Patch/i.test(form);
 
       const p1Pct = num(document.getElementById("p1Percent")?.value);
       const p2Pct = num(document.getElementById("p2Percent")?.value);
@@ -4662,34 +4881,50 @@ Hooks into renderStandardTable/renderPatchTable
         ? (p2StartInput._flatpickr?.selectedDates?.[0] || (p2StartInput.value ? new Date(p2StartInput.value) : null))
         : null;
 
-      const unit = /Patch/i.test(form) ? "mcg/h" : "mg";
+      const unit = isPatch ? "mcg/h" : "mg";
 
-      // Derive starting total from current inputs (no recomputation of future rows)
+      // --- Baseline total from current inputs ---
       let prevTotal = 0;
+
       if (cls === "Antipsychotic" && typeof window.apSeedPacksFromFourInputs === "function") {
         prevTotal = safePacksTotalMg(window.apSeedPacksFromFourInputs() || {});
-      } else if (/Patch/i.test(form)) {
+      } else if (isPatch) {
         prevTotal = sumPatchesFromDoseLines();
+
+        // PATCH SAFETY NET: if doseLines didn’t yield a total, try first plan row
+        if (prevTotal <= EPS) {
+          const firstDoseRow = (stepRows || []).find(r => !(r.stop || r.review));
+          const fromRow = patchTotalFromRow(firstDoseRow);
+          if (fromRow > EPS) prevTotal = fromRow;
+        }
       } else if (typeof window.buildPacksFromDoseLines === "function") {
         prevTotal = safePacksTotalMg(window.buildPacksFromDoseLines() || {});
       }
 
+      let keptAny = false;
+
       (stepRows || []).forEach((row) => {
-        if (row.stop || row.review) return; // skip non-dose rows
+        if (row.stop || row.review) return;
 
-        const dateStr   = row.dateStr || row.date || row.when || "";
-        const cfgPct    = pickConfiguredPercentForDate(dateStr, p1Pct, p2Pct, p2Start);
-        const rawTarget = prevTotal * (1 - (cfgPct / 100)); // informational (unrounded)
+        const dateStr = row.dateStr || row.date || row.when || "";
 
-        // Chosen total comes from the rendered row itself
+        // Read the chosen dose from the plan row itself
         let chosen = 0;
-        if (/Patch/i.test(form) || row.patches) {
-          chosen = sumPatches(Array.isArray(row.patches) ? row.patches : []);
+        if (isPatch) {
+          chosen = patchTotalFromRow(row);
+          if (chosen <= EPS) chosen = prevTotal; // fallback only if row couldn't be read
         } else {
           chosen = safePacksTotalMg(row.packs);
         }
 
-        const actualPct = prevTotal > EPS ? (100 * (1 - (chosen / prevTotal))) : 0;
+        // PATCH ONLY: collapse rows where the dose didn't change (optional)
+        if (isPatch && keptAny && prevTotal > EPS && Math.abs(chosen - prevTotal) < EPS) return;
+
+        const cfgPct = pickConfiguredPercentForDate(dateStr, p1Pct, p2Pct, p2Start);
+
+      // Step 1 = first reduction target from baseline
+      let rawTarget = prevTotal * (1 - (cfgPct / 100));
+      let actualPct = prevTotal > EPS ? (100 * (1 - (chosen / prevTotal))) : 0;
 
         this.rows.push({
           step: this.rows.length + 1,
@@ -4701,8 +4936,11 @@ Hooks into renderStandardTable/renderPatchTable
           actualPct
         });
 
-        prevTotal = chosen; // advance for next step’s comparisons
+        keptAny = true;
+        prevTotal = chosen;
       });
+
+      this.updateVarianceNotice();
     },
 
     render(){
@@ -4717,19 +4955,13 @@ Hooks into renderStandardTable/renderPatchTable
         return;
       }
 
-      const tbl   = document.createElement("table");
+      const tbl = document.createElement("table");
       tbl.className = "plan-table calc-table";
 
       const thead = document.createElement("thead");
-      const trh   = document.createElement("tr");
-      [
-        "Step",
-        "Date",
-        "Calculated Dose",
-        "Selected % Change",
-        "Rounded Dose",
-        "Actual % Change"
-      ].forEach(h => { const th = document.createElement("th"); th.textContent = h; trh.appendChild(th); });
+      const trh = document.createElement("tr");
+      ["Step","Date","Calculated Dose","Selected % Change","Rounded Dose","Actual % Change"]
+        .forEach(h => { const th = document.createElement("th"); th.textContent = h; trh.appendChild(th); });
       thead.appendChild(trh);
       tbl.appendChild(thead);
 
@@ -4774,23 +5006,69 @@ Hooks into renderStandardTable/renderPatchTable
     } catch { return 0; }
   }
 
-  function sumPatchesFromDoseLines(){
+function sumPatchesFromDoseLines(){
+  const form = document.getElementById("formSelect")?.value || "";
+  if (!/Patch/i.test(form)) return 0;
+
+  // IMPORTANT: support BOTH "doseLines" (your patch builder uses this)
+  // and "window.doseLines" (older versions used this)
+  const lines =
+    (typeof window !== "undefined" && Array.isArray(window.doseLines) && window.doseLines) ? window.doseLines :
+    (typeof doseLines !== "undefined" && Array.isArray(doseLines) && doseLines) ? doseLines :
+    [];
+
+  return lines.reduce((sum, ln) => {
+    const strength =
+      ln?.strengthStr ??
+      ln?.strengthLabel ??
+      ln?.strength ??
+      "";
+
+    const rawQty =
+      ln?.qty ??
+      ln?.quantity ??
+      ln?.count ??
+      0;
+
+    const rate = parsePatchRate(strength);
+    const qty  = Math.max(0, Math.floor(parseFloat(rawQty) || 0));
+
+    return sum + (Number.isFinite(rate) ? rate : 0) * qty;
+  }, 0);
+}
+
+function sumPatches(list){
+  try {
+    return (list || []).reduce((s, p) => {
+      if (typeof p === "number") return s + p;        // numeric patch rates
+      return s + ((+p?.rate) || 0);                   // {rate: ...}
+    }, 0);
+  } catch {
+    return 0;
+  }
+}
+function patchTotalFromRow(row){
+  if (Number.isFinite(row?.totalRate)) return row.totalRate;
+  if (Number.isFinite(row?.total)) return row.total;
+
+  // patch rows store an array like [5, 30, 5]
+  if (Array.isArray(row?.patches)) {
+    return row.patches.reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
+  }
+
+  // fallback: object like { "25 mcg/hr": 1, "12.5 mcg/hr": 1 }
+  if (row && row.packs && typeof row.packs === "object") {
     let total = 0;
-    (window.doseLines || []).forEach(ln => {
-      const rate = (typeof window.parsePatchRate === "function")
-        ? (window.parsePatchRate(ln.strengthStr) || 0)
-        : parseFloat(ln.strengthStr) || 0;
-      const qty = Math.max(0, Math.floor(ln.qty ?? 0));
-      total += rate * qty;
-    });
+    for (const k of Object.keys(row.packs)) {
+      const qty = parseFloat(row.packs[k]) || 0;
+      total += parsePatchRate(k) * qty;
+    }
     return total;
   }
 
-  function sumPatches(list){
-    try { return (list || []).reduce((s, p) => s + ((+p.rate) || 0), 0); }
-    catch { return 0; }
-  }
-
+  return 0;
+}
+ 
   function pickConfiguredPercentForDate(dateStr, p1Pct, p2Pct, p2Start){
     if (!(p2Start instanceof Date) || !(p2Pct > 0)) return p1Pct;
     try { const dt = new Date(dateStr); if (isFinite(+dt) && +dt >= +p2Start) return p2Pct; } catch {}
@@ -4833,8 +5111,6 @@ Hooks into renderStandardTable/renderPatchTable
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", wireCalcToggle);
   else                                   wireCalcToggle();
 })();
-
-
 
 /* =================== Build & init =================== */
 
@@ -4896,6 +5172,74 @@ function init(){
       try { el.type = "date"; } catch(_) {}
     }
   });
+    // 1b) Chart horizon controls ("Generate chart for")
+  const durationRadio = document.getElementById("taperModeDuration");
+  const endRadio = document.getElementById("taperModeDate");
+  const durationSelect = document.getElementById("taperDuration");
+  const endInput = document.getElementById("taperEndDate");
+
+  const syncTaperModeUI = () => {
+    if (durationRadio && durationSelect) durationSelect.disabled = !durationRadio.checked;
+    if (endRadio && endInput) endInput.disabled = !endRadio.checked;
+  };
+
+  // Default to "Until complete"
+  if (durationRadio) durationRadio.checked = true;
+  if (durationSelect) durationSelect.value = "complete";
+  syncTaperModeUI();
+
+  // If user interacts with controls, switch modes automatically
+  durationSelect?.addEventListener("change", () => {
+    if (durationRadio) durationRadio.checked = true;
+    syncTaperModeUI();
+    setDirty(true);
+    setGenerateEnabled();
+  });
+
+  endInput?.addEventListener("change", () => {
+    if (endRadio) endRadio.checked = true;
+    syncTaperModeUI();
+    setDirty(true);
+    setGenerateEnabled();
+  });
+
+  durationRadio?.addEventListener("change", () => {
+    syncTaperModeUI();
+    setDirty(true);
+    setGenerateEnabled();
+  });
+
+  endRadio?.addEventListener("change", () => {
+    syncTaperModeUI();
+    setDirty(true);
+    setGenerateEnabled();
+  });
+
+  // Keep end-date >= start-date (best-effort, only if flatpickr is present)
+  const startEl = document.getElementById("startDate");
+  const bumpEndMinDate = () => {
+    if (!endInput || !endInput._flatpickr) return;
+
+    let sd = null;
+    if (startEl && startEl._flatpickr &&
+        Array.isArray(startEl._flatpickr.selectedDates) &&
+        startEl._flatpickr.selectedDates[0]) {
+      sd = startEl._flatpickr.selectedDates[0];
+    } else if (startEl && startEl.value) {
+      const parts = startEl.value.split("/").map(s => parseInt(s, 10));
+      if (parts.length === 3 && parts.every(n => Number.isFinite(n))) {
+        const [dd, mm, yyyy] = parts;
+        sd = new Date(yyyy, mm - 1, dd);
+      }
+    }
+
+    if (sd instanceof Date && !isNaN(+sd)) {
+      endInput._flatpickr.set("minDate", sd);
+    }
+  };
+
+  startEl?.addEventListener("change", bumpEndMinDate);
+  bumpEndMinDate();
 
   // 2) Clear Phase-1 presets (placeholders only)
   const p1PctEl = document.getElementById("p1Percent");
@@ -4917,11 +5261,15 @@ function init(){
 
   // 4) Change handlers for dependent selects
   document.getElementById("classSelect")?.addEventListener("change", () => {
+      if (window.SelectedFormulations && typeof SelectedFormulations.clear === "function") {
+    SelectedFormulations.clear();}
     populateMedicines();
     populateForms();
     updateRecommended();
     applyPatchIntervalAttributes();
     renderProductPicker();
+    bzraVisibilityTick();
+    bidPrefVisibilityTick();
     if (typeof setFooterText === "function") setFooterText(document.getElementById("classSelect")?.value || "");
     resetDoseLinesToLowest();
     setDirty(true);
@@ -4934,6 +5282,7 @@ function init(){
     updateRecommended();
     applyPatchIntervalAttributes();
     renderProductPicker();
+    bidPrefVisibilityTick();
     if (typeof setFooterText === "function") setFooterText(document.getElementById("classSelect")?.value || "");
     resetDoseLinesToLowest();
     setDirty(true);
@@ -5022,8 +5371,7 @@ card.innerHTML = `
     </p>
 
     <p>
-      This calculator is not designed for generating an individualised tapering plan for patients with severe substance use disorder; 
-      these patients require tailored plans beyond the scope of this calculator.
+      This calculator is <strong>not</strong> designed for generating an individualised tapering plan for complex patients (eg those with severe substance use disorder); these patients require tailored plans beyond the scope of this calculator.
     </p>
 
     <p>
