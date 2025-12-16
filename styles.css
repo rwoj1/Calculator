@@ -464,6 +464,31 @@ button.ghost{
 .calc-table .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .calc-table .wrap { white-space: normal; }
 
+/* Variance notice banner under action buttons */
+.variance-notice {
+  margin: 8px 0 4px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border-left: 4px solid #f97316;          /* warm amber-ish accent */
+  background-color: #fff7ed;               /* very light orange */
+  color: #7c2d12;                          /* dark text for contrast */
+  font-size: 0.9rem;
+}
+
+/* Make "Show calculation" more obvious */
+.calc-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+.calc-toggle input {
+  transform: scale(1.15);                  /* slightly bigger checkbox */
+}
+#bzraSplitOptions { display: none; }
+
 /* ==============================
    PRINT / PDF rules
    ============================== */
@@ -898,5 +923,3 @@ button.ghost{
   .suggested-practice .practice-text { font-size: 1rem; line-height: 1.65; }
 }
  
-
-
