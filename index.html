@@ -75,18 +75,18 @@
   </label>
 
   <label style="display:flex; flex-direction:column; gap:8px;">
-    <span>Generate chart for:</span>
+    <span>Generate chart:</span>
 
     <span class="inline-label" style="display:flex; align-items:center; gap:8px;">
       <input type="radio" name="taperMode" id="taperModeDuration" value="duration" checked />
       <select id="taperDuration">
-        <option value="1">1 month</option>
-        <option value="2">2 months</option>
-        <option value="3" selected>3 months</option>
-        <option value="4">4 months</option>
-        <option value="5">5 months</option>
-        <option value="6">6 months</option>
-        <option value="complete">Until complete</option>
+        <option value="1">for 1 month</option>
+        <option value="2">for 2 months</option>
+        <option value="3">for 3 months</option>
+        <option value="4">for 4 months</option>
+        <option value="5">for 5 months</option>
+        <option value="6">for 6 months</option>
+        <option value="complete"selected>until complete</option>
       </select>
     </span>
 
@@ -193,7 +193,7 @@
         </div>
       
 <!-- BID split preference -->
-     <div class="sub-card">
+     <div class="sub-card" id="bidPrefCard">
 <div class="taper-block">
   <h3>Dose-split preference for twice-daily dosing</h3>
   <label class="inline-label">
@@ -219,6 +219,11 @@
     </button>
     <button id="resetBtn" type="button" class="ghost">Reset</button>
   </div>
+
+    <!-- Variance notification (shown only when needed) -->
+  <div id="varianceNotice" class="variance-notice" style="display:none">
+    Note: Due to limitations of available or selected formulations, some steps in the generated tapering schedule have a higher % dose reduction than requested. For more information, refer to <strong>Show calculation</strong>.
+  </div>    
 
   <label class="inline-label calc-toggle">
 <input id="showCalc" type="checkbox" />
