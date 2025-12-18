@@ -1,4 +1,4 @@
-
+\
 /* =========================================================
    THEME — Flip backgrounds (White page • Light-blue cards)
    Palette: 094D76, 118BD5, 0E75B3, 0D6CA6
@@ -291,14 +291,32 @@ button.ghost{
   .admin-calendar th {
     text-align: center;
     font-size: 8.5pt;
-    padding-top: 4pt;
-    padding-bottom: 4pt;
+    padding-top: 3pt;
+    padding-bottom: 3pt;
   }
 
-  .admin-day {
-    min-height: 42pt;
-  }
+.admin-calendar td.admin-day{
+  height: 62pt;            /* increase if you want more breathing room */
+  padding: 4pt 3pt;
+}
 
+.dose-row{
+  display: flex;
+  align-items: center;
+  gap: 3pt;
+  font-size: 8pt;
+  line-height: 1.1;
+  margin-top: 1pt;
+}
+
+.admin-checkbox{
+  flex: 0 0 9pt;           /* fixed width */
+  width: 9pt;
+  height: 9pt;
+  border: 1px solid #000;
+  box-sizing: border-box;
+}
+  
   /* Days outside taper window: greyed but still present */
   .admin-day-outside {
     background: #f2f2f2;
@@ -313,26 +331,13 @@ button.ghost{
 
   .day-number {
     font-weight: 600;
-    margin-bottom: 2pt;
+    margin-bottom: 1pt;
     font-size: 8.5pt;
   }
   .review-label {
     margin-top: 2pt;
     font-size: 8pt;
     font-style: italic;
-  }
-
-  .dose-row {
-    font-size: 8pt;
-    line-height: 1.2;
-  }
-
-  .admin-checkbox {
-    display: inline-block;
-    width: 8pt;
-    height: 8pt;
-    border: 1px solid #000;
-    margin-right: 2pt;
   }
 
   .admin-empty {
@@ -349,14 +354,14 @@ button.ghost{
   }
 
   .step-label {
-    margin-top: 2pt;
-    font-size: 8pt;
+    margin-top: 1pt;
+    font-size: 7.5pt;
     font-style: italic;
   }
 
   .review-label {
-    margin-top: 2pt;
-    font-size: 8pt;
+    margin-top: 1pt;
+    font-size: 7.5pt;
     font-style: italic;
   }
 
@@ -742,13 +747,20 @@ button.ghost{
   line-height: 1.35;
 }
 
-/* strong headers within footer */
-.class-footer strong {
+/* strong headers within footer (only when strong is a direct child) */
+.class-footer > strong {
   display: block;
   color: var(--brand-900);
   font-weight: 600;
   margin-top: 0.9em;
   margin-bottom: 0.3em;
+}
+
+/* inline strong inside paragraphs should stay inline */
+.class-footer p strong,
+.class-footer li strong {
+  display: inline;
+  margin: 0;
 }
 
 /* textarea box */
@@ -922,4 +934,3 @@ button.ghost{
   .suggested-practice { padding: 18px; }
   .suggested-practice .practice-text { font-size: 1rem; line-height: 1.65; }
 }
- 
