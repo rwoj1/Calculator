@@ -18,8 +18,7 @@
   11. Boot / Init
 ============================================================== */
 
-"use strict";
-
+//#region 1) Helpers & Core Utilities
 /* ====================== Helpers ====================== */
 
 const $ = (id) => document.getElementById(id);
@@ -36,6 +35,15 @@ const DAYS_PER_MONTH = 28; // change to 30 if you prefer 30-day "months"
 const MS_PER_DAY = 24 * 3600 * 1000;
 const THREE_MONTHS_MS = 3 * DAYS_PER_MONTH * MS_PER_DAY; // only used as a fallback
 const EPS = 1e-6;
+
+// ===== Medicine class visibility toggles =====
+const MEDICINE_CLASS_VISIBILITY = {
+  "Opioid": true,
+  "Benzodiazepine / Z-Drug (BZRA)": true,
+  "Antipsychotic": false,
+  "Proton Pump Inhibitor": true,
+  "Gabapentinoid": true,
+};
 
 // Compute the maximum plan/chart date from user controls.
 function getChartCapDate(startDate){
@@ -97,6 +105,9 @@ function getChartCapDate(startDate){
   return fallbackCap();
 }
 
+//#endregion
+
+//#region 2) Patch Interval Safety Rules
 /* ===== Patch interval safety (Fentanyl: ×3 days, Buprenorphine: ×7 days) ===== */
 //#endregion
 //#region 2. Patch Interval Rules (safety)
@@ -537,6 +548,9 @@ function bidPrefVisibilityTick(){
   box.style.display = (isOpioidSrTablet || isPregabalin) ? "" : "none";
 }
 
+//#endregion
+
+//#region 3) Antipsychotic UI Wiring
 /* ===== Antipsychotic UI wiring (layout only) ===== */
 ;(() => {
   const $id = (s) => document.getElementById(s);
@@ -669,7 +683,7 @@ function apToggleCurrentDoseUI(isAP){
 
 // Ensure chips show full labels (Morning/Midday/Dinner/Night)
 function apEnsureChipLabels(){
-  const LABELS = { AM: "Morning", MID: "Midday", DIN: "Dinner", PM: "Night" };
+  const LABELS = { AM: "Morning", MID: "Midday", DIN: "Evening", PM: "Night" };
 
   document.querySelectorAll("#apOrder .ap-chip").forEach((chip, i) => {
     const slot = chip.getAttribute("data-slot") || "";
@@ -794,6 +808,9 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 })();
 
+//#endregion
+
+//#region 4) Antipsychotic Dose Seeding
 /* ===== Antipsychotics: seed packs from the four AM/MID/DIN/PM inputs ===== */
 function apSeedPacksFromFourInputs(){
   // Prefer your existing reader if present
@@ -1211,6 +1228,9 @@ function distributePregabalinBID(unitsArr, perSlotCap) {
 
   return out;
 }
+//#endregion
+
+//#region 5) Gabapentinoid Helpers
 /* ===== Gabapentinoid helpers (non-destructive additions) ===== */
 
 // Round daily target per medicine class, keeping nudged-down behavior if unchanged.
@@ -1570,6 +1590,9 @@ function hasSelectedCommercialLowest(cls, med, form) {
   return selectedMg.some((mg) => Math.abs(mg - lowestCommercial) < 1e-9);
 }
 
+//#endregion
+
+//#region 6) Print & Admin Record Helpers
 /* ===== Minimal print / save helpers (do NOT duplicate elsewhere) ===== */
 
 // PRINT: use your existing print CSS and guard against stale charts
@@ -1877,6 +1900,22 @@ if (!inWindow) {
     pb.className = "page-break";
     monthWrapper.appendChild(pb);
 
+// Notes section (print-only)
+const notes = document.createElement("div");
+notes.className = "admin-notes";
+
+const notesTitle = document.createElement("div");
+notesTitle.className = "admin-notes-title";
+notesTitle.textContent = "Notes (eg activity level, sleep, withdrawal effects, ability to think clearly, social life)";
+
+const notesBox = document.createElement("div");
+notesBox.className = "admin-notes-box";
+
+notes.appendChild(notesTitle);
+notes.appendChild(notesBox);
+monthWrapper.appendChild(notes);
+
+    
     block.appendChild(monthWrapper);
 
     // Move to next month
@@ -2043,7 +2082,7 @@ This tapering plan may need to change depending on how you’re feeling.</p>
   <li>Plans to prevent and manage withdrawal symptoms if you get any – these are temporary and usually mild, but can be distressing (e.g. flu-like symptoms, nausea, diarrhoea, stomach aches, anxiety, restlessness, sweating, fast heartbeat).</li>
 </ul>
 <p>See your healthcare team regularly while reducing your dose. If you have any concerns or troublesome withdrawal symptoms, speak to your prescriber about what to do.</p>
-<p>Your tolerance to opioids will reduce as your dose reduces. This means <strong>you are at risk of overdosing if you quickly return to your previous high doses of opioids</strong>. Naloxone is a medication that reverses the effects of opioid overdose and may save your life. For more information, see <a href="https://saferopioiduse.com.au" target="_blank">The Opioid Safety Toolkit (https://saferopioiduse.com.au) for details</a>.</p>
+<p>Your tolerance to opioids will reduce as your dose reduces. This means <strong>you are at risk of overdosing if you quickly return to your previous high doses of opioids</strong>. Naloxone is a medication that reverses the effects of opioid overdose and may save your life. For more information, see <a href="https://saferopioiduse.com.au" target="_blank">The Opioid Safety Toolkit (https://saferopioiduse.com.au)</a> for details.</p>
 
 <strong>Additional notes:</strong>
 <textarea></textarea>
@@ -2189,6 +2228,9 @@ function watchDirty(selector) {
   });
 }
 
+//#endregion
+
+//#region 7) Dose Text & Fraction Helpers
 /* ===== digits/words helpers (fractional → words incl. whole) ===== */
 function _smallIntToWords(n) {
   const map = {0:'zero',1:'one',2:'two',3:'three',4:'four',5:'five',6:'six',7:'seven',8:'eight',9:'nine',10:'ten'};
@@ -2237,6 +2279,9 @@ function collapseFentanylTwelves(patches){
   if (twelves % 2 === 1) others.push(12);
   return others.sort((a, b) => b - a).slice(0, 2); // keep ≤2 patches
 }
+//#endregion
+
+//#region 8) Dose-form Nouns & Labels
 /* ===== Dose-form nouns for labels/instructions ===== */
 function doseFormNoun(form) {
   if (/Patch/i.test(form)) return "patches";
@@ -2702,40 +2747,48 @@ function oxyNxPairLabel(oxyMg){
   return `Oxycodone ${stripZeros(oxy)} mg + naloxone ${stripZeros(nx)} mg SR tablet`;
 }
 /* =================== Dropdowns & dose lines =================== */
-const ANTIPSYCHOTIC_MODE = "show";
-
 function populateClasses() {
   const el = $("classSelect");
   if (!el) return;
+
+  // Keep current selection if possible
+  const current = el.value;
+
   el.innerHTML = "";
+
+  // General per-class mode: "show" | "hide" | "disable"
+  // Default is "show"
+  const CLASS_MODE = {
+    "Opioid": "show",
+    "Benzodiazepine / Z-Drug (BZRA)": "show",
+    "Antipsychotic": "show",
+    "Proton Pump Inhibitor": "show",
+    "Gabapentinoid": "show",
+  };
 
   CLASS_ORDER.forEach(c => {
     // only add classes that exist in the catalog
     if (!CATALOG[c]) return;
 
-    // handle Antipsychotic visibility/enable state
-    if (c === "Antipsychotic") {
-      if (ANTIPSYCHOTIC_MODE === "hide") return; // skip entirely
+    const mode = CLASS_MODE[c] || "show";
+    if (mode === "hide") return; // skip entirely
 
-      const o = document.createElement("option");
-      o.value = c;
-      o.textContent = c;
-      if (ANTIPSYCHOTIC_MODE === "disable") {
-        o.disabled = true; // visible but cannot be chosen
-      }
-      el.appendChild(o);
-      return;
-    }
-
-    // normal classes
     const o = document.createElement("option");
     o.value = c;
     o.textContent = c;
+
+    if (mode === "disable") {
+      o.disabled = true; // visible but cannot be chosen
+    }
+
     el.appendChild(o);
   });
 
-  // Safety: if the current value is Antipsychotic while muted, bump to first available
-  if ((el.value === "Antipsychotic" && ANTIPSYCHOTIC_MODE !== "show") || !el.value) {
+  // Restore selection if still available and not hidden
+  const restoredOption = Array.from(el.options).find(o => o.value === current && !o.disabled);
+  if (restoredOption) {
+    el.value = current;
+  } else {
     el.selectedIndex = 0;
   }
 }
@@ -5569,4 +5622,6 @@ if (document.readyState === 'loading') {
 }
 
 document.addEventListener("DOMContentLoaded", ()=>{ try{ init(); } catch(e){ console.error(e); alert("Init error: "+(e?.message||String(e))); }});
+//#endregion
+
 //#endregion
