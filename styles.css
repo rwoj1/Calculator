@@ -1,572 +1,504 @@
-
 /* =========================================================
-   THEME — Flip backgrounds (White page • Light-blue cards)
+   THEME — White page • Light-blue cards
    Palette: 094D76, 118BD5, 0E75B3, 0D6CA6
    ========================================================= */
 :root{
   /* Brand blues */
-  --brand-900: #094D76;
-  --brand-700: #0D6CA6;
-  --brand-600: #0E75B3;
-  --brand-500: #118BD5;
+  --brand-900:#094D76;
+  --brand-700:#0D6CA6;
+  --brand-600:#0E75B3;
+  --brand-500:#118BD5;
 
   /* Surfaces & text */
-  --page:        #ffffff;                         /* outer background */
-  --card:        #EDF6FB;                         /* inner cards (light blue) */
-  --card-hover:  #E6F2F9;                         /* slightly darker on hover */
-  --text:        #0f172a;                         /* near-black in cards */
-  --muted:       #4b5563;                         /* gray-600 */
-  --border:      #dbe9f5;                         /* light blue-gray */
-  --line:        #e5eef6;                         /* separators */
-  --line-strong: #c9dfef;
+  --page:#ffffff;
+  --card:#EDF6FB;
+  --card-hover:#E6F2F9;
+  --text:#0f172a;
+  --muted:#4b5563;
+  --border:#dbe9f5;
+  --line:#e5eef6;
+  --line-strong:#c9dfef;
 
   /* Accent */
-  --accent:      var(--brand-500);
+  --accent:var(--brand-500);
 }
 
-*{ box-sizing:border-box; }
-html, body{
-  margin:0; padding:0;
-  background: var(--page);        /* white outer background */
-  color: var(--text);
+*{box-sizing:border-box;}
+html,body{
+  margin:0;padding:0;
+  background:var(--page);
+  color:var(--text);
   font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
 }
 
 /* =========================================================
    LAYOUT & HEADINGS
    ========================================================= */
-.container{ max-width:1040px; margin:28px auto; padding:0 18px; }
-h1{ font-size:22px; margin:0 0 12px; color:var(--brand-900); }
-h2{ font-size:18px; margin:0 0 10px; color:var(--brand-700); }
-h3{ font-size:14px; margin:0 0 8px; color:var(--muted); }
+.container{max-width:1040px;margin:28px auto;padding:0 18px;}
+h1{font-size:22px;margin:0 0 12px;color:var(--brand-900);}
+h2{font-size:18px;margin:0 0 10px;color:var(--brand-700);}
+h3{font-size:14px;margin:0 0 8px;color:var(--muted);}
 
 /* Cards */
 .card{
-  background: var(--card);
-  border: 1px solid var(--border);
+  background:var(--card);
+  border:1px solid var(--border);
   border-radius:16px;
   padding:18px;
   margin:18px 0;
-  box-shadow:
-    0 10px 22px rgba(17,139,213,0.06),
-    0 2px 6px rgba(0,0,0,0.03);
+  box-shadow:0 10px 22px rgba(17,139,213,.06),0 2px 6px rgba(0,0,0,.03);
 }
-.card:hover{ background: var(--card-hover); }
-
-.card-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
-.card-head h2, .card-head h3{ position:relative; padding-bottom:4px; margin-bottom:2px; }
-.card-head h2::after, .card-head h3::after{
-  content:""; position:absolute; left:0; bottom:-2px; height:3px; width:56px;
-  background: linear-gradient(90deg, var(--brand-500), var(--brand-700));
-  border-radius:2px; opacity:.25;
+.card:hover{background:var(--card-hover);}
+.card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.card-head h2,.card-head h3{position:relative;padding-bottom:4px;margin-bottom:2px;}
+.card-head h2::after,.card-head h3::after{
+  content:"";position:absolute;left:0;bottom:-2px;height:3px;width:56px;
+  background:linear-gradient(90deg,var(--brand-500),var(--brand-700));
+  border-radius:2px;opacity:.25;
 }
 
 /* =========================================================
-   MEDICINE CHART INPUT (Class | Medicine | Form + Dates)
+   FORMS / CONTROLS / BUTTONS
    ========================================================= */
-.grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:12px 0; }
-.grid.compact{ grid-template-columns:repeat(2,1fr); }
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:12px 0;}
+.grid.compact{grid-template-columns:repeat(2,1fr);}
 
-/* Stack labels inside grids by default */
-.grid > label, .grid.compact > label{
-  display:flex; flex-direction:column; gap:6px;
-}
+/* Stack labels inside grids */
+.grid>label,.grid.compact>label{display:flex;flex-direction:column;gap:6px;}
 
-/* Specific layout for the Medicine block (as before) */
+/* Specific layout for the Medicine block */
 .grid:has(> label[for="classSelect"]){
-  grid-template-columns: repeat(3, minmax(220px, 1fr)); /* Class | Medicine | Form */
-  gap: 12px 20px;
+  grid-template-columns:repeat(3,minmax(220px,1fr));
+  gap:12px 20px;
 }
-.grid:has(> label[for="classSelect"]) > label{
-  display:flex; flex-direction:column; gap:6px;       /* label stacked above control */
-}
-#classSelect, #medicineSelect, #formSelect, #startDate, #reviewDate{ width:100%; }
+.grid:has(> label[for="classSelect"])>label{display:flex;flex-direction:column;gap:6px;}
+#classSelect,#medicineSelect,#formSelect,#startDate,#reviewDate{width:100%;}
 
-/* Responsive collapse for that block */
+/* Responsive collapse for the Medicine block */
 @media (max-width:900px){
-  .grid:has(> label[for="classSelect"]){
-    grid-template-columns: repeat(2, minmax(220px, 1fr));
-  }
+  .grid:has(> label[for="classSelect"]){grid-template-columns:repeat(2,minmax(220px,1fr));}
 }
 @media (max-width:600px){
-  .grid:has(> label[for="classSelect"]){
-    grid-template-columns: 1fr;
-  }
+  .grid:has(> label[for="classSelect"]){grid-template-columns:1fr;}
 }
 
-/* =========================================================
-   CONTROLS / BUTTONS / BADGES
-   ========================================================= */
-select, input, textarea{
-  background:#ffffff;
-  color:var(--text);
+select,input,textarea{
+  background:#fff;color:var(--text);
   border:1px solid var(--line);
   border-radius:10px;
   padding:10px;
   outline:none;
   transition:border-color .15s ease, box-shadow .15s ease;
 }
-select:focus, input:focus, textarea:focus{
-  border-color: var(--brand-600);
-  box-shadow: 0 0 0 3px rgba(17,139,213,0.18);
+select:focus,input:focus,textarea:focus{
+  border-color:var(--brand-600);
+  box-shadow:0 0 0 3px rgba(17,139,213,.18);
 }
 
 button{
-  background: linear-gradient(180deg, var(--brand-500), var(--brand-600));
-  color:#ffffff;
-  border:none; border-radius:10px;
-  padding:10px 14px; font-weight:600; cursor:pointer;
+  background:linear-gradient(180deg,var(--brand-500),var(--brand-600));
+  color:#fff;border:none;border-radius:10px;
+  padding:10px 14px;font-weight:600;cursor:pointer;
   transition:transform .05s ease, filter .15s ease;
 }
-button:hover{ filter:brightness(1.05); }
-button:active{ transform:translateY(1px); }
-button:focus-visible{ outline:2px solid rgba(9,77,118,.35); outline-offset:2px; }
-
+button:hover{filter:brightness(1.05);}
+button:active{transform:translateY(1px);}
+button:focus-visible{outline:2px solid rgba(9,77,118,.35);outline-offset:2px;}
 button.secondary{
-  background: color-mix(in srgb, var(--brand-500) 12%, #ffffff 88%);
-  color: var(--brand-900);
-  border: 1px solid var(--brand-600);
+  background:color-mix(in srgb,var(--brand-500) 12%,#fff 88%);
+  color:var(--brand-900);
+  border:1px solid var(--brand-600);
 }
 button.ghost{
-  background: transparent;
-  color: var(--brand-700);
-  border: 1px solid var(--brand-600);
+  background:transparent;
+  color:var(--brand-700);
+  border:1px solid var(--brand-600);
 }
 
-.pill, .dose-lines .badge{
-  background: color-mix(in srgb, var(--brand-500) 12%, #ffffff 88%);
-  border: 1px solid color-mix(in srgb, var(--brand-600) 35%, #e5e7eb 65%);
-  color: var(--brand-900);
+.pill,.dose-lines .badge{
+  background:color-mix(in srgb,var(--brand-500) 12%,#fff 88%);
+  border:1px solid color-mix(in srgb,var(--brand-600) 35%,#e5e7eb 65%);
+  color:var(--brand-900);
   border-radius:999px;
   padding:6px 10px;
 }
 
-.hint{ color:var(--muted); margin:6px 0 0; }
-.actions{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+.hint{color:var(--muted);margin:6px 0 0;}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+
+/* Details/Accordion: make the affordance obvious */
+.accordion summary{
+  display:flex;align-items:center;gap:10px;
+  cursor:pointer;font-weight:700;
+  padding:12px 16px;
+  border-radius:10px;
+  background:#dff0ff;
+  border:1px solid #b7d9f7;
+  user-select:none;
+}
+.accordion summary::-webkit-details-marker{display:none;}
+.accordion summary::marker{content:"";}
+.accordion summary::before{
+  content:"▸";
+  font-size:20px;
+  width:22px;
+  display:inline-block;
+  transition:transform .2s ease;
+}
+.accordion[open] summary::before{transform:rotate(90deg);}
+.accordion summary:hover{background:#d3ebff;}
+.accordion summary:focus{outline:2px solid #7fb8f0;outline-offset:2px;}
+
+/* Inline label pairs */
+.taper-row{display:flex;align-items:center;flex-wrap:wrap;gap:12px 20px;margin-bottom:10px;}
+.inline-label{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;}
 
 /* =========================================================
-   TAPER CONTROLS (inline pairs remain inline)
+   PRODUCT PICKER (formulation bubbles)
    ========================================================= */
-.taper-row{
-  display:flex; align-items:center; flex-wrap:wrap;
-  gap:12px 20px; margin-bottom:10px;
-}
-.inline-label{ display:inline-flex; align-items:center; gap:8px; white-space:nowrap; }
-
-/* =========================================================
-   PRODUCT PICKER — blue-tinted bubbles (match secondary buttons)
-   ========================================================= */
-#productPicker{
-  display:flex;
-  flex-wrap:wrap;
-  gap:6px;
-  align-items:flex-start;
-}
-
-/* Base bubble — same family as "Select all / Clear selection" */
+#productPicker{display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start;}
 #productPicker .checkbox{
-  display:inline-flex;
-  flex-direction:row-reverse;   /* text left, checkbox right */
-  align-items:center;
-  width:auto;
-  padding:6px 8px;
-  border-radius:8px;
-  gap:8px;
-
-  /* tint like button.secondary */
-  background: color-mix(in srgb, var(--brand-500) 12%, #ffffff 88%);
-  border: 1px solid var(--brand-600);
-  color: var(--brand-900);
-
-  transition: background .15s ease, border-color .15s ease;
+  display:inline-flex;flex-direction:row-reverse;align-items:center;
+  width:auto;padding:6px 8px;border-radius:8px;gap:8px;
+  background:color-mix(in srgb,var(--brand-500) 12%,#fff 88%);
+  border:1px solid var(--brand-600);
+  color:var(--brand-900);
+  transition:background .15s ease, border-color .15s ease;
 }
-
-/* Hover: a touch more tint */
 #productPicker .checkbox:hover{
-  background: color-mix(in srgb, var(--brand-500) 18%, #ffffff 82%);
-  border-color: var(--brand-600);
+  background:color-mix(in srgb,var(--brand-500) 18%,#fff 82%);
 }
-
-/* Checked: slightly stronger tint + firmer border */
 #productPicker .checkbox:has(input:checked){
-  background: color-mix(in srgb, var(--brand-500) 26%, #ffffff 74%);
-  border-color: var(--brand-700);
+  background:color-mix(in srgb,var(--brand-500) 26%,#fff 74%);
+  border-color:var(--brand-700);
 }
-
-/* Control + text */
 #productPicker .checkbox input{
-  transform: scale(0.95);
-  margin-left: 6px;  /* checkbox on the right */
-  margin-right: 0;
-  accent-color: var(--brand-500);
+  transform:scale(.95);
+  margin-left:6px;margin-right:0;
+  accent-color:var(--brand-500);
 }
 #productPicker .checkbox span{
-  font-size: 0.92rem;
-  font-weight: 500;
-  line-height: 1.15;
-  white-space: nowrap;
+  font-size:.92rem;font-weight:500;line-height:1.15;white-space:nowrap;
 }
 
 /* =========================================================
-   TABLES
+   TABLES + OUTPUT
    ========================================================= */
-.table{ width:100%; border-collapse:separate; border-spacing:0 8px; }
-.table thead th{ font-weight:600; text-align:left; padding:8px; color:var(--brand-900); }
+.table{width:100%;border-collapse:separate;border-spacing:0 8px;}
+.table thead th{font-weight:600;text-align:left;padding:8px;color:var(--brand-900);}
 .table tbody td{
-  background:#ffffff; color:var(--text);
+  background:#fff;color:var(--text);
   border:1px solid var(--border);
-  padding:10px; vertical-align:top;
+  padding:10px;
+  vertical-align:top;
 }
-.table tbody tr td:first-child{ border-top-left-radius:10px; border-bottom-left-radius:10px; }
-.table tbody tr td:last-child { border-top-right-radius:10px; border-bottom-right-radius:10px; }
+.table tbody tr td:first-child{border-top-left-radius:10px;border-bottom-left-radius:10px;}
+.table tbody tr td:last-child{border-top-right-radius:10px;border-bottom-right-radius:10px;}
 
-.output-head{ display:flex; gap:10px; align-items:center; justify-content:space-between; margin-bottom:8px; }
-.footer-notes{ margin-top:12px; padding-top:8px; border-top:1px solid var(--border); }
-.class-footer{ white-space:pre-wrap; line-height:1.35; font-size:0.95rem; color:var(--text); }
+.output-head{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.footer-notes{margin-top:12px;padding-top:8px;border-top:1px solid var(--border);}
 
-/* Show each instruction on its own line */
-.instructions-pre {
-  white-space: pre-line;  /* render \n as line breaks, wrap long lines */
-  line-height: 1.25;
+/* render \n in instructions nicely */
+.instructions-pre{white-space:pre-line;line-height:1.25;}
+.tablet-icon{display:inline-block;width:18px;height:18px;object-fit:contain;margin:0 1px;vertical-align:middle;}
+
+/* =========================================================
+   FOOTER / CLASS-SPECIFIC NOTES (HTML footer block)
+   ========================================================= */
+.class-footer{
+  font-size:.92rem;
+  color:var(--text);
+  line-height:1.35;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:12px 14px;
+  margin-top:10px;
+  white-space:normal;
 }
-/* Tablet icons inside the time-of-day columns */
-.tablet-icon{
-  display: inline-block;
-  width: 18px;     /* adjust if you want bigger/smaller */
-  height: 18px;
-  object-fit: contain;
-  margin: 0 1px;
-  vertical-align: middle;
+.class-footer p{margin:0 0 .6em;}
+.class-footer br{display:block;margin-top:.6em;content:"";}
+.class-footer .footer-list{margin:.2em 0 .6em 1.2em;padding:0;}
+.class-footer .footer-list li{margin:.2em 0;line-height:1.35;}
+
+/* headings inside footer should be block; inline <strong> stays inline */
+.class-footer > strong{
+  display:block;
+  color:var(--brand-900);
+  font-weight:600;
+  margin-top:.9em;
+  margin-bottom:.3em;
+}
+.class-footer p strong,
+.class-footer li strong{display:inline;margin:0;}
+
+/* textarea blocks in footer */
+.class-footer textarea{
+  display:block;
+  width:100%;
+  min-height:80px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:8px 10px;
+  font:inherit;
+  background:#fff;
+  resize:vertical;
+  margin-top:.4em;
+  margin-bottom:.8em;
+}
+.class-footer em{
+  display:block;
+  font-size:.8rem;
+  color:var(--muted);
+  line-height:1.3;
+  margin-top:.8em;
+}
+@media print{
+  .class-footer strong{font-weight:700 !important;color:#000 !important;}
 }
 
-@media print {
-  .instructions-pre { white-space: pre-line; }
+/* =========================================================
+   DISCLAIMER GATE
+   ========================================================= */
+.hide-until-accept{display:none !important;}
+#disclaimerCard .disclaimer-copy p{margin:0 0 10px;}
+#disclaimerCard .inline-label{display:inline-flex;align-items:center;gap:10px;margin-top:6px;}
+#disclaimerCard strong{color:var(--brand-900);}
+#disclaimerCard.card{
+  border:1px solid var(--brand-600);
+  box-shadow:0 10px 22px rgba(17,139,213,.06),0 2px 6px rgba(0,0,0,.03);
 }
+
+/* =========================================================
+   ANTIPSYCHOTIC PANEL (layout only)
+   Keep ONE layout system (grid-based) to avoid conflicts.
+   ========================================================= */
+.ap-brief{font-size:.9rem;color:var(--muted);margin-bottom:.75rem;}
+.ap-dose-grid{display:grid;gap:.5rem;max-width:480px;}
+.ap-row{
+  display:grid;
+  grid-template-columns:1fr auto auto; /* label | input | mg */
+  align-items:center;
+  gap:.5rem;
+}
+.ap-row input{width:140px;text-align:right;}
+.ap-row span:last-child{min-width:2.2rem;}
+.ap-total-line{margin:.5rem 0;display:flex;align-items:center;gap:.5rem;}
+.ap-total-box{padding:.2rem .5rem;border-radius:.4rem;font-weight:600;}
+.ap-ok{background:#e9f7ef;color:#146c43;}
+.ap-err{background:#fdecea;color:#b02a37;}
+
+/* AP reduction-order chips */
+.ap-order-label{font-size:.9rem;color:#333;margin-bottom:.25rem;}
+.ap-order-chips{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;}
+.ap-chip{
+  display:inline-flex;align-items:center;gap:.45rem;
+  padding:.45rem .7rem;
+  border:1px solid #c7d2fe;
+  background:linear-gradient(180deg,#eef2ff,#e0e7ff);
+  border-radius:9999px;
+  color:var(--text,#111827);
+  font-weight:600;
+  box-shadow:0 1px 1px rgba(0,0,0,.04),0 2px 8px rgba(0,0,0,.06);
+  cursor:grab;user-select:none;
+  transition:transform .08s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease;
+}
+.ap-chip:active{cursor:grabbing;transform:scale(.98);background:linear-gradient(180deg,#e0e7ff,#dbeafe);border-color:#a5b4fc;}
+.ap-chip:focus-visible{outline:2px solid #a5b4fc;outline-offset:2px;}
+.ap-badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:1.15rem;height:1.15rem;padding:0 .2rem;
+  border-radius:9999px;background:#eef2f7;color:inherit;
+  font-size:.8rem;font-weight:700;
+}
+#apOrder .ap-chip.dragging{opacity:.6;cursor:grabbing;}
+
+/* =========================================================
+   CALCULATIONS (optional)
+   ========================================================= */
+.calc-toggle{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  margin-left:6px;
+  margin-top:4px;
+  font-weight:600;
+}
+.calc-toggle input{transform:scale(1.15);}
+#calcBlock h3{margin:0 0 8px 0;}
+.calc-table{width:100%;}
+.calc-table th,.calc-table td{white-space:nowrap;}
+.calc-table .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+.calc-table .wrap{white-space:normal;}
+.variance-notice{
+  margin:8px 0 4px;
+  padding:8px 12px;
+  border-radius:6px;
+  border-left:4px solid #f97316;
+  background-color:#fff7ed;
+  color:#7c2d12;
+  font-size:.9rem;
+}
+#bzraSplitOptions{display:none;}
+
+/* =========================================================
+   ADVANCED SETTINGS (details accordion content styling)
+   ========================================================= */
+#advancedSettings{
+  background-color:#d6ebf8;
+  border:1px solid #b5d9f1;
+  border-radius:12px;
+  padding:12px 14px 14px;
+  margin-top:14px;
+  box-shadow:0 2px 6px rgba(0,0,0,.06);
+}
+#advancedSettings>summary{
+  list-style:none;
+  cursor:pointer;
+  font-weight:700;
+  color:#004b7a;
+  margin:-4px -2px 6px;
+}
+#advancedSettings>summary::-webkit-details-marker{display:none;}
+#advancedSettings>summary::marker{content:"";}
+#advancedSettings>summary::after{
+  content:"▾";
+  margin-left:auto;
+  opacity:.7;
+  transition:transform .2s ease;
+}
+#advancedSettings[open]>summary::after{transform:rotate(180deg);}
+
+/* Inner sub-cards only */
+#advancedSettings .sub-card{
+  background-color:#eaf4fb;
+  border:1px solid #c6e0f2;
+  border-radius:10px;
+  padding:14px 16px;
+  margin:10px 0;
+  box-shadow:0 1px 3px rgba(0,0,0,.04);
+}
+#advancedSettings .sub-card p{margin:0 0 .75rem;line-height:1.55;}
+
+/* Suggested practice readability */
+.suggested-practice{
+  background:#e9f4fb;
+  border:1px solid #cfe6f5;
+  border-radius:12px;
+  padding:22px 24px;
+  box-shadow:0 2px 8px rgba(0,0,0,.05);
+}
+.suggested-practice .practice-text{
+  max-width:72ch;
+  font-size:1.02rem;
+  line-height:1.7;
+  color:#073a53;
+}
+.suggested-practice h3{
+  margin:0 0 .6rem;
+  color:#004b7a;
+  font-size:1.18rem;
+  font-weight:700;
+}
+.suggested-practice .practice-text p{margin:0 0 .9rem;}
+.suggested-practice .practice-text ul,
+.suggested-practice .practice-text ol{
+  margin:.2rem 0 1rem 1.25rem;
+  padding:0;
+  list-style:disc;
+}
+.suggested-practice .practice-text li{margin:.35rem 0;}
+.suggested-practice .practice-text .lead{font-weight:500;color:#062f44;}
+.suggested-practice .practice-text a{
+  color:#005a98;
+  text-decoration-thickness:2px;
+  text-underline-offset:2px;
+}
+.suggested-practice .practice-text a:hover{color:#00406e;}
+@media (max-width:480px){
+  .suggested-practice{padding:18px;}
+  .suggested-practice .practice-text{font-size:1rem;line-height:1.65;}
+}
+
 /* =========================================================
    RESPONSIVE (global grid fallback)
    ========================================================= */
 @media (max-width:800px){
-  .grid{ grid-template-columns:1fr; }
-  .grid.compact{ grid-template-columns:1fr; }
-  .actions{ flex-direction:column; align-items:flex-start; }
-}
-  /* ===== Administration Record (print-only) ===== */
-
-  .admin-record-block {
-    page-break-before: always;   /* start calendars on a new page after the chart */
-    margin-top: 8pt;
-    font-size: 9pt;
-  }
-
-  .admin-month {
-    page-break-after: always;    /* one month per page */
-    margin-top: 4pt;
-  }
-
-  .admin-month-heading {
-    margin: 0 0 2pt;
-    font-size: 11pt;
-    font-weight: 600;
-  }
-
-  .admin-month-note {
-    margin: 0 0 4pt;
-    font-size: 8.5pt;
-  }
-
-  .admin-calendar {
-    width: 100%;
-    border-collapse: collapse;
-    table-layout: fixed;
-    margin-top: 2pt;
-  }
-
-  .admin-calendar th,
-  .admin-calendar td {
-    border: 1px solid #000;
-    vertical-align: top;
-    padding: 3pt 2pt;
-  }
-
-  .admin-calendar th {
-    text-align: center;
-    font-size: 8.5pt;
-    padding-top: 3pt;
-    padding-bottom: 3pt;
-  }
-
-.admin-calendar td.admin-day{
-  height: 62pt;            /* increase if you want more breathing room */
-  padding: 4pt 3pt;
+  .grid{grid-template-columns:1fr;}
+  .grid.compact{grid-template-columns:1fr;}
+  .actions{flex-direction:column;align-items:flex-start;}
 }
 
-.dose-row{
-  display: flex;
-  align-items: center;
-  gap: 3pt;
-  font-size: 8pt;
-  line-height: 1.1;
-  margin-top: 1pt;
-}
-
-.admin-checkbox{
-  flex: 0 0 9pt;           /* fixed width */
-  width: 9pt;
-  height: 9pt;
-  border: 1px solid #000;
-  box-sizing: border-box;
-}
-  
-  /* Days outside taper window: greyed but still present */
-  .admin-day-outside {
-    background: #f2f2f2;
-    color: #777;
-  }
-
-  /* Review day: strong border + mid-grey fill (B&W-friendly) */
-  .admin-day-review {
-    border: 2px solid #000 !important;
-    background: #d9d9d9;
-  }
-
-  .day-number {
-    font-weight: 600;
-    margin-bottom: 1pt;
-    font-size: 8.5pt;
-  }
-  .review-label {
-    margin-top: 2pt;
-    font-size: 8pt;
-    font-style: italic;
-  }
-
-  .admin-empty {
-    background: #fafafa;
-  }
-/* Step-down day: slightly stronger border + underlined date + light shading */
-.admin-day-step {
-  border: 1.5pt solid #000;
-  background-color: #e6e6e6;   /* light grey so it prints fine in B&W */
-}
-
-  .admin-day-step .day-number {
-    text-decoration: underline;
-  }
-
-  .step-label {
-    margin-top: 1pt;
-    font-size: 7.5pt;
-    font-style: italic;
-  }
-
-  .review-label {
-    margin-top: 1pt;
-    font-size: 7.5pt;
-    font-style: italic;
-  }
-
-/* ===== Disclaimer gate ===== */
-.hide-until-accept{ display:none !important; }
-
-#disclaimerCard .disclaimer-copy p{ margin: 0 0 10px; }
-#disclaimerCard .inline-label{
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 6px;
-}
-#disclaimerCard strong{ color: var(--brand-900); }
-
-/* Make the disclaimer card a touch more prominent */
-#disclaimerCard.card{
-  border: 1px solid var(--brand-600);
-  box-shadow:
-    0 10px 22px rgba(17,139,213,0.06),
-    0 2px 6px rgba(0,0,0,0.03);
-}
-/* ===== Antipsychotic panel (layout only) ===== */
-.ap-dose-grid { display: grid; gap: .5rem; grid-template-columns: 1fr; max-width: 440px; }
-.ap-row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
-.ap-row input { width: 140px; text-align: right; }
-
-.ap-total-line { margin: .5rem 0; display: flex; align-items: center; gap: .5rem; }
-.ap-total-box { padding: .2rem .5rem; border-radius: .4rem; font-weight: 600; }
-.ap-ok  { background: #e9f7ef; color: #146c43; }
-.ap-err { background: #fdecea; color: #b02a37; }
-
-.ap-brief { font-size: .9rem; color: var(--muted); margin-bottom: .75rem; }
-
-.ap-dose-grid {
-  display: grid;
-  gap: .5rem;
-  max-width: 480px;
-}
-.ap-row {
-  display: grid;
-  grid-template-columns: 1fr auto auto; /* label | input | mg */
-  align-items: center;
-  gap: .5rem;
-}
-.ap-row input { width: 140px; text-align: right; }
-.ap-row span:last-child { min-width: 2.2rem; }
-
-/* Antipsychotic reduction-order chips: ensure text isn’t white */
-.ap-order-chips .ap-chip { color: var(--text); }   /* show labels */
-.ap-order-chips .ap-badge { color: var(--text); }  /* show 1..4 */
-
-/* Antipsychotic reduction-order chips */
-.ap-order-label { font-size: .9rem; color: #333; margin-bottom: .25rem; }
-.ap-order-chips { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
-
-/* Pill */
-.ap-chip{
-  display:inline-flex; align-items:center; gap:.45rem;
-  padding:.45rem .7rem;
-  border:1px solid #e5e7eb;
-  background:#f8fafc;
-  border-radius:9999px;
-  color:var(--text, #111827);
-  font-weight:600; letter-spacing:.2px;
-  box-shadow:0 1px 1px rgba(0,0,0,.04), 0 2px 8px rgba(0,0,0,.06);
-  cursor:grab; user-select:none;
-  transition:transform .08s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease;
-}
-.ap-chip:active{ cursor:grabbing; transform:scale(.98); }
-.ap-chip:focus-visible{ outline:2px solid #a5b4fc; outline-offset:2px; }
-
-/* Badge inside pill (optional) */
-.ap-badge{
-  display:inline-flex; align-items:center; justify-content:center;
-  min-width:1.15rem; height:1.15rem; padding:0 .2rem;
-  border-radius:9999px; background:#eef2f7; color:inherit; font-size:.8rem; font-weight:700;
-}
-/* Ensure text is visible even on themed chips */
-.ap-order-chips .ap-chip { color: var(--text, #111827); }
-.ap-order-chips .ap-badge{ color: inherit; }
-/* Unified blue styling for all AP reduction-order pills */
-.ap-order-chips .ap-chip{
-  background: linear-gradient(180deg, #eef2ff, #e0e7ff);
-  border-color: #c7d2fe;
-}
-/* Optional: slightly darker on press */
-.ap-order-chips .ap-chip:active{
-  background: linear-gradient(180deg, #e0e7ff, #dbeafe);
-  border-color: #a5b4fc;
-}
-
-/* DnD affordances */
-#apOrder .ap-chip{ cursor:grab; }
-#apOrder .ap-chip.dragging{ opacity:.6; cursor:grabbing; }
-
-/* === Show Calculations — minimal extras === */
-.calc-toggle { margin-left: 6px; }
-#calcBlock h3 { margin: 0 0 8px 0; }
-
-
-/* Reuse plan-table visuals */
-.calc-table { width: 100%; }
-.calc-table th, .calc-table td { white-space: nowrap; }
-.calc-table .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-.calc-table .wrap { white-space: normal; }
-
-/* Variance notice banner under action buttons */
-.variance-notice {
-  margin: 8px 0 4px;
-  padding: 8px 12px;
-  border-radius: 6px;
-  border-left: 4px solid #f97316;          /* warm amber-ish accent */
-  background-color: #fff7ed;               /* very light orange */
-  color: #7c2d12;                          /* dark text for contrast */
-  font-size: 0.9rem;
-}
-
-/* Make "Show calculation" more obvious */
-.calc-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 4px;
-  font-weight: 600;
-}
-
-.calc-toggle input {
-  transform: scale(1.15);                  /* slightly bigger checkbox */
-}
-#bzraSplitOptions { display: none; }
-
-/* ==============================
+/* =========================================================
    PRINT / PDF rules
-   ============================== */
+   ========================================================= */
+@page{size:A4 portrait;margin:16mm 12mm;}
+.print-only{display:none;}
 
-@page { size: A4 portrait; margin: 16mm 12mm; }
-
-/* used when the script injects a print header; harmless if unused */
-.print-only { display: none; }
-
-@media print {
+@media print{
   /* keep shading/colors exactly in print */
-  html, body, #outputCard, #outputCard * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
+  html,body,#outputCard,#outputCard *{
+    -webkit-print-color-adjust:exact !important;
+    print-color-adjust:exact !important;
   }
 
   /* print just the chart card */
-  body.printing .container > * { display: none !important; }
-  body.printing #outputCard     { display: block !important; margin: 0 !important; }
+  body.printing .container > *{display:none !important;}
+  body.printing #outputCard{display:block !important;margin:0 !important;}
 
   /* white page; remove app chrome/bands/shadows */
-  html, body, main, .container, .card, #outputCard {
-    background: #fff !important;
-    color: #000 !important;
-    box-shadow: none !important;
+  html,body,main,.container,.card,#outputCard{
+    background:#fff !important;
+    color:#000 !important;
+    box-shadow:none !important;
   }
-  .container::before, .container::after,
-  .card::before, .card::after,
-  #outputCard::before, #outputCard::after { content: none !important; display: none !important; }
+  .container::before,.container::after,
+  .card::before,.card::after,
+  #outputCard::before,#outputCard::after{content:none !important;display:none !important;}
 
-  /* hide on-screen header; show injected print header if present */
-  .output-head { display: none !important; }
-  .print-only  { display: block !important; }
+  .output-head{display:none !important;}
+  .print-only{display:block !important;}
 
   /* optional injected header styling (safe to keep) */
-  .print-header      { margin: 0 0 10pt 0; padding-bottom: 6pt; border-bottom: 1px solid #000; }
-  .print-medline     { font-size: 14pt; font-weight: 600; margin: 0 0 2pt 0; }
-  .print-instruction { font-size: 10pt; margin: 0 0 2pt 0; }
-  .print-disclaimer  { font-size: 9pt; font-style: italic; margin: 0 0 8pt 0; }
+  .print-header{margin:0 0 10pt 0;padding-bottom:6pt;border-bottom:1px solid #000;}
+  .print-medline{font-size:14pt;font-weight:600;margin:0 0 2pt 0;}
+  .print-instruction{font-size:10pt;margin:0 0 2pt 0;}
+  .print-disclaimer{font-size:9pt;font-style:italic;margin:0 0 8pt 0;}
 
-  /* table shell: use separate borders so border-radius prints cleanly */
-  .table, .plan-table {
-    width: 100% !important;
-    border-collapse: separate !important;
-    border-spacing: 0 !important;
-    table-layout: auto !important;
-    background: #fff !important;
+  /* base table shell */
+  .table,.plan-table{
+    width:100% !important;
+    border-collapse:separate !important;
+    border-spacing:0 !important;
+    table-layout:auto !important;
+    background:#fff !important;
   }
-  .table thead { display: table-header-group; }
-  .table tfoot { display: table-footer-group; }
+  .table thead{display:table-header-group !important;}
+  .table tfoot{display:table-footer-group;}
 
-  /* base cells (we'll override inside step for bubble look) */
-  .table th, .table td,
-  .plan-table th, .plan-table td {
-    border: 1px solid #000 !important;
-    padding: 6pt 8pt !important;
-    background: #fff !important;
-    color: #000 !important;
-    white-space: pre-line;
-    font-size: 12px;
-    vertical-align: middle;
-  }
-
-  /* HEADER ROW: only a bottom border */
-  .plan-table thead th {
-    border-width: 0 0 1px 0 !important;
-    border-style: solid !important;
-    border-color: #000 !important;
-    background: #fff !important;
-    text-align: left;
+  .table th,.table td,
+  .plan-table th,.plan-table td{
+    border:1px solid #000 !important;
+    padding:6pt 8pt !important;
+    background:#fff !important;
+    color:#000 !important;
+    white-space:pre-line;
+    font-size:12px;
+    vertical-align:middle;
+    border-radius:0 !important;
   }
 
-  /* center the time-of-day columns (header + body) */
+  /* Plan-table header: only bottom border */
+  .plan-table thead th{
+    border-width:0 0 1px 0 !important;
+    border-style:solid !important;
+    border-color:#000 !important;
+    background:#fff !important;
+    text-align:left;
+  }
+  .plan-table thead tr{border:0 !important;}
+
+  /* center time-of-day columns (header + body) */
   .plan-standard thead th:nth-child(4),
   .plan-standard thead th:nth-child(5),
   .plan-standard thead th:nth-child(6),
@@ -574,364 +506,146 @@ button.ghost{
   .plan-standard td.col-am,
   .plan-standard td.col-mid,
   .plan-standard td.col-din,
-  .plan-standard td.col-pm {
-    text-align: center !important;
-    vertical-align: middle !important;
+  .plan-standard td.col-pm{
+    text-align:center !important;
+    vertical-align:middle !important;
   }
-
-  /* Make dose numbers easier to scan */
   .plan-standard td.col-am,
   .plan-standard td.col-mid,
   .plan-standard td.col-din,
-  .plan-standard td.col-pm {
-    font-variant-numeric: tabular-nums; /* align digits vertically */
-    letter-spacing: 0.03em;             /* tiny extra spacing around the decimal */
+  .plan-standard td.col-pm{
+    font-variant-numeric:tabular-nums;
+    letter-spacing:.03em;
   }
-   
-  /* === STEP BUBBLE (tablets/caps) === */
-  /* clear inner gridlines; we'll draw only the lines we want */
-  .plan-standard tbody.step-group td { border-color: transparent !important; background-clip: padding-box; }
 
-  /* outer rectangle of the step (left/right on all rows; top/bottom on first/last) */
-  .plan-standard tbody.step-group tr td:first-child { border-left: 1px solid #000 !important; }
-  .plan-standard tbody.step-group tr td:last-child  { border-right: 1px solid #000 !important; }
-  .plan-standard tbody.step-group tr:first-child td { border-top: 1px solid #000 !important; }
-  .plan-standard tbody.step-group tr:last-child  td { border-bottom: 1px solid #000 !important; }
+  /* === STEP BUBBLE: tablets/caps === */
+  .plan-standard tbody.step-group td{border-color:transparent !important;background-clip:padding-box;}
 
-  /* one horizontal separator between strength rows */
-  .plan-standard tbody.step-group tr + tr td { border-top: 1px solid #000 !important; }
+  .plan-standard tbody.step-group tr td:first-child{border-left:1px solid #000 !important;}
+  .plan-standard tbody.step-group tr td:last-child {border-right:1px solid #000 !important;}
+  .plan-standard tbody.step-group tr:first-child td{border-top:1px solid #000 !important;}
+  .plan-standard tbody.step-group tr:last-child  td{border-bottom:1px solid #000 !important;}
+  .plan-standard tbody.step-group tr + tr td{border-top:1px solid #000 !important;}
 
-  /* vertical lines INSIDE the step:
-     - no line after Date→Strength (no right on date; no left on strength)
-     - no line after Strength→Instructions (no left on instructions)
-     - YES lines before Morning/Midday/Dinner/Night */
+  /* Internal verticals */
   .plan-standard tbody.step-group td.col-date,
-  .plan-standard tbody.step-group td.date-spacer { border-right: 0 !important; }
+  .plan-standard tbody.step-group td.date-spacer{border-right:0 !important;}
   .plan-standard tbody.step-group td.col-strength,
-  .plan-standard tbody.step-group td.col-instr   { border-left: 0 !important; }
+  .plan-standard tbody.step-group td.col-instr{border-left:0 !important;}
   .plan-standard tbody.step-group td.col-am,
   .plan-standard tbody.step-group td.col-mid,
   .plan-standard tbody.step-group td.col-din,
-  .plan-standard tbody.step-group td.col-pm      { border-left: 1px solid #000 !important; }
+  .plan-standard tbody.step-group td.col-pm{border-left:1px solid #000 !important;}
 
-  /* make date look merged: remove inter-row top line in the Date cell */
-  .plan-standard tbody.step-group tr + tr td.col-date { border-top: 0 !important; }
+  /* make date look merged */
+  .plan-standard tbody.step-group tr + tr td.col-date{border-top:0 !important;}
 
-  /* rounded corners on the bubble */
-  .plan-standard tbody.step-group tr:first-child td:first-child { border-top-left-radius: 6pt !important; }
-  .plan-standard tbody.step-group tr:first-child td:last-child  { border-top-right-radius: 6pt !important; }
-  .plan-standard tbody.step-group tr:last-child  td:first-child { border-bottom-left-radius: 6pt !important; }
-  .plan-standard tbody.step-group tr:last-child  td:last-child  { border-bottom-right-radius: 6pt !important; }
+  /* zebra by whole step */
+  .plan-standard tbody.step-group.step-odd  td{background:#fff !important;}
+  .plan-standard tbody.step-group.step-even td{background:#f2f2f2 !important;}
+  #outputCard tr[data-step].zebra-even td{background:#f2f2f2 !important;}
 
-  /* zebra by whole step (first white, second grey) + fallback if TBODY splits */
-  .plan-standard tbody.step-group.step-odd  td { background: #fff !important; }
-  .plan-standard tbody.step-group.step-even td { background: #f2f2f2 !important; }
-  #outputCard tr[data-step].zebra-even td       { background: #f2f2f2 !important; }
+  /* PATCH TABLE: same bubble / zebra style */
+  .plan-patch tbody.step-group td{border-color:transparent !important;background-clip:padding-box;}
+  .plan-patch tbody.step-group tr td:first-child{border-left:1px solid #000 !important;}
+  .plan-patch tbody.step-group tr td:last-child {border-right:1px solid #000 !important;}
+  .plan-patch tbody.step-group tr:first-child td{border-top:1px solid #000 !important;}
+  .plan-patch tbody.step-group tr:last-child  td{border-bottom:1px solid #000 !important;}
+  .plan-patch tbody.step-group tr + tr td{border-top:1px solid #000 !important;}
+  .plan-patch tbody.step-group.step-odd  td{background:#fff !important;}
+  .plan-patch tbody.step-group.step-even td{background:#f2f2f2 !important;}
 
-  /* === PATCH TABLE (leave layout as-is; still get bubble + zebra + separators) === */
-  .plan-patch tbody.step-group td { border-color: transparent !important; background-clip: padding-box; }
-  .plan-patch tbody.step-group tr td:first-child { border-left: 1px solid #000 !important; }
-  .plan-patch tbody.step-group tr td:last-child  { border-right: 1px solid #000 !important; }
-  .plan-patch tbody.step-group tr:first-child td { border-top: 1px solid #000 !important; }
-  .plan-patch tbody.step-group tr:last-child  td { border-bottom: 1px solid #000 !important; }
-  .plan-patch tbody.step-group tr + tr td       { border-top: 1px solid #000 !important; }
-  .plan-patch tbody.step-group.tr:first-child td:first-child { border-top-left-radius: 6pt !important; }
-  .plan-patch tbody.step-group.tr:first-child td:last-child  { border-top-right-radius: 6pt !important; }
-  .plan-patch tbody.step-group.tr:last-child  td:first-child { border-bottom-left-radius: 6pt !important; }
-  .plan-patch tbody.step-group.tr:last-child  td:last-child  { border-bottom-right-radius: 6pt !important; }
-  .plan-patch tbody.step-group.step-odd  td { background: #fff !important; }
-  .plan-patch tbody.step-group.step-even td { background: #f2f2f2 !important; }
-
-  /* footer clean & black */
-  .footer-notes, .footer-notes * { color:#000 !important; background:#fff !important; border:0 !important; }
-    /* A) Square corners: remove rounded edges on step bubbles */
-  .plan-standard tbody.step-group tr:first-child td:first-child,
-  .plan-standard tbody.step-group tr:first-child td:last-child,
-  .plan-standard tbody.step-group tr:last-child  td:first-child,
-  .plan-standard tbody.step-group tr:last-child  td:last-child,
-  .plan-patch    tbody.step-group tr:first-child td:first-child,
-  .plan-patch    tbody.step-group tr:first-child td:last-child,
-  .plan-patch    tbody.step-group tr:last-child  td:first-child,
-  .plan-patch    tbody.step-group tr:last-child  td:last-child {
-    border-radius: 0 !important;   /* was 6pt */
-  }
-
-  /* B) Remove any outer page/card border & shadows */
-  #outputCard, .card, .container, main {
-    border: 0 !important;
-    box-shadow: none !important;
-    outline: none !important;
-  }
-    /* Nuke ALL rounded corners that might be coming from base .table styles */
-  .plan-standard td, .plan-standard th,
-  .plan-patch td,    .plan-patch th,
-  .plan-table td,    .plan-table th,
-  .table td,         .table th,
-  .table tr {
-    border-radius: 0 !important;
-    -webkit-border-radius: 0 !important;
-  }
-
-  /* Also ensure no row-level shadows are making rows look like bubbles */
-  .table tr,
+  /* Prevent a step from splitting across pages */
+  .plan-standard tbody.step-group,
+  .plan-patch tbody.step-group,
   .plan-standard tbody.step-group tr,
-  .plan-patch    tbody.step-group tr {
-    box-shadow: none !important;
-    overflow: visible !important;
+  .plan-patch tbody.step-group tr{
+    break-inside:avoid !important;
+    page-break-inside:avoid !important;
   }
+   /* Remove the rounded card outline in PRINT */
+   body.printing #outputCard,
+   body.printing #outputCard.card,
+   body.printing #outputCard .card,
+   body.printing .card{
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+   }
+   /* PRINT: make the taper table header look like headings (no boxed cells) */
+.table thead th{
+  border-width: 0 0 1px 0 !important;
+  border-style: solid !important;
+  border-color: #000 !important;
+  background: #fff !important;
+}
+.table thead tr{
+  border: 0 !important;
+}
 
-  /* Belt-and-braces: make absolutely sure NO row gets corner rounding */
-  .plan-standard tbody.step-group tr td:first-child,
-  .plan-standard tbody.step-group tr td:last-child,
-  .plan-patch    tbody.step-group tr td:first-child,
-  .plan-patch    tbody.step-group tr td:last-child {
-    border-top-left-radius: 0 !important;
-    border-top-right-radius: 0 !important;
-    border-bottom-left-radius: 0 !important;
-    border-bottom-right-radius: 0 !important;
+  /* Footer in print */
+  .footer-notes,.footer-notes *{color:#000 !important;background:#fff !important;border:0 !important;}
+  .footer-notes{margin-top:8pt;padding-top:6pt;border-top:1pt solid #000;}
+
+  /* ===== Administration Record (print-only) ===== */
+  .admin-record-block{
+    page-break-before:always;
+    margin-top:8pt;
+    font-size:9pt;
   }
-    /* Remove ALL borders from the table header row (top row) */
-  .plan-table thead th,
-  .plan-standard thead th {
-    border: 0 !important;          /* no top/left/right/bottom */
-    background: #fff !important;    /* keep white header background */
+  .admin-month{
+    page-break-after:always;
+    margin-top:4pt;
   }
-  /* Safety: some themes add a border on the <tr> itself */
-  .plan-table thead tr,
-  .plan-standard thead tr {
-    border: 0 !important;
+  .admin-month-heading{margin:0 0 2pt;font-size:11pt;font-weight:600;}
+  .admin-month-note{margin:0 0 4pt;font-size:8.5pt;}
+
+  .admin-calendar{
+    width:100%;
+    border-collapse:collapse;
+    table-layout:fixed;
+    margin-top:2pt;
   }
-  /* Prevent a step from being split across pages (tablets & patches) */
-.plan-standard tbody.step-group,
-.plan-patch    tbody.step-group {
-  break-inside: avoid !important;
-  page-break-inside: avoid !important;
-}
+  .admin-calendar th,
+  .admin-calendar td{
+    border:1px solid #000;
+    vertical-align:top;
+    padding:3pt 2pt;
+  }
+  .admin-calendar th{
+    text-align:center;
+    font-size:8.5pt;
+    padding-top:3pt;
+    padding-bottom:3pt;
+  }
+  .admin-calendar td.admin-day{height:62pt;padding:4pt 3pt;}
 
-/* Extra belt-and-braces on the rows themselves */
-.plan-standard tbody.step-group tr,
-.plan-patch    tbody.step-group tr {
-  break-inside: avoid !important;
-  page-break-inside: avoid !important;
-}
+  .day-number{font-weight:600;margin-bottom:1pt;font-size:8.5pt;}
+  .dose-row{display:flex;align-items:center;gap:3pt;font-size:8pt;line-height:1.1;margin-top:1pt;}
+  .admin-checkbox{flex:0 0 9pt;width:9pt;height:9pt;border:1px solid #000;box-sizing:border-box;}
 
-    .footer-notes { margin-top: 8pt; padding-top: 6pt; border-top: 1pt solid #000; }
-  .class-footer { color: #000; }
-  
-/* Keep the header row repeating at the top of each printed page */
-.table thead { display: table-header-group !important; }
+  .admin-empty{background:#fafafa;}
+  .admin-day-outside{background:#f2f2f2;color:#777;}
 
-}
-.class-footer {
-  font-size: 0.92rem;
-  color: var(--text);
-  line-height: 1.35;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px 14px;
-  margin-top: 10px;
-  white-space: normal; /* stops newlines from creating double gaps */
-}
+  .admin-day-step{border:1.5pt solid #000;background:#e6e6e6;}
+  .admin-day-step .day-number{text-decoration:underline;}
+  .step-label{margin-top:1pt;font-size:7.5pt;font-style:italic;}
 
-/* add vertical rhythm between paragraph-like chunks */
-.class-footer br { display:block; margin-top:.6em; content:""; }
+  .admin-day-review{border:2px solid #000 !important;background:#d9d9d9;}
+  .review-label{margin-top:1pt;font-size:7.5pt;font-style:italic;}
 
-/* list styling for consistency */
-.class-footer .footer-list {
-  margin: 0.4em 0 0.6em 1.2em;
-  padding: 0;
-}
-.class-footer .footer-list li {
-  margin: 0.2em 0;
-  line-height: 1.35;
-}
-
-/* strong headers within footer (only when strong is a direct child) */
-.class-footer > strong {
-  display: block;
-  color: var(--brand-900);
-  font-weight: 600;
-  margin-top: 0.9em;
-  margin-bottom: 0.3em;
-}
-
-/* inline strong inside paragraphs should stay inline */
-.class-footer p strong,
-.class-footer li strong {
-  display: inline;
-  margin: 0;
-}
-
-/* textarea box */
-.class-footer textarea {
-  display: block;
-  width: 100%;
-  min-height: 80px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 8px 10px;
-  font: inherit;
-  background: #fff;
-  resize: vertical;
-  margin-top: 0.4em;
-  margin-bottom: 0.8em;
-}
-
-/* smaller, muted disclaimer */
-.class-footer em {
-  display: block;
-  font-size: 0.8rem;
-  color: var(--muted);
-  line-height: 1.3;
-  margin-top: 0.8em;
-}
-
-.class-footer p { margin: 0 0 .6em; }           /* tidy single spacing */
-.class-footer .footer-list { margin: .2em 0 .6em 1.2em; padding: 0; }
-.class-footer .footer-list li { margin: .2em 0; }
-
-/* ensure bold text stays bold in print/PDF */
-@media print {
-  .class-footer strong {
-    font-weight: 700 !important;
-    color: #000 !important; /* prevent pale or grey text when printing */
+  /* Notes section on admin calendar pages */
+  .admin-notes{margin-top:10mm;}
+  .admin-notes-title{font-weight:600;font-size:10pt;margin-bottom:3mm;}
+  .admin-notes-box{
+    border:1px solid #000;
+    height:25mm;
+    background:repeating-linear-gradient(
+      to bottom,
+      transparent,
+      transparent 6mm,
+      #e0e0e0 6mm,
+      #e0e0e0 6.5mm
+    );
   }
 }
-/* ===== Advanced Settings: card within a card ===== */
-
-/* Outer card (the <details> block) */
-#advancedSettings {
-  background-color: #d6ebf8;            /* medium blue */
-  border: 1px solid #b5d9f1;
-  border-radius: 12px;
-  padding: 12px 14px 14px;              /* leave room for sub-cards */
-  margin-top: 14px;
-  box-shadow: 0 2px 6px rgba(0,0,0,.06);
-}
-
-/* Make the summary (clickable header) blend in nicely */
-#advancedSettings > summary {
-  list-style: none;                      /* remove default triangle */
-  cursor: pointer;
-  font-weight: 700;
-  color: #004b7a;
-  margin: -4px -2px 6px;                 /* pull it tight to the border */
-}
-
-/* Optional chevron */
-#advancedSettings > summary::after {
-  content: "▾";
-  float: right;
-  opacity: .7;
-  transition: transform .2s ease;
-}
-#advancedSettings[open] > summary::after {
-  transform: rotate(180deg);
-}
-
-/* Outer card stays the same */
-#advancedSettings {
-  background-color: #d6ebf8;
-  border: 1px solid #b5d9f1;
-  border-radius: 12px;
-  padding: 12px 14px 14px;
-  margin-top: 14px;
-  box-shadow: 0 2px 6px rgba(0,0,0,.06);
-}
-
-/* Make the summary look nice (keep if you already have it) */
-#advancedSettings > summary {
-  list-style: none;
-  cursor: pointer;
-  font-weight: 700;
-  color: #004b7a;
-  margin: -4px -2px 6px;
-}
-#advancedSettings > summary::after {
-  content: "▾";
-  float: right;
-  opacity: .7;
-  transition: transform .2s ease;
-}
-#advancedSettings[open] > summary::after { transform: rotate(180deg); }
-
-/* ✅ Inner sub-cards: only style .sub-card, not every child */
-#advancedSettings .sub-card {
-  background-color: #eaf4fb;
-  border: 1px solid #c6e0f2;
-  border-radius: 10px;
-  padding: 14px 16px;
-  margin: 10px 0;
-  box-shadow: 0 1px 3px rgba(0,0,0,.04);
-}
-
-/* (Optional) tidy up spacing inside cards */
-#advancedSettings .sub-card p { margin: 0 0 .75rem; line-height: 1.55; }
-
-/* ===== Readability upgrades for Suggested Practice card ===== */
-.suggested-practice {
-  /* keep your existing card look; just soften & space it a bit more */
-  background: #e9f4fb;                    /* lighter for better contrast */
-  border: 1px solid #cfe6f5;
-  border-radius: 12px;
-  padding: 22px 24px;
-  box-shadow: 0 2px 8px rgba(0,0,0,.05);
-}
-
-/* the inner text container */
-.suggested-practice .practice-text {
-  /* 1) readable column width */
-  max-width: 72ch;                         /* ~70–75 characters per line */
-  /* 2) type rhythm */
-  font-size: 1.02rem;                      /* tiny bump */
-  line-height: 1.7;
-  color: #073a53;                          /* higher contrast on blue bg */
-}
-
-/* heading */
-.suggested-practice h3 {
-  margin: 0 0 0.6rem;
-  color: #004b7a;
-  font-size: 1.18rem;
-  font-weight: 700;
-}
-
-/* paragraphs */
-.suggested-practice .practice-text p {
-  margin: 0 0 0.9rem;
-}
-
-/* lists */
-.suggested-practice .practice-text ul,
-.suggested-practice .practice-text ol {
-  margin: 0.2rem 0 1rem 1.25rem;           /* tidy top/bottom gap + indent */
-  padding: 0;
-  list-style: disc;
-}
-.suggested-practice .practice-text li {
-  margin: 0.35rem 0;                        /* space between bullets */
-}
-
-/* optional: emphasize the first paragraph slightly for scanning */
-.suggested-practice .practice-text .lead {
-  font-weight: 500;
-  color: #062f44;
-}
-
-/* links inside the card */
-.suggested-practice .practice-text a {
-  color: #005a98;
-  text-decoration-thickness: 2px;
-  text-underline-offset: 2px;
-}
-.suggested-practice .practice-text a:hover {
-  color: #00406e;
-}
-
-/* responsive: on very small screens, relax the spacing slightly */
-@media (max-width: 480px) {
-  .suggested-practice { padding: 18px; }
-  .suggested-practice .practice-text { font-size: 1rem; line-height: 1.65; }
-}
- 
