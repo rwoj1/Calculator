@@ -510,6 +510,16 @@ function bzraVisibilityTick() {
 
   box.style.display = isBZRA ? "block" : "none";
 }
+function printAdminVisibilityTick(){
+  const btn = document.getElementById("printAdminBtn");
+  if (!btn) return;
+
+  const med  = document.getElementById("medicineSelect")?.value || "";
+  const form = document.getElementById("formSelect")?.value || "";
+
+  const hide = /Patch/i.test(form) && /(Fentanyl|Buprenorphine)/i.test(med);
+  btn.style.display = hide ? "none" : "";
+}
 function bidPrefVisibilityTick(){
   const box = document.getElementById("bidPrefCard");
   if (!box) return;
@@ -1577,7 +1587,10 @@ function _printCSS(){
 function buildAdministrationCalendars() {
   const { table, type } = getPrintTableAndType();
   if (!table) return () => {};
-
+  const med  = document.getElementById("medicineSelect")?.value || "";
+  const form = document.getElementById("formSelect")?.value || "";
+  if (/Patch/i.test(form) && /(Fentanyl|Buprenorphine)/i.test(med)) return () => {};
+  
   // Helper: parse whatever date text is in the table into a Date
   const parseDMY = (s) => {
     const text = String(s || "").replace(/\s+/g, " ").trim();
@@ -1590,6 +1603,7 @@ function buildAdministrationCalendars() {
   // Scan table rows to find all taper dates + any review dates
   const allDates = [];
   const reviewDates = [];
+  const stopDates = [];
 
   const rows = table.querySelectorAll("tbody.step-group tr");
   rows.forEach(tr => {
@@ -1611,13 +1625,12 @@ function buildAdministrationCalendars() {
     allDates.push(dt);
 
     // Final / review cell is marked with "final-cell"
-    const finalCell = tr.querySelector("td.final-cell");
-    if (finalCell) {
-      const msg = (finalCell.textContent || "").toLowerCase();
-      if (msg.includes("review")) {
-        reviewDates.push(dt);
-      }
-    }
+const finalCell = tr.querySelector("td.final-cell");
+if (finalCell) {
+  const msg = (finalCell.textContent || "").toLowerCase();
+  if (msg.includes("review")) reviewDates.push(dt);
+  if (msg.includes("stop")) stopDates.push(dt);
+}
   });
 
   if (!allDates.length) {
@@ -1633,6 +1646,71 @@ function buildAdministrationCalendars() {
   const startDate = uniqDates[0];
   const endDate   = uniqDates[uniqDates.length - 1];
 
+// Time slots + labels (Dinner -> Evening)
+const SLOT_COLS = [
+  { sel: "td.col-am",  key: "AM",  label: "Morning" },
+  { sel: "td.col-mid", key: "MID", label: "Midday" },
+  { sel: "td.col-din", key: "EVE", label: "Evening" },
+  { sel: "td.col-pm",  key: "PM",  label: "Night" },
+];
+
+// Build a map: stepDateMs -> Set of slots used at that step
+const stepSlots = new Map();
+
+if (type === "standard") {
+  const rowsAll = Array.from(table.querySelectorAll("tbody.step-group tr"));
+
+  let currentStepMs = null;
+
+  const nonZero = (td) => {
+    const t = (td?.textContent || "").replace(/\s+/g, "").trim();
+    if (!t) return false;
+    // treat any non-zero as used (covers "1", "0.5", tablet icons with text, etc)
+    const n = Number(t);
+    return Number.isFinite(n) ? n !== 0 : true;
+  };
+
+  rowsAll.forEach(tr => {
+    // Step date appears only on the first row of each group
+    const tdDate = tr.querySelector("td.col-date");
+    const dateText = (tdDate?.textContent || "").trim();
+    if (dateText) {
+      const dt = parseDMY(dateText);
+      if (dt) currentStepMs = dt.getTime();
+    }
+    if (currentStepMs == null) return;
+
+    // Ensure a set exists
+    if (!stepSlots.has(currentStepMs)) stepSlots.set(currentStepMs, new Set());
+
+    // Add any used slots from this row
+    SLOT_COLS.forEach(s => {
+      const td = tr.querySelector(s.sel);
+      if (td && nonZero(td)) stepSlots.get(currentStepMs).add(s.key);
+    });
+  });
+}
+
+// Sorted list of step dates (ms) for lookup
+const stepMsList = uniqDates.map(d => d.getTime()).sort((a,b)=>a-b);
+
+// For any calendar day, use the most recent step date <= that day
+const slotsForDay = (d) => {
+  const dayMs = d.getTime();
+  let chosenMs = null;
+  for (let i = 0; i < stepMsList.length; i++) {
+    if (stepMsList[i] <= dayMs) chosenMs = stepMsList[i];
+    else break;
+  }
+  const set = (chosenMs != null) ? stepSlots.get(chosenMs) : null;
+
+  // Fallback: if we couldn't detect slots, show all 4 (keeps behavior safe)
+  const keys = (set && set.size) ? Array.from(set) : SLOT_COLS.map(s => s.key);
+
+  // Return slot objects in the standard display order
+  return SLOT_COLS.filter(s => keys.includes(s.key));
+};
+ 
   const sameYMD = (a, b) =>
     a.getFullYear() === b.getFullYear() &&
     a.getMonth()    === b.getMonth() &&
@@ -1640,6 +1718,9 @@ function buildAdministrationCalendars() {
 
   const isReviewDate = (d) =>
     reviewDates.some(r => sameYMD(r, d));
+  
+  const isStopDate = (d) =>
+  stopDates.some(s => sameYMD(s, d));
 
   const isStepDate = (d) =>
     uniqDates.some(dt => sameYMD(dt, d));
@@ -1727,49 +1808,54 @@ function buildAdministrationCalendars() {
       const inWindow =
         cellDate >= startDate &&
         cellDate <= endDate;
-
-      // Light grey for days entirely outside the taper window
-      if (!inWindow) {
-        td.classList.add("admin-day-outside");
-      }
-
-      const stepDay   = isStepDate(cellDate);
+        
+      const stepDay = isStepDate(cellDate);
       const reviewDay = isReviewDate(cellDate);
+      const stopDay = isStopDate(cellDate);
+      
+// Light grey for days entirely outside the taper window
+if (!inWindow) {
+  td.classList.add("admin-day-outside");
+} else if (!stopDay) {
+  // tick boxes ONLY on days within the taper window AND not a Stop day
+  slotsForDay(cellDate).forEach(({ label }) => {
+    const row = document.createElement("div");
+    row.className = "dose-row";
+    const box = document.createElement("span");
+    box.className = "admin-checkbox";
+    const text = document.createElement("span");
+    text.textContent = ` ${label}`;
+    row.appendChild(box);
+    row.appendChild(text);
+    td.appendChild(row);
+  });
+}
+  if (inWindow) {
+  if (stepDay && !stopDay) {
+    td.classList.add("admin-day-step");
+    if (!reviewDay) {
+      const stepTag = document.createElement("div");
+      stepTag.className = "step-label";
+      stepTag.textContent = "Dose reduction";
+      td.appendChild(stepTag);
+    }
+  }
 
-      // Four tick boxes on EVERY day
-      const doses = ["Morning","Midday","Dinner","Night"];
-      doses.forEach(name => {
-        const row = document.createElement("div");
-        row.className = "dose-row";
-        const box = document.createElement("span");
-        box.className = "admin-checkbox";
-        const text = document.createElement("span");
-        text.textContent = ` ${name}`;
-        row.appendChild(box);
-        row.appendChild(text);
-        td.appendChild(row);
-      });
-
-      // Step-down days: thicker border + underlined date + optional "Step" tag
-      if (stepDay) {
-        td.classList.add("admin-day-step");
-        if (!reviewDay) {
-          const stepTag = document.createElement("div");
-          stepTag.className = "step-label";
-          stepTag.textContent = "Dose reduction";
-          td.appendChild(stepTag);
-        }
-      }
-
-      // Review days: strong grey styling + "Review" tag (overrides step styling)
-      if (reviewDay) {
-        td.classList.add("admin-day-review");
-        const reviewTag = document.createElement("div");
-        reviewTag.className = "review-label";
-        reviewTag.textContent = "See prescriber";
-        td.appendChild(reviewTag);
-      }
-
+  if (reviewDay) {
+    td.classList.add("admin-day-review");
+    const reviewTag = document.createElement("div");
+    reviewTag.className = "review-label";
+    reviewTag.textContent = "See prescriber";
+    td.appendChild(reviewTag);
+  }
+       if (stopDay) {
+  td.classList.add("admin-day-review"); 
+  const stopTag = document.createElement("div");
+  stopTag.className = "review-label";
+  stopTag.textContent = "Stop";
+  td.appendChild(stopTag);
+}
+}
       currentRow.appendChild(td);
     }
 
@@ -1947,31 +2033,38 @@ const SUGGESTED_PRACTICE = {
 const CLASS_FOOTER_COPY = {
 opioids: `
 <p><strong>Talk to your doctor, pharmacist or nurse before making any changes to your medicine.</strong>
-They can help you plan and monitor your dose reduction safely.</p>
+This tapering plan may need to change depending on how you’re feeling.</p>
 <p>If you are taking a short-acting or “when required” opioid, confirm with your healthcare professional which dose to continue during each reduction step.</p>
-<p>Your tolerance to opioids will reduce as your dose reduces. This means you are at risk of overdosing if you quickly return to your previous high doses of opioids. Naloxone is a freely available medication that reverses the effects of opioids and may save your life if you have a severe opioid reaction. For more information, see <a href="https://saferopioiduse.com.au" target="_blank">The Opioid Safety Toolkit</a>.</p>
-<strong>Discuss the following with your doctor, pharmacist or nurse:</strong>
+<strong>Discuss the following with your healthcare team:</strong>
 <ul class="footer-list">
   <li>Other strategies to help manage your pain</li>
   <li>Regular review and follow-up appointments</li>
-  <li>Your support network</li>
-  <li>Plans to prevent and manage withdrawal symptoms if you get any – these are temporary and usually mild (e.g. flu-like symptoms, nausea, diarrhoea, stomach aches).</li>
+  <li>How to keep your support network informed</li>
+  <li>Plans to prevent and manage withdrawal symptoms if you get any – these are temporary and usually mild, but can be distressing (e.g. flu-like symptoms, nausea, diarrhoea, stomach aches, anxiety, restlessness, sweating, fast heartbeat).</li>
 </ul>
-<strong>Additional Notes:</strong>
+<p>See your healthcare team regularly while reducing your dose. If you have any concerns or troublesome withdrawal symptoms, speak to your prescriber about what to do.</p>
+<p>Your tolerance to opioids will reduce as your dose reduces. This means <strong>you are at risk of overdosing if you quickly return to your previous high doses of opioids</strong>. Naloxone is a medication that reverses the effects of opioid overdose and may save your life. For more information, see <a href="https://saferopioiduse.com.au" target="_blank">The Opioid Safety Toolkit (https://saferopioiduse.com.au) for details</a>.</p>
+
+<strong>Additional notes:</strong>
+<textarea></textarea>
+<strong>Prescriber contact details:</strong>
 <textarea></textarea>
 <em>This information is not intended as a substitute for medical advice and should not be exclusively relied on to diagnose or manage a medical condition. Monash University disclaims all liability (including for negligence) for any loss, damage or injury resulting from reliance on or use of this information.</em>
 `,
 bzra: `
 <strong>Talk to your doctor, pharmacist or nurse before making any changes to your medicine.</strong>
-They can help you plan and monitor your dose reduction safely.
-<strong>Discuss the following with your doctor, pharmacist or nurse:</strong>
+This tapering plan may need to change depending on how you’re feeling.
+<strong>Discuss the following with your healthcare team:</strong>
 <ul class="footer-list">
   <li>Other strategies to help manage your insomnia</li>
   <li>Regular review and follow-up appointments</li>
-  <li>Your support network</li>
-  <li>Plans to prevent and manage withdrawal symptoms if you get any – these are temporary and usually mild (e.g. sleeplessness, anxiety, restlessness).</li>
+  <li>How to keep your support network informed</li>
+  <li>Plans to prevent and manage withdrawal symptoms if you get any – these are temporary and usually mild, but can be distressing (e.g. sleeplessness, nightmares, anxiety, restlessness, irritability, sweating, tremors, high blood pressure, fast heartbeat).</li>
 </ul>
-<strong>Additional Notes:</strong>
+<p>See your healthcare team regularly while reducing your dose. If you have any concerns or troublesome withdrawal symptoms, speak to your prescriber about what to do.</p>
+<strong>Additional notes:</strong>
+<textarea></textarea>
+<strong>Prescriber contact details:</strong>
 <textarea></textarea>
 <em>This information is not intended as a substitute for medical advice and should not be exclusively relied on to diagnose or manage a medical condition. Monash University disclaims all liability (including for negligence) for any loss, damage or injury resulting from reliance on or use of this information.</em>
 `,
@@ -2222,7 +2315,7 @@ function renderStandardTable(stepRows){
   // Column headers (on-screen unchanged)
   const thead = document.createElement("thead");
   const trCols = document.createElement("tr");
-  ["Date beginning","Strength","Instructions","Morning","Midday","Dinner","Night"].forEach(t=>{
+  ["Date beginning","Strength","Instructions","Morning","Midday","Evening","Night"].forEach(t=>{
     const th = document.createElement("th");
     th.textContent = t;
     trCols.appendChild(th);
@@ -2784,12 +2877,12 @@ sSel.onchange = (e) => {
       fSel.appendChild(o); fSel.disabled=true;
     } else if(cls==="Opioid" || cls==="Antipsychotic" || cls==="Proton Pump Inhibitor" || cls==="Gabapentinoid"){
       [
-        ["AM","In the morning"],["MID","At midday"],["DIN","At dinner"],["PM","At night"],
+        ["AM","In the morning"],["MID","At midday"],["DIN","In the evening"],["PM","At night"],
         ["BID","Twice a day (morning & night)"],["TID","Three times a day"],["QID","Four times a day"]
       ].forEach(([v,t])=>{ const o=document.createElement("option"); o.value=v; o.textContent=t; fSel.appendChild(o); });
       fSel.disabled=false;
     } else {
-      [["AM","Daily in the morning"],["MID","Daily at midday"],["DIN","Daily at dinner"],["PM","Daily at night"]]
+      [["AM","Daily in the morning"],["MID","Daily at midday"],["DIN","Daily in the evening"],["PM","Daily at night"]]
         .forEach(([v,t])=>{ const o=document.createElement("option"); o.value=v; o.textContent=t; fSel.appendChild(o); });
       fSel.disabled=false;
     }
@@ -4791,7 +4884,7 @@ bases.forEach(b => {
 
   if (q.AM)  lines.push(`Take ${unitsPhraseDigits(q.AM, doseUnit)} in the morning`);
   if (q.MID) lines.push(`Take ${unitsPhraseDigits(q.MID, doseUnit)} at midday`);
-  if (q.DIN) lines.push(`Take ${unitsPhraseDigits(q.DIN, doseUnit)} at dinner`);
+  if (q.DIN) lines.push(`Take ${unitsPhraseDigits(q.DIN, doseUnit)} in the evening`);
   if (q.PM)  lines.push(`Take ${unitsPhraseDigits(q.PM, doseUnit)} at night`);
 
   if (!lines.length) return;
@@ -5270,6 +5363,7 @@ function init(){
     renderProductPicker();
     bzraVisibilityTick();
     bidPrefVisibilityTick();
+    printAdminVisibilityTick();
     if (typeof setFooterText === "function") setFooterText(document.getElementById("classSelect")?.value || "");
     resetDoseLinesToLowest();
     setDirty(true);
@@ -5283,6 +5377,7 @@ function init(){
     applyPatchIntervalAttributes();
     renderProductPicker();
     bidPrefVisibilityTick();
+    printAdminVisibilityTick();
     if (typeof setFooterText === "function") setFooterText(document.getElementById("classSelect")?.value || "");
     resetDoseLinesToLowest();
     setDirty(true);
