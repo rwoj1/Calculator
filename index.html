@@ -43,7 +43,7 @@
       <input id="apDoseMID" type="number" min="0" step="0.01" value="0" /> <span>mg</span>
     </label>
     <label class="ap-row">
-      <span>At dinner</span>
+      <span>In the evening</span>
       <input id="apDoseDIN" type="number" min="0" step="0.01" value="0" /> <span>mg</span>
     </label>
     <label class="ap-row">
@@ -137,7 +137,7 @@
 
   <!-- Reduction order (Antipsychotic) -->
   <div id="apOrderRow" style="display:none; margin-bottom: .5rem;">
-
+  <h3>Antipsychotic dose reduction order</h3>
   <div class="ap-order-label">Select which dose time to reduce first (drag and drop to reorder):</div>
   <div id="apOrder" class="ap-order-chips" aria-label="Reduction order">
     <button class="ap-chip" data-slot="AM"><span class="ap-badge">1</span><span class="ap-chip-label">Morning</span></button>
@@ -148,9 +148,12 @@
 </div>
 
   <!-- NEW: Advanced Settings accordion (everything for Phase 2 lives here) -->
-  <details id="advancedSettings" class="accordion">
-    <summary>Advanced Settings (Optional)</summary>
-    <div class="accordion-body">
+<details id="advancedSettings" class="accordion">
+  <summary>
+    <span class="chevron" aria-hidden="true"></span>
+    <span class="summary-text">Advanced settings (optional)</span>
+  </summary>
+  <div class="accordion-body">
 
       <!-- Phase 2 (entirely inside the accordion) -->
       <div class="sub-card">
